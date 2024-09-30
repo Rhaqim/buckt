@@ -2,19 +2,26 @@ package service
 
 import (
 	"github.com/Rhaqim/buckt/config"
-	"github.com/Rhaqim/buckt/internal/database"
 	"github.com/Rhaqim/buckt/internal/domain"
+	"github.com/Rhaqim/buckt/internal/model"
 	"github.com/Rhaqim/buckt/pkg/logger"
 )
 
 type StorageService struct {
 	*logger.Logger
-	*database.DB
 	*config.Config
+	Store
 }
 
-func NewStorageService(log *logger.Logger, db *database.DB, cfg *config.Config) domain.StorageFileService {
-	return &StorageService{log, db, cfg}
+type Store struct {
+	fileStore   domain.Repository[model.FileModel]
+	bucketStore domain.Repository[model.BucketModel]
+}
+
+func NewStorageService(log *logger.Logger, cfg *config.Config, fileStore domain.Repository[model.FileModel], bucketStore domain.Repository[model.BucketModel]) domain.StorageFileService {
+	store := Store{fileStore: fileStore, bucketStore: bucketStore}
+
+	return &StorageService{log, cfg, store}
 }
 
 func (s *StorageService) UploadFile(file []byte, filename string) error {

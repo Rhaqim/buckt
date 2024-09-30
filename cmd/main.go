@@ -22,6 +22,10 @@ func main() {
 	if err != nil {
 		log.ErrorLogger.Fatalf("Failed to initialize database: %v", err)
 	}
+
+	// Migrate the database
+	db.Migrate()
+
 	// Close the database connection when the main function exits
 	defer db.Close()
 

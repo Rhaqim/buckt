@@ -2,6 +2,7 @@ package database
 
 import (
 	"github.com/Rhaqim/buckt/config"
+	"github.com/Rhaqim/buckt/internal/model"
 	"github.com/Rhaqim/buckt/pkg/logger"
 
 	"gorm.io/driver/sqlite"
@@ -43,7 +44,7 @@ func (db *DB) Close() {
 }
 
 func (db *DB) Migrate() {
-	if err := db.AutoMigrate(); err != nil {
+	if err := db.AutoMigrate(&model.FileModel{}, &model.BucketModel{}); err != nil {
 		db.ErrorLogger.Fatalf("Failed to auto migrate database: %v", err)
 	}
 }

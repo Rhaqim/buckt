@@ -4,6 +4,7 @@ import (
 	"github.com/Rhaqim/buckt/config"
 	"github.com/Rhaqim/buckt/internal/database"
 	"github.com/Rhaqim/buckt/internal/domain"
+	"github.com/Rhaqim/buckt/internal/model"
 	"github.com/Rhaqim/buckt/internal/service"
 	"github.com/Rhaqim/buckt/pkg/logger"
 	"github.com/gin-gonic/gin"
@@ -32,7 +33,11 @@ func NewRouter(log *logger.Logger, cfg *config.Config, db *database.DB) *Router 
 // Run starts the router.
 func (r *Router) Run() error {
 
-	var fileService domain.StorageFileService = service.NewStorageService(r.Logger, r.DB, r.Config)
+	var fileStore domain.Repository[model.FileModel] = model.NewFileRepository(r.DB.DB)
+
+	var bucketStore domain.Repository[model.BucketModel] = model.NewBucketRepository(r.DB.DB)
+
+	var fileService domain.StorageFileService = service.NewStorageService(r.Logger, r.Config, fileStore, bucketStore)
 
 	var httpService domain.StorageHTTPService = service.NewHTTPService(fileService)
 
