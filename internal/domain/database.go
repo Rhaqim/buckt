@@ -5,4 +5,5 @@ type Repository[T any] interface {
 	FindAll() ([]T, error)
 	FindByID(uint) (T, error)
 	Delete(uint) error
+	GetBy(string, string) (T, error)
 }

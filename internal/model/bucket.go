@@ -37,3 +37,10 @@ func (r *BucketRepository) FindByID(id uint) (BucketModel, error) {
 func (r *BucketRepository) Delete(id uint) error {
 	return r.db.Delete(&BucketModel{}, id).Error
 }
+
+func (r *BucketRepository) GetBy(key string, value string) (BucketModel, error) {
+	var file BucketModel
+
+	err := r.db.Where(key+" = ?", value).First(&file).Error
+	return file, err
+}

@@ -38,3 +38,9 @@ func (r *FileRepository) FindByID(id uint) (FileModel, error) {
 func (r *FileRepository) Delete(id uint) error {
 	return r.db.Delete(&FileModel{}, id).Error
 }
+
+func (r *FileRepository) GetBy(key string, value string) (FileModel, error) {
+	var file FileModel
+	err := r.db.Where(key+" = ?", value).First(&file).Error
+	return file, err
+}

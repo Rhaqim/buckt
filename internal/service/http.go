@@ -17,11 +17,13 @@ func NewHTTPService(s domain.StorageFileService) domain.StorageHTTPService {
 
 func (s *httpService) Download(c *gin.Context) {
 	filename := c.Param("filename")
+
 	file, err := s.DownloadFile(filename)
 	if err != nil {
 		c.JSON(500, gin.H{"error": err.Error()})
 		return
 	}
+
 	c.Data(200, "application/octet-stream", file)
 }
 
@@ -31,31 +33,39 @@ func (s *httpService) Upload(c *gin.Context) {
 		c.JSON(400, gin.H{"error": err.Error()})
 		return
 	}
+
+	bucketname := c.PostForm("bucketname")
+
 	f, err := file.Open()
 	if err != nil {
 		c.JSON(500, gin.H{"error": err.Error()})
 		return
 	}
 	defer f.Close()
+
 	data, err := io.ReadAll(f)
 	if err != nil {
 		c.JSON(500, gin.H{"error": err.Error()})
 		return
 	}
-	err = s.UploadFile(data, file.Filename)
+
+	err = s.UploadFile(data, bucketname, file.Filename)
 	if err != nil {
 		c.JSON(500, gin.H{"error": err.Error()})
 		return
 	}
+
 	c.JSON(200, gin.H{"message": "File uploaded successfully"})
 }
 
 func (s *httpService) Delete(c *gin.Context) {
 	filename := c.Param("filename")
+
 	err := s.DeleteFile(filename)
 	if err != nil {
 		c.JSON(500, gin.H{"error": err.Error()})
 		return
 	}
+
 	c.JSON(200, gin.H{"message": "File deleted successfully"})
 }
