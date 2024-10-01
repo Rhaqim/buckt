@@ -13,8 +13,8 @@ type Logger struct {
 	ErrorLogger *log.Logger
 }
 
-func NewLogger(logToFileAndTerminal bool) *Logger {
-	logDir := filepath.Join("logs", time.Now().Format("2006-01-02"))
+func NewLogger(logToFileAndTerminal bool, saveDir string) *Logger {
+	logDir := filepath.Join(saveDir, "logs", time.Now().Format("2006-01-02"))
 	if err := os.MkdirAll(logDir, 0755); err != nil {
 		log.Fatal("Failed to create log directory:", err)
 	}

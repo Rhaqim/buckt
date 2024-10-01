@@ -19,14 +19,21 @@ type Media struct {
 	Dir string `yaml:"dir"`
 }
 
+type Log struct {
+	Level                string `yaml:"level"`
+	LogToFileAndTerminal bool   `yaml:"logToFileAndTerminal"`
+	SaveDir              string `yaml:"saveDir"`
+}
+
 type Config struct {
+	Log      Log      `yaml:"log"`
 	Database Database `yaml:"database"`
 	Server   Server   `yaml:"server"`
 	Media    Media    `yaml:"media"`
 }
 
 // LoadConfig loads the configuration from the given file.
-func LoadConfig(configPath string) (*Config, error) {
+func LoadConfig(configPath string) *Config {
 	var cfg = &Config{}
 
 	file, err := os.ReadFile(configPath)
@@ -41,5 +48,5 @@ func LoadConfig(configPath string) (*Config, error) {
 	// convert Server.Port to ":port"
 	cfg.Server.Port = ":" + cfg.Server.Port
 
-	return cfg, nil
+	return cfg
 }

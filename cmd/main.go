@@ -8,14 +8,11 @@ import (
 )
 
 func main() {
-	// Initialize logger
-	log := logger.NewLogger(true)
-
 	// Load config
-	cfg, err := config.LoadConfig("config.yaml")
-	if err != nil {
-		log.ErrorLogger.Fatalf("Failed to load config: %v", err)
-	}
+	cfg := config.LoadConfig("config.yaml")
+
+	// Initialize logger
+	log := logger.NewLogger(cfg.Log.LogToFileAndTerminal, cfg.Log.SaveDir)
 
 	// Initialize database
 	db, err := database.NewSQLite(cfg, log)
