@@ -1,6 +1,9 @@
 package service
 
 import (
+	"crypto/sha256"
+	"fmt"
+	"mime"
 	"os"
 	"path/filepath"
 
@@ -28,32 +31,58 @@ func NewStorageService(log *logger.Logger, cfg *config.Config, fileStore domain.
 	return &StorageService{log, cfg, store}
 }
 
-func (s *StorageService) UploadFile(file []byte, bucketname, filename string) error {
-	// Check if file already exists
-	if _, err := s.fileStore.GetBy("filename", filename); err == nil {
-		return errs.ErrFileAlreadyExists
-	}
-
+func (s *StorageService) UploadFile(file []byte, bucketName, fileName string) error {
 	// Check if bucket exists
-	_, err := s.bucketStore.GetBy("name", bucketname)
+	bucket, err := s.bucketStore.GetBy("name", bucketName)
 	if err != nil {
 		return errs.ErrBucketNotFound
 	}
 
-	// Save file to storage
-	filePath := filepath.Join(bucketname, filename)
-	if err := os.WriteFile(filePath, file, 0644); err != nil {
-		return err
+	// Check if file already exists in the bucket
+	if _, err := s.fileStore.GetBy("name", fileName); err == nil {
+		return errs.ErrFileAlreadyExists
 	}
 
-	// Save file to database
-	fileModel := model.FileModel{Name: filename, Path: filePath}
+	// Calculate file hash (SHA-256) for uniqueness check and future retrieval
+	hash := fmt.Sprintf("%x", sha256.Sum256(file))
+
+	// File size in bytes
+	fileSize := int64(len(file))
+
+	// Determine file content type (MIME type)
+	contentType := mime.TypeByExtension(filepath.Ext(fileName))
+	if contentType == "" {
+		contentType = "application/octet-stream" // Default content type
+	}
+
+	// Create the full file path using bucket name and file name
+	// filePath := filepath.Join("/www/media", bucketName, fileName)
+	filePath := filepath.Join(s.Media.Dir, bucketName, fileName)
+
+	// Save the file to the file system
+	if err := os.MkdirAll(filepath.Dir(filePath), 0755); err != nil {
+		return fmt.Errorf("failed to create directory: %w", err)
+	}
+	if err := os.WriteFile(filePath, file, 0644); err != nil {
+		return fmt.Errorf("failed to save file: %w", err)
+	}
+
+	// Save file record to the database
+	fileModel := model.FileModel{
+		Name:        fileName,
+		Path:        filePath,
+		ContentType: contentType,
+		Size:        fileSize,
+		Hash:        hash,
+		BucketID:    bucket.ID, // Associate the file with the existing bucket
+	}
+
+	// Insert the file entry into the database
 	if err := s.fileStore.Create(&fileModel); err != nil {
-		return err
+		return fmt.Errorf("failed to save file metadata: %w", err)
 	}
 
 	return nil
-
 }
 
 func (s *StorageService) DownloadFile(filename string) ([]byte, error) {
