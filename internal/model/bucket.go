@@ -11,6 +11,7 @@ type BucketModel struct {
 	Name        string      `gorm:"unique;not null"`      // Ensure each bucket name is unique
 	Description string      `gorm:"type:text"`            // Optional description of the bucket
 	Files       []FileModel `gorm:"foreignKey:BucketID"`  // Establish one-to-many relationship with FileModel
+	OwnerID     string      `gorm:"type:uuid;not null"`   // Foreign key to OwnerModel
 	gorm.Model
 }
 
