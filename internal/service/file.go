@@ -87,21 +87,21 @@ func (s *StorageService) UploadFile(file []byte, bucketName, fileName string) er
 	return nil
 }
 
-func (s *StorageService) DownloadFile(filename string) ([]byte, error) {
+func (s *StorageService) DownloadFile(filename string) ([]byte, string, error) {
 	// Get file from database
 	file, err := s.fileStore.GetBy("name", filename)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 
 	// Read file from storage
 	filePath := file.Path
 	data, err := os.ReadFile(filePath)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 
-	return data, nil
+	return data, filePath, nil
 }
 
 func (s *StorageService) DeleteFile(filename string) error {

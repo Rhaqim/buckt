@@ -15,18 +15,6 @@ func NewHTTPService(s domain.StorageFileService) domain.StorageHTTPService {
 	return &httpService{s}
 }
 
-func (s *httpService) Download(c *gin.Context) {
-	filename := c.Param("filename")
-
-	file, err := s.DownloadFile(filename)
-	if err != nil {
-		c.JSON(500, gin.H{"error": err.Error()})
-		return
-	}
-
-	c.Data(200, "application/octet-stream", file)
-}
-
 func (s *httpService) Upload(c *gin.Context) {
 	file, err := c.FormFile("file")
 	if err != nil {
@@ -56,6 +44,30 @@ func (s *httpService) Upload(c *gin.Context) {
 	}
 
 	c.JSON(200, gin.H{"message": "File uploaded successfully"})
+}
+
+func (s *httpService) Download(c *gin.Context) {
+	filename := c.Param("filename")
+
+	file, _, err := s.DownloadFile(filename)
+	if err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.Data(200, "application/octet-stream", file)
+}
+
+func (s *httpService) ServeFile(c *gin.Context) {
+	filename := c.Param("filename")
+
+	_, path, err := s.DownloadFile(filename)
+	if err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.File(path)
 }
 
 func (s *httpService) Delete(c *gin.Context) {

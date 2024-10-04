@@ -5,8 +5,9 @@ import (
 )
 
 type StorageHTTPService interface {
-	Download(*gin.Context)
 	Upload(*gin.Context)
+	Download(*gin.Context)
+	ServeFile(*gin.Context)
 	Delete(*gin.Context)
 	NewUser(c *gin.Context)
 	NewBucket(c *gin.Context)

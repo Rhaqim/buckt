@@ -50,6 +50,7 @@ func (r *Router) Run() error {
 
 	r.POST("/upload", httpService.Upload)
 	r.GET("/download/:filename", httpService.Download)
+	r.GET("/serve/:filename", httpService.ServeFile)
 	r.DELETE("/delete/:filename", httpService.Delete)
 
 	return r.Engine.Run(r.Server.Port)
