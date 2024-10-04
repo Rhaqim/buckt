@@ -7,7 +7,7 @@ import (
 )
 
 type OwnerModel struct {
-	ID      string        `gorm:"type:uuid;primaryKey"` // Unique identifier for the owner
+	ID      uuid.UUID     `gorm:"type:uuid;primaryKey"` // Unique identifier for the owner
 	Name    string        `gorm:"not null"`             // Owner name
 	Email   string        `gorm:"not null;unique"`      // Owner email
 	Buckets []BucketModel `gorm:"foreignKey:OwnerID"`   // Establish one-to-many relationship with BucketModel
@@ -31,13 +31,13 @@ func (r *OwnerRepository) FindAll() ([]OwnerModel, error) {
 	return owners, err
 }
 
-func (r *OwnerRepository) FindByID(id string) (OwnerModel, error) {
+func (r *OwnerRepository) FindByID(id uuid.UUID) (OwnerModel, error) {
 	var owner OwnerModel
 	err := r.db.First(&owner, id).Error
 	return owner, err
 }
 
-func (r *OwnerRepository) Delete(id string) error {
+func (r *OwnerRepository) Delete(id uuid.UUID) error {
 	return r.db.Delete(&OwnerModel{}, id).Error
 }
 
@@ -50,6 +50,6 @@ func (r *OwnerRepository) GetBy(key string, value string) (OwnerModel, error) {
 
 // BeforeCreate hook for OwnerModel to add a prefixed UUID
 func (owner *OwnerModel) BeforeCreate(tx *gorm.DB) (err error) {
-	owner.ID = "owner-" + uuid.New().String()
+	owner.ID = uuid.New()
 	return
 }

@@ -14,19 +14,21 @@ import (
 	"github.com/Rhaqim/buckt/pkg/logger"
 )
 
+type Store struct {
+	fileStore   domain.Repository[model.FileModel]
+	bucketStore domain.Repository[model.BucketModel]
+	ownerStore  domain.Repository[model.OwnerModel]
+	tagStore    domain.Repository[model.TagModel]
+}
+
 type StorageService struct {
 	*logger.Logger
 	*config.Config
 	Store
 }
 
-type Store struct {
-	fileStore   domain.Repository[model.FileModel]
-	bucketStore domain.Repository[model.BucketModel]
-}
-
-func NewStorageService(log *logger.Logger, cfg *config.Config, fileStore domain.Repository[model.FileModel], bucketStore domain.Repository[model.BucketModel]) domain.StorageFileService {
-	store := Store{fileStore: fileStore, bucketStore: bucketStore}
+func NewStorageService(log *logger.Logger, cfg *config.Config, fileStore domain.Repository[model.FileModel], bucketStore domain.Repository[model.BucketModel], ownerStore domain.Repository[model.OwnerModel], tagStore domain.Repository[model.TagModel]) domain.StorageFileService {
+	store := Store{fileStore: fileStore, bucketStore: bucketStore, ownerStore: ownerStore, tagStore: tagStore}
 
 	return &StorageService{log, cfg, store}
 }
@@ -87,7 +89,7 @@ func (s *StorageService) UploadFile(file []byte, bucketName, fileName string) er
 
 func (s *StorageService) DownloadFile(filename string) ([]byte, error) {
 	// Get file from database
-	file, err := s.fileStore.GetBy("filename", filename)
+	file, err := s.fileStore.GetBy("name", filename)
 	if err != nil {
 		return nil, err
 	}
@@ -121,4 +123,42 @@ func (s *StorageService) DeleteFile(filename string) error {
 	}
 
 	return nil
+}
+
+func (s *StorageService) CreateBucket(name, description, owner_ string) error {
+	var err error
+
+	owner, err := s.ownerStore.GetBy("name", owner_)
+	if err != nil {
+		return err
+	}
+
+	var bucket model.BucketModel = model.BucketModel{
+		Name:        name,
+		Description: description,
+		OwnerID:     owner.ID,
+	}
+
+	err = s.bucketStore.Create(&bucket)
+	if err != nil {
+		return err
+	}
+
+	return err
+}
+
+func (s *StorageService) CreateOwner(name, email string) error {
+	var err error
+
+	var owner model.OwnerModel = model.OwnerModel{
+		Name:  name,
+		Email: email,
+	}
+
+	err = s.ownerStore.Create(&owner)
+	if err != nil {
+		return nil
+	}
+
+	return err
 }

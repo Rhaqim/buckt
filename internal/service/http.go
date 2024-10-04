@@ -69,3 +69,48 @@ func (s *httpService) Delete(c *gin.Context) {
 
 	c.JSON(200, gin.H{"message": "File deleted successfully"})
 }
+
+func (s *httpService) NewUser(c *gin.Context) {
+
+	req := struct {
+		Name  string
+		Email string
+	}{}
+
+	err := c.ShouldBindJSON(&req)
+	if err != nil {
+		c.JSON(400, gin.H{"error": err.Error()})
+		return
+	}
+
+	err = s.CreateOwner(req.Name, req.Email)
+	if err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(200, gin.H{"message": "User created successfully"})
+}
+
+func (s *httpService) NewBucket(c *gin.Context) {
+
+	req := struct {
+		Name        string
+		Description string
+		OwnerID     string `json:"owner_id"`
+	}{}
+
+	err := c.ShouldBindJSON(&req)
+	if err != nil {
+		c.JSON(400, gin.H{"error": err.Error()})
+		return
+	}
+
+	err = s.CreateBucket(req.Name, req.Description, req.OwnerID)
+	if err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(200, gin.H{"message": "Bucket created successfully"})
+}

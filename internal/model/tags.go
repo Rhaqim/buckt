@@ -7,8 +7,8 @@ import (
 )
 
 type TagModel struct {
-	ID   string `gorm:"type:uuid;primaryKey"` // Unique identifier for the tag
-	Name string `gorm:"not null"`             // Tag name
+	ID   uuid.UUID `gorm:"type:uuid;primaryKey"` // Unique identifier for the tag
+	Name string    `gorm:"not null"`             // Tag name
 	gorm.Model
 }
 
@@ -30,13 +30,13 @@ func (r *TagRepository) FindAll() ([]TagModel, error) {
 	return tags, err
 }
 
-func (r *TagRepository) FindByID(id string) (TagModel, error) {
+func (r *TagRepository) FindByID(id uuid.UUID) (TagModel, error) {
 	var tag TagModel
 	err := r.db.First(&tag, id).Error
 	return tag, err
 }
 
-func (r *TagRepository) Delete(id string) error {
+func (r *TagRepository) Delete(id uuid.UUID) error {
 	return r.db.Delete(&TagModel{}, id).Error
 }
 
@@ -49,6 +49,6 @@ func (r *TagRepository) GetBy(key string, value string) (TagModel, error) {
 
 // BeforeCreate hook for TagModel to add a prefixed UUID
 func (tag *TagModel) BeforeCreate(tx *gorm.DB) (err error) {
-	tag.ID = "tag-" + uuid.New().String()
+	tag.ID = uuid.New()
 	return
 }

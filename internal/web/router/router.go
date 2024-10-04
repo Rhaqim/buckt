@@ -37,12 +37,19 @@ func (r *Router) Run() error {
 
 	var bucketStore domain.Repository[model.BucketModel] = model.NewBucketRepository(r.DB.DB)
 
-	var fileService domain.StorageFileService = service.NewStorageService(r.Logger, r.Config, fileStore, bucketStore)
+	var ownerStore domain.Repository[model.OwnerModel] = model.NewOwnerRepository(r.DB.DB)
+
+	var tagStore domain.Repository[model.TagModel] = model.NewTagRepository(r.DB.DB)
+
+	var fileService domain.StorageFileService = service.NewStorageService(r.Logger, r.Config, fileStore, bucketStore, ownerStore, tagStore)
 
 	var httpService domain.StorageHTTPService = service.NewHTTPService(fileService)
 
-	r.GET("/download/:filename", httpService.Download)
+	r.POST("/new_user", httpService.NewUser)
+	r.POST("/new_bucket", httpService.NewBucket)
+
 	r.POST("/upload", httpService.Upload)
+	r.GET("/download/:filename", httpService.Download)
 	r.DELETE("/delete/:filename", httpService.Delete)
 
 	return r.Engine.Run(r.Server.Port)

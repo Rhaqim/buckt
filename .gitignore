@@ -4,3 +4,4 @@ config.yaml
 db.sqlite
 
 logs/
+media/
