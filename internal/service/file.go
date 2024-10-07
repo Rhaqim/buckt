@@ -87,26 +87,44 @@ func (s *StorageService) UploadFile(file []byte, bucketName, fileName string) er
 	return nil
 }
 
-func (s *StorageService) DownloadFile(filename string) ([]byte, string, error) {
+func (s *StorageService) Serve(filename string, serve bool) (string, error) {
 	// Get file from database
 	file, err := s.fileStore.GetBy("name", filename)
 	if err != nil {
-		return nil, "", err
+		return "", err
 	}
 
 	// Read file from storage
 	filePath := file.Path
-	data, err := os.ReadFile(filePath)
-	if err != nil {
-		return nil, "", err
+	if _, err := os.Stat(filePath); err != nil {
+		return "", err
 	}
 
-	return data, filePath, nil
+	if serve {
+		filePath = s.Config.Endpoint.URL + "/server/" + filename
+	}
+
+	return filePath, nil
+}
+
+func (s *StorageService) DownloadFile(filename string) ([]byte, error) {
+	// Get file from database
+	filePath, err := s.Serve(filename, false)
+	if err != nil {
+		return nil, err
+	}
+
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		return nil, err
+	}
+
+	return data, nil
 }
 
 func (s *StorageService) DeleteFile(filename string) error {
 	// Get file from database
-	file, err := s.fileStore.GetBy("filename", filename)
+	file, err := s.fileStore.GetBy("name", filename)
 	if err != nil {
 		return err
 	}

@@ -43,13 +43,22 @@ func (s *httpService) Upload(c *gin.Context) {
 		return
 	}
 
-	c.JSON(200, gin.H{"message": "File uploaded successfully"})
+	path, err := s.Serve(file.Filename, true)
+	if err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(200, gin.H{
+		"message": "File uploaded successfully",
+		"path":    path,
+	})
 }
 
 func (s *httpService) Download(c *gin.Context) {
 	filename := c.Param("filename")
 
-	file, _, err := s.DownloadFile(filename)
+	file, err := s.DownloadFile(filename)
 	if err != nil {
 		c.JSON(500, gin.H{"error": err.Error()})
 		return
@@ -61,7 +70,7 @@ func (s *httpService) Download(c *gin.Context) {
 func (s *httpService) ServeFile(c *gin.Context) {
 	filename := c.Param("filename")
 
-	_, path, err := s.DownloadFile(filename)
+	path, err := s.Serve(filename, false)
 	if err != nil {
 		c.JSON(500, gin.H{"error": err.Error()})
 		return

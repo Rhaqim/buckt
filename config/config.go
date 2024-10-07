@@ -25,11 +25,16 @@ type Log struct {
 	SaveDir              string `yaml:"saveDir"`
 }
 
+type Endpoint struct {
+	URL string `yaml:"url"`
+}
+
 type Config struct {
 	Log      Log      `yaml:"log"`
 	Database Database `yaml:"database"`
 	Server   Server   `yaml:"server"`
 	Media    Media    `yaml:"media"`
+	Endpoint Endpoint `yaml:"endpoint"`
 }
 
 // LoadConfig loads the configuration from the given file.
