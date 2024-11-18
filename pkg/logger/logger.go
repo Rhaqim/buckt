@@ -13,44 +13,51 @@ type Logger struct {
 	ErrorLogger *log.Logger
 }
 
-func NewLogger(logToFileAndTerminal bool, saveDir string) *Logger {
-	logDir := filepath.Join(saveDir, "logs", time.Now().Format("2006-01-02"))
-	if err := os.MkdirAll(logDir, 0755); err != nil {
-		log.Fatal("Failed to create log directory:", err)
+func NewLogger(logFile bool, logTerminal bool, saveDir string) *Logger {
+	// Default to logging to terminal if neither option is explicitly set
+	if !logFile && !logTerminal {
+		logTerminal = true
 	}
 
-	// Open log files for today's date
-	infoLogFile, err := os.OpenFile(filepath.Join(logDir, "info.log"), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
-	if err != nil {
-		log.Fatal("Failed to open info log file:", err)
+	var infoWriter io.Writer = os.Stdout
+	var errorWriter io.Writer = os.Stderr
+
+	if logFile {
+		if saveDir == "" {
+			log.Fatal("Save directory must be provided when logging to file")
+		}
+
+		logDir := filepath.Join(saveDir, "logs", time.Now().Format("2006-01-02"))
+		if err := os.MkdirAll(logDir, 0755); err != nil {
+			log.Fatal("Failed to create log directory:", err)
+		}
+
+		infoLogFile, err := os.OpenFile(filepath.Join(logDir, "info.log"), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+		if err != nil {
+			log.Fatal("Failed to open info log file:", err)
+		}
+
+		errorLogFile, err := os.OpenFile(filepath.Join(logDir, "error.log"), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+		if err != nil {
+			log.Fatal("Failed to open error log file:", err)
+		}
+
+		// If logging to both file and terminal
+		if logTerminal {
+			infoWriter = io.MultiWriter(os.Stdout, infoLogFile)
+			errorWriter = io.MultiWriter(os.Stderr, errorLogFile)
+		} else {
+			// Only log to file
+			infoWriter = infoLogFile
+			errorWriter = errorLogFile
+		}
 	}
 
-	errorLogFile, err := os.OpenFile(filepath.Join(logDir, "error.log"), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
-	if err != nil {
-		log.Fatal("Failed to open error log file:", err)
-	}
-
-	// Create multi-writer to write to both file and terminal if logToFileAndTerminal is true
-	var infoWriter io.Writer = infoLogFile
-	var errorWriter io.Writer = errorLogFile
-
-	if logToFileAndTerminal {
-		infoWriter = io.MultiWriter(os.Stdout, infoLogFile)
-		errorWriter = io.MultiWriter(os.Stderr, errorLogFile)
-	}
-
-	// Initialize loggers
 	infoLogger := log.New(infoWriter, "INFO: ", log.Ldate|log.Ltime|log.Lshortfile)
 	errorLogger := log.New(errorWriter, "ERROR: ", log.Ldate|log.Ltime|log.Lshortfile)
 
 	return &Logger{
 		InfoLogger:  infoLogger,
 		ErrorLogger: errorLogger,
-	}
-}
-
-func (l *Logger) CleanLogs() {
-	if err := os.RemoveAll("logs"); err != nil {
-		log.Fatal("Failed to remove log directory:", err)
 	}
 }
