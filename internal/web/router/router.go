@@ -2,10 +2,7 @@ package router
 
 import (
 	"github.com/Rhaqim/buckt/config"
-	"github.com/Rhaqim/buckt/internal/database"
 	"github.com/Rhaqim/buckt/internal/domain"
-	"github.com/Rhaqim/buckt/internal/model"
-	"github.com/Rhaqim/buckt/internal/service"
 	"github.com/Rhaqim/buckt/pkg/logger"
 	"github.com/gin-gonic/gin"
 )
@@ -14,11 +11,11 @@ type Router struct {
 	*gin.Engine
 	*logger.Logger
 	*config.Config
-	*database.DB
+	httpService domain.StorageHTTPService
 }
 
 // NewRouter creates a new router with the given logger and config.
-func NewRouter(log *logger.Logger, cfg *config.Config, db *database.DB) *Router {
+func NewRouter(log *logger.Logger, cfg *config.Config, httpService domain.StorageHTTPService) *Router {
 	r := gin.New()
 
 	// Set logger
@@ -27,31 +24,19 @@ func NewRouter(log *logger.Logger, cfg *config.Config, db *database.DB) *Router 
 	// Set recovery
 	r.Use(gin.Recovery())
 
-	return &Router{r, log, cfg, db}
+	return &Router{r, log, cfg, httpService}
 }
 
 // Run starts the router.
 func (r *Router) Run() error {
 
-	var fileStore domain.Repository[model.FileModel] = model.NewFileRepository(r.DB.DB)
+	r.POST("/new_user", r.httpService.NewUser)
+	r.POST("/new_bucket", r.httpService.NewBucket)
 
-	var bucketStore domain.Repository[model.BucketModel] = model.NewBucketRepository(r.DB.DB)
-
-	var ownerStore domain.Repository[model.OwnerModel] = model.NewOwnerRepository(r.DB.DB)
-
-	var tagStore domain.Repository[model.TagModel] = model.NewTagRepository(r.DB.DB)
-
-	var fileService domain.StorageFileService = service.NewStorageService(r.Logger, r.Config, fileStore, bucketStore, ownerStore, tagStore)
-
-	var httpService domain.StorageHTTPService = service.NewHTTPService(fileService)
-
-	r.POST("/new_user", httpService.NewUser)
-	r.POST("/new_bucket", httpService.NewBucket)
-
-	r.POST("/upload", httpService.Upload)
-	r.GET("/download/:filename", httpService.Download)
-	r.DELETE("/delete/:filename", httpService.Delete)
-	r.GET("/serve/:filename", httpService.ServeFile)
+	r.POST("/upload", r.httpService.Upload)
+	r.GET("/download/:filename", r.httpService.Download)
+	r.DELETE("/delete/:filename", r.httpService.Delete)
+	r.GET("/serve/:filename", r.httpService.ServeFile)
 
 	return r.Engine.Run(r.Server.Port)
 }

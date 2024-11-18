@@ -136,16 +136,10 @@ func (s *StorageService) DeleteFile(filename string) error {
 	}
 
 	// Delete file from database
-	if err := s.fileStore.Delete(file.ID); err != nil {
-		return err
-	}
-
-	return nil
+	return s.fileStore.Delete(file.ID)
 }
 
 func (s *StorageService) CreateBucket(name, description, owner_ string) error {
-	var err error
-
 	owner, err := s.ownerStore.GetBy("name", owner_)
 	if err != nil {
 		return err
@@ -157,26 +151,14 @@ func (s *StorageService) CreateBucket(name, description, owner_ string) error {
 		OwnerID:     owner.ID,
 	}
 
-	err = s.bucketStore.Create(&bucket)
-	if err != nil {
-		return err
-	}
-
-	return err
+	return s.bucketStore.Create(&bucket)
 }
 
 func (s *StorageService) CreateOwner(name, email string) error {
-	var err error
-
 	var owner model.OwnerModel = model.OwnerModel{
 		Name:  name,
 		Email: email,
 	}
 
-	err = s.ownerStore.Create(&owner)
-	if err != nil {
-		return nil
-	}
-
-	return err
+	return s.ownerStore.Create(&owner)
 }
