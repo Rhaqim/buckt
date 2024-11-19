@@ -52,6 +52,13 @@ func (r *FileRepository) GetBy(key string, value string) (FileModel, error) {
 	return file, err
 }
 
+func (r *FileRepository) GetMany(key string, value string) ([]FileModel, error) {
+	var files []FileModel
+
+	err := r.db.Where(key+" = ?", value).Find(&files).Error
+	return files, err
+}
+
 // BeforeCreate hook for FileModel to add a prefixed UUID
 func (file *FileModel) BeforeCreate(tx *gorm.DB) (err error) {
 	file.ID = uuid.New()

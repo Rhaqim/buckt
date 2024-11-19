@@ -47,6 +47,12 @@ func (r *TagRepository) GetBy(key string, value string) (TagModel, error) {
 	return tag, err
 }
 
+func (r *TagRepository) GetMany(key string, value string) ([]TagModel, error) {
+	var tags []TagModel
+	err := r.db.Where(key+" = ?", value).Find(&tags).Error
+	return tags, err
+}
+
 // BeforeCreate hook for TagModel to add a prefixed UUID
 func (tag *TagModel) BeforeCreate(tx *gorm.DB) (err error) {
 	tag.ID = uuid.New()

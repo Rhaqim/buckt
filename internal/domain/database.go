@@ -8,4 +8,5 @@ type Repository[T any] interface {
 	FindByID(uuid.UUID) (T, error)
 	Delete(uuid.UUID) error
 	GetBy(string, string) (T, error)
+	GetMany(string, string) ([]T, error)
 }

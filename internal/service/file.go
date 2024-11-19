@@ -6,6 +6,7 @@ import (
 	"mime"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/Rhaqim/buckt/config"
 	"github.com/Rhaqim/buckt/internal/domain"
@@ -71,7 +72,7 @@ func (s *StorageService) UploadFile(file []byte, bucketName, fileName string) er
 
 	// Save file record to the database
 	fileModel := model.FileModel{
-		Name:        fileName,
+		Name:        strings.Split(fileName, ".")[0],
 		Path:        filePath,
 		ContentType: contentType,
 		Size:        fileSize,
@@ -167,11 +168,22 @@ func (s *StorageService) GetBuckets() ([]model.BucketModel, error) {
 	return s.bucketStore.FindAll()
 }
 
-func (s *StorageService) GetFiles(bucketName string) ([]string, error) {
-	_, err := s.bucketStore.GetBy("name", bucketName)
+func (s *StorageService) GetFiles(bucketName string) ([]interface{}, error) {
+	var response []interface{}
+
+	bucket, err := s.bucketStore.GetBy("name", bucketName)
 	if err != nil {
 		return nil, err
 	}
 
-	return []string{}, nil
+	files, err := s.fileStore.GetMany("bucket_id", bucket.ID.String())
+	if err != nil {
+		return nil, err
+	}
+
+	for _, file := range files {
+		response = append(response, file)
+	}
+
+	return response, nil
 }

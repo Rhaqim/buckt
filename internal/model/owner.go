@@ -48,6 +48,12 @@ func (r *OwnerRepository) GetBy(key string, value string) (OwnerModel, error) {
 	return owner, err
 }
 
+func (r *OwnerRepository) GetMany(key string, value string) ([]OwnerModel, error) {
+	var owners []OwnerModel
+	err := r.db.Where(key+" = ?", value).Find(&owners).Error
+	return owners, err
+}
+
 // BeforeCreate hook for OwnerModel to add a prefixed UUID
 func (owner *OwnerModel) BeforeCreate(tx *gorm.DB) (err error) {
 	owner.ID = uuid.New()

@@ -6,6 +6,6 @@ type StorageFileService interface {
 	UploadFile(file []byte, bucketname, filename string) error
 	DownloadFile(filename string) ([]byte, error)
 	DeleteFile(filename string) error
-	GetFiles(bucketName string) ([]string, error)
+	GetFiles(bucketName string) ([]interface{}, error)
 	Serve(filename string, serve bool) (string, error)
 }

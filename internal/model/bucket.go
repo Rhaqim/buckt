@@ -50,6 +50,14 @@ func (r *BucketRepository) GetBy(key string, value string) (BucketModel, error) 
 	return file, err
 }
 
+func (r *BucketRepository) GetMany(key string, value string) ([]BucketModel, error) {
+	var files []BucketModel
+
+	err := r.db.Where(key+" = ?", value).Find(&files).Error
+
+	return files, err
+}
+
 // BeforeCreate hook for BucketModel to add a prefixed UUID
 func (bucket *BucketModel) BeforeCreate(tx *gorm.DB) (err error) {
 	bucket.ID = uuid.New()
