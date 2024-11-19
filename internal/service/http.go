@@ -135,3 +135,15 @@ func (s *httpService) NewBucket(c *gin.Context) {
 
 	c.JSON(200, gin.H{"message": "Bucket created successfully"})
 }
+
+func (s *httpService) FetchFiles(c *gin.Context) {
+	bucketname := c.Param("bucketname")
+
+	files, err := s.GetFiles(bucketname)
+	if err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(200, gin.H{"files": files})
+}

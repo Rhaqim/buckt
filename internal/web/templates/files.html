@@ -1,0 +1,13 @@
+<!-- Example in files.html -->
+{{ define "partials/files.html" }}
+<!-- Template content goes here -->
+
+{{ range .Files }}
+<div>
+    <p>{{ . }}</p>
+    <button hx-get="/download/{{ . }}">Download</button>
+    <button hx-delete="/delete/{{ . }}">Delete</button>
+</div>
+{{ end }}
+
+{{ end }}

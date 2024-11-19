@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>File Management</title>
+    <script src="https://unpkg.com/htmx.org@1.9.2"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+        }
+
+        h1 {
+            text-align: center;
+            margin-top: 20px;
+        }
+
+        form {
+            margin: 20px;
+            padding: 20px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 5px;
+        }
+
+        input {
+            width: 100%;
+            padding: 5px;
+            margin-bottom: 10px;
+        }
+
+        button {
+            padding: 5px 10px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background-color: #0056b3;
+        }
+
+        #files-container {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        .file {
+            margin: 10px;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            width: 200px;
+            text-align: center;
+        }
+
+        .file img {
+            width: 100%;
+            height: 100px;
+            object-fit: cover;
+        }
+
+        .file a {
+            display: block;
+            margin-top: 10px;
+            color: #007bff;
+            text-decoration: none;
+        }
+
+        .file a:hover {
+            text-decoration: underline;
+        }
+
+        #message {
+            margin: 20px;
+            padding: 20px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <h1>File Management</h1>
+
+    <!-- Create Bucket Form -->
+    <form hx-post="/new_bucket" hx-target="#message" hx-swap="innerHTML">
+        <h2>Create New Bucket</h2>
+        <label for="bucket_name">Bucket Name:</label>
+        <input type="text" id="bucket_name" name="bucket_name" required>
+        <label for="description">Description:</label>
+        <input type="text" id="description" name="description" required>
+        <button type="submit">Create Bucket</button>
+    </form>
+
+    <!-- File Upload Form -->
+    <form hx-post="/upload" hx-encoding="multipart/form-data" hx-target="#message" hx-swap="innerHTML">
+        <h2>Upload New File</h2>
+        <label for="bucket_name_upload">Bucket Name:</label>
+        <input type="text" id="bucket_name_upload" name="bucket_name" required>
+        <label for="file">File:</label>
+        <input type="file" id="file" name="file" required>
+        <button type="submit">Upload</button>
+    </form>
+
+    <!-- Display existing files -->
+    <h2>Existing Files</h2>
+    <div id="files-container" hx-get="/view/all_buckets" hx-trigger="load">
+        <!-- File listing will be dynamically injected here -->
+        {{ template "partials/files.html" . }}
+    </div>
+
+    <!-- Messages -->
+    <div id="message"></div>
+</body>
+</html>

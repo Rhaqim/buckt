@@ -162,3 +162,16 @@ func (s *StorageService) CreateOwner(name, email string) error {
 
 	return s.ownerStore.Create(&owner)
 }
+
+func (s *StorageService) GetBuckets() ([]model.BucketModel, error) {
+	return s.bucketStore.FindAll()
+}
+
+func (s *StorageService) GetFiles(bucketName string) ([]string, error) {
+	_, err := s.bucketStore.GetBy("name", bucketName)
+	if err != nil {
+		return nil, err
+	}
+
+	return []string{}, nil
+}
