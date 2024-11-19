@@ -61,8 +61,11 @@ func NewBuckt(configFile string, logToFileAndTerminal bool, saveDir string) (Buc
 	// Http service
 	var httpService domain.StorageHTTPService = service.NewHTTPService(fileService)
 
+	// Http service
+	var portalService domain.StorageHTTPService = service.NewPortalService(fileService)
+
 	// Run the router
-	router := router.NewRouter(log, cfg, httpService)
+	router := router.NewRouter(log, cfg, httpService, portalService)
 
 	return &buckt{
 		cfg,

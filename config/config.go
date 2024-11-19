@@ -30,11 +30,12 @@ type Endpoint struct {
 }
 
 type Config struct {
-	Log      Log      `yaml:"log"`
-	Database Database `yaml:"database"`
-	Server   Server   `yaml:"server"`
-	Media    Media    `yaml:"media"`
-	Endpoint Endpoint `yaml:"endpoint"`
+	Log       Log      `yaml:"log"`
+	Database  Database `yaml:"database"`
+	Server    Server   `yaml:"server"`
+	Media     Media    `yaml:"media"`
+	Endpoint  Endpoint `yaml:"endpoint"`
+	Templates string   `yaml:"templates"`
 }
 
 // LoadConfig loads the configuration from the given file.

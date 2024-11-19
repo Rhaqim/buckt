@@ -19,7 +19,6 @@ The Buckt package provides a flexible storage service with optional integration 
     - [Basic Usage](#basic-usage)
     - [Using with Gin Router](#using-with-gin-router)
   - [License](#license)
-  - [Contributing](#contributing)
 
 ## Installation
 
@@ -133,7 +132,3 @@ func main() {
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## Contributing
-
-Please read [CONTRIBUTING.md](CONTRIBUTING.md) for details on our code of conduct, and the process for submitting pull requests to us.
