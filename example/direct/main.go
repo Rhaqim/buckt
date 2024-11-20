@@ -2,6 +2,7 @@ package main
 
 import (
 	"log"
+	"mime/multipart"
 
 	"github.com/Rhaqim/buckt"
 )
@@ -15,8 +16,10 @@ func main() {
 
 	// Use the Buckt services directly
 
+	var file *multipart.FileHeader = nil
+
 	// Upload a file
-	b.UploadFile([]byte("Hello, World!"), "mybucket", "hello.txt")
+	b.UploadFile(file, "mybucket", "hello/world")
 
 	// Download a file
 	data, err := b.DownloadFile("hello.txt")

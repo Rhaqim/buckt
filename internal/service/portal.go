@@ -1,8 +1,6 @@
 package service
 
 import (
-	"io"
-
 	"github.com/Rhaqim/buckt/internal/domain"
 	"github.com/gin-gonic/gin"
 )
@@ -77,26 +75,13 @@ func (s *portalService) Upload(c *gin.Context) {
 	bucketName := c.PostForm("bucket_name")
 	file, err := c.FormFile("file")
 	if err != nil {
-		c.JSON(400, gin.H{"error": "Failed to retrieve file"})
+		c.JSON(400, gin.H{"error": "Failed to retrieve file", "message": err.Error()})
 		return
 	}
 
-	fileData, err := file.Open()
+	err = s.UploadFile(file, bucketName)
 	if err != nil {
-		c.JSON(500, gin.H{"error": "Failed to open file"})
-		return
-	}
-	defer fileData.Close()
-
-	fileBytes, err := io.ReadAll(fileData)
-	if err != nil {
-		c.JSON(500, gin.H{"error": "Failed to read file"})
-		return
-	}
-
-	err = s.UploadFile(fileBytes, bucketName, file.Filename)
-	if err != nil {
-		c.JSON(500, gin.H{"error": "Failed to upload file"})
+		c.JSON(500, gin.H{"error": "Failed to upload file", "message": err.Error()})
 		return
 	}
 

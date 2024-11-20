@@ -1,6 +1,8 @@
 package buckt
 
 import (
+	"mime/multipart"
+
 	"github.com/Rhaqim/buckt/config"
 	"github.com/Rhaqim/buckt/internal/database"
 	"github.com/Rhaqim/buckt/internal/domain"
@@ -17,7 +19,7 @@ type Buckt interface {
 	Close()
 
 	// Buckt storage service methods
-	UploadFile(file []byte, bucketname, filename string) error
+	UploadFile(file *multipart.FileHeader, bucketName string, folderPath ...string) error
 	DownloadFile(filename string) ([]byte, error)
 	DeleteFile(filename string) error
 	CreateBucket(name, description, ownerID string) error
@@ -50,13 +52,14 @@ func NewBuckt(configFile string, logToFileAndTerminal bool, saveDir string) (Buc
 	db.Migrate()
 
 	// Initialize the stores
+	var tagStore domain.Repository[model.TagModel] = model.NewTagRepository(db.DB)
 	var fileStore domain.Repository[model.FileModel] = model.NewFileRepository(db.DB)
+	var folderStore domain.Repository[model.FolderModel] = model.NewFolderRepository(db.DB)
 	var bucketStore domain.Repository[model.BucketModel] = model.NewBucketRepository(db.DB)
 	var ownerStore domain.Repository[model.OwnerModel] = model.NewOwnerRepository(db.DB)
-	var tagStore domain.Repository[model.TagModel] = model.NewTagRepository(db.DB)
 
 	// Initialize the services
-	var fileService domain.StorageFileService = service.NewStorageService(log, cfg, fileStore, bucketStore, ownerStore, tagStore)
+	var fileService domain.StorageFileService = service.NewStorageService(log, cfg, ownerStore, bucketStore, folderStore, fileStore, tagStore)
 
 	// Http service
 	var httpService domain.StorageHTTPService = service.NewHTTPService(fileService)
@@ -84,8 +87,8 @@ func (b *buckt) Close() {
 	b.db.Close()
 }
 
-func (b *buckt) UploadFile(file []byte, bucketname, filename string) error {
-	return b.StorageFileService.UploadFile(file, bucketname, filename)
+func (b *buckt) UploadFile(file *multipart.FileHeader, bucketName string, folderPath ...string) error {
+	return b.StorageFileService.UploadFile(file, bucketName, folderPath...)
 }
 
 func (b *buckt) DownloadFile(filename string) ([]byte, error) {

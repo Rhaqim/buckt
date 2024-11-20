@@ -1,8 +1,6 @@
 package service
 
 import (
-	"io"
-
 	"github.com/Rhaqim/buckt/internal/domain"
 	"github.com/gin-gonic/gin"
 )
@@ -24,20 +22,7 @@ func (s *httpService) Upload(c *gin.Context) {
 
 	bucketname := c.PostForm("bucketname")
 
-	f, err := file.Open()
-	if err != nil {
-		c.JSON(500, gin.H{"error": err.Error()})
-		return
-	}
-	defer f.Close()
-
-	data, err := io.ReadAll(f)
-	if err != nil {
-		c.JSON(500, gin.H{"error": err.Error()})
-		return
-	}
-
-	err = s.UploadFile(data, bucketname, file.Filename)
+	err = s.UploadFile(file, bucketname)
 	if err != nil {
 		c.JSON(500, gin.H{"error": err.Error()})
 		return

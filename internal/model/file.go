@@ -12,7 +12,7 @@ type FileModel struct {
 	Path        string     `gorm:"not null"`             // Full path or URL to the file
 	ContentType string     `gorm:"not null"`             // MIME type (e.g., image/png, application/pdf)
 	Size        int64      `gorm:"not null"`             // File size in bytes
-	BucketID    uuid.UUID  `gorm:"type:uuid;not null"`   // Foreign key to BucketModel
+	ParentID    uuid.UUID  `gorm:"type:uuid;not null"`   // Foreign key to BucketModel
 	Hash        string     `gorm:"not null;unique"`      // Hash of the file for integrity checks and uniqueness
 	Tags        []TagModel `gorm:"many2many:file_tags;"` // Establish many-to-many relationship with TagModel
 	gorm.Model

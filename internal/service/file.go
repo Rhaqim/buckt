@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"fmt"
 	"mime"
+	"mime/multipart"
 	"os"
 	"path/filepath"
 	"strings"
@@ -12,13 +13,15 @@ import (
 	"github.com/Rhaqim/buckt/internal/domain"
 	errs "github.com/Rhaqim/buckt/internal/error"
 	"github.com/Rhaqim/buckt/internal/model"
+	"github.com/Rhaqim/buckt/internal/utils"
 	"github.com/Rhaqim/buckt/pkg/logger"
 )
 
 type Store struct {
-	fileStore   domain.Repository[model.FileModel]
-	bucketStore domain.Repository[model.BucketModel]
 	ownerStore  domain.Repository[model.OwnerModel]
+	bucketStore domain.Repository[model.BucketModel]
+	folderStore domain.Repository[model.FolderModel]
+	fileStore   domain.Repository[model.FileModel]
 	tagStore    domain.Repository[model.TagModel]
 }
 
@@ -28,13 +31,21 @@ type StorageService struct {
 	Store
 }
 
-func NewStorageService(log *logger.Logger, cfg *config.Config, fileStore domain.Repository[model.FileModel], bucketStore domain.Repository[model.BucketModel], ownerStore domain.Repository[model.OwnerModel], tagStore domain.Repository[model.TagModel]) domain.StorageFileService {
-	store := Store{fileStore: fileStore, bucketStore: bucketStore, ownerStore: ownerStore, tagStore: tagStore}
+func NewStorageService(log *logger.Logger, cfg *config.Config, ownerStore domain.Repository[model.OwnerModel], bucketStore domain.Repository[model.BucketModel], folderStore domain.Repository[model.FolderModel], fileStore domain.Repository[model.FileModel], tagStore domain.Repository[model.TagModel]) domain.StorageFileService {
+	store := Store{fileStore: fileStore, bucketStore: bucketStore, ownerStore: ownerStore, tagStore: tagStore, folderStore: folderStore}
 
 	return &StorageService{log, cfg, store}
 }
 
-func (s *StorageService) UploadFile(file []byte, bucketName, fileName string) error {
+func (s *StorageService) UploadFile(file_ *multipart.FileHeader, bucketName string, folderPath ...string) error {
+	// Read file from request
+	fileName, file, err := utils.ProcessFile(file_)
+	if err != nil {
+		return err
+	}
+
+	name := strings.Split(fileName, ".")[0]
+
 	// Check if bucket exists
 	bucket, err := s.bucketStore.GetBy("name", bucketName)
 	if err != nil {
@@ -42,7 +53,7 @@ func (s *StorageService) UploadFile(file []byte, bucketName, fileName string) er
 	}
 
 	// Check if file already exists in the bucket
-	if _, err := s.fileStore.GetBy("name", fileName); err == nil {
+	if _, err := s.fileStore.GetBy("name", name); err == nil {
 		return errs.ErrFileAlreadyExists
 	}
 
@@ -72,12 +83,12 @@ func (s *StorageService) UploadFile(file []byte, bucketName, fileName string) er
 
 	// Save file record to the database
 	fileModel := model.FileModel{
-		Name:        strings.Split(fileName, ".")[0],
+		Name:        name,
 		Path:        filePath,
 		ContentType: contentType,
 		Size:        fileSize,
 		Hash:        hash,
-		BucketID:    bucket.ID, // Associate the file with the existing bucket
+		ParentID:    bucket.ID, // Associate the file with the existing bucket
 	}
 
 	// Insert the file entry into the database
