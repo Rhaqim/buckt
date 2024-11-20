@@ -41,16 +41,16 @@ func (r *OwnerRepository) Delete(id uuid.UUID) error {
 	return r.db.Delete(&OwnerModel{}, id).Error
 }
 
-func (r *OwnerRepository) GetBy(key string, value string) (OwnerModel, error) {
+func (r *OwnerRepository) GetBy(key interface{}, value ...interface{}) (OwnerModel, error) {
 	var owner OwnerModel
 
-	err := r.db.Where(key+" = ?", value).First(&owner).Error
+	err := r.db.Where(key, value...).First(&owner).Error
 	return owner, err
 }
 
-func (r *OwnerRepository) GetMany(key string, value string) ([]OwnerModel, error) {
+func (r *OwnerRepository) GetMany(key interface{}, value ...interface{}) ([]OwnerModel, error) {
 	var owners []OwnerModel
-	err := r.db.Where(key+" = ?", value).Find(&owners).Error
+	err := r.db.Where(key, value).Find(&owners).Error
 	return owners, err
 }
 

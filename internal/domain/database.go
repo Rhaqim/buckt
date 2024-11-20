@@ -7,6 +7,6 @@ type Repository[T any] interface {
 	FindAll() ([]T, error)
 	FindByID(uuid.UUID) (T, error)
 	Delete(uuid.UUID) error
-	GetBy(string, string) (T, error)
-	GetMany(string, string) ([]T, error)
+	GetBy(interface{}, ...interface{}) (T, error)
+	GetMany(interface{}, ...interface{}) ([]T, error)
 }

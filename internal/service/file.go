@@ -20,7 +20,7 @@ import (
 type Store struct {
 	ownerStore  domain.Repository[model.OwnerModel]
 	bucketStore domain.Repository[model.BucketModel]
-	folderStore domain.Repository[model.FolderModel]
+	folderStore *model.FolderRepository
 	fileStore   domain.Repository[model.FileModel]
 	tagStore    domain.Repository[model.TagModel]
 }
@@ -31,7 +31,7 @@ type StorageService struct {
 	Store
 }
 
-func NewStorageService(log *logger.Logger, cfg *config.Config, ownerStore domain.Repository[model.OwnerModel], bucketStore domain.Repository[model.BucketModel], folderStore domain.Repository[model.FolderModel], fileStore domain.Repository[model.FileModel], tagStore domain.Repository[model.TagModel]) domain.StorageFileService {
+func NewStorageService(log *logger.Logger, cfg *config.Config, ownerStore domain.Repository[model.OwnerModel], bucketStore domain.Repository[model.BucketModel], folderStore *model.FolderRepository, fileStore domain.Repository[model.FileModel], tagStore domain.Repository[model.TagModel]) domain.StorageFileService {
 	store := Store{fileStore: fileStore, bucketStore: bucketStore, ownerStore: ownerStore, tagStore: tagStore, folderStore: folderStore}
 
 	return &StorageService{log, cfg, store}
@@ -47,13 +47,13 @@ func (s *StorageService) UploadFile(file_ *multipart.FileHeader, bucketName stri
 	name := strings.Split(fileName, ".")[0]
 
 	// Check if bucket exists
-	bucket, err := s.bucketStore.GetBy("name", bucketName)
+	bucket, err := s.bucketStore.GetBy("name = ?", bucketName)
 	if err != nil {
 		return errs.ErrBucketNotFound
 	}
 
 	// Check if file already exists in the bucket
-	if _, err := s.fileStore.GetBy("name", name); err == nil {
+	if _, err := s.fileStore.GetBy("name = ?", name); err == nil {
 		return errs.ErrFileAlreadyExists
 	}
 
@@ -88,6 +88,7 @@ func (s *StorageService) UploadFile(file_ *multipart.FileHeader, bucketName stri
 		ContentType: contentType,
 		Size:        fileSize,
 		Hash:        hash,
+		BucketID:    bucket.ID, // Associate the file with the existing bucket
 		ParentID:    bucket.ID, // Associate the file with the existing bucket
 	}
 
@@ -101,7 +102,7 @@ func (s *StorageService) UploadFile(file_ *multipart.FileHeader, bucketName stri
 
 func (s *StorageService) Serve(filename string, serve bool) (string, error) {
 	// Get file from database
-	file, err := s.fileStore.GetBy("name", filename)
+	file, err := s.fileStore.GetBy("name = ?", filename)
 	if err != nil {
 		return "", err
 	}
@@ -136,7 +137,7 @@ func (s *StorageService) DownloadFile(filename string) ([]byte, error) {
 
 func (s *StorageService) DeleteFile(filename string) error {
 	// Get file from database
-	file, err := s.fileStore.GetBy("name", filename)
+	file, err := s.fileStore.GetBy("name = ?", filename)
 	if err != nil {
 		return err
 	}
@@ -152,7 +153,7 @@ func (s *StorageService) DeleteFile(filename string) error {
 }
 
 func (s *StorageService) CreateBucket(name, description, owner_ string) error {
-	owner, err := s.ownerStore.GetBy("name", owner_)
+	owner, err := s.ownerStore.GetBy("name = ?", owner_)
 	if err != nil {
 		return err
 	}
@@ -182,12 +183,12 @@ func (s *StorageService) GetBuckets() ([]model.BucketModel, error) {
 func (s *StorageService) GetFiles(bucketName string) ([]interface{}, error) {
 	var response []interface{}
 
-	bucket, err := s.bucketStore.GetBy("name", bucketName)
+	bucket, err := s.bucketStore.GetBy("name = ?", bucketName)
 	if err != nil {
 		return nil, err
 	}
 
-	files, err := s.fileStore.GetMany("bucket_id", bucket.ID.String())
+	files, err := s.fileStore.GetMany("bucket_id = ?", bucket.ID.String())
 	if err != nil {
 		return nil, err
 	}

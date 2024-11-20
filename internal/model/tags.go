@@ -40,16 +40,16 @@ func (r *TagRepository) Delete(id uuid.UUID) error {
 	return r.db.Delete(&TagModel{}, id).Error
 }
 
-func (r *TagRepository) GetBy(key string, value string) (TagModel, error) {
+func (r *TagRepository) GetBy(key interface{}, value ...interface{}) (TagModel, error) {
 	var tag TagModel
 
-	err := r.db.Where(key+" = ?", value).First(&tag).Error
+	err := r.db.Where(key, value...).First(&tag).Error
 	return tag, err
 }
 
-func (r *TagRepository) GetMany(key string, value string) ([]TagModel, error) {
+func (r *TagRepository) GetMany(key interface{}, value ...interface{}) ([]TagModel, error) {
 	var tags []TagModel
-	err := r.db.Where(key+" = ?", value).Find(&tags).Error
+	err := r.db.Where(key, value).Find(&tags).Error
 	return tags, err
 }
 

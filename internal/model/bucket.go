@@ -43,17 +43,17 @@ func (r *BucketRepository) Delete(id uuid.UUID) error {
 	return r.db.Delete(&BucketModel{}, id).Error
 }
 
-func (r *BucketRepository) GetBy(key string, value string) (BucketModel, error) {
+func (r *BucketRepository) GetBy(key interface{}, value ...interface{}) (BucketModel, error) {
 	var file BucketModel
 
-	err := r.db.Where(key+" = ?", value).First(&file).Error
+	err := r.db.Where(key, value...).First(&file).Error
 	return file, err
 }
 
-func (r *BucketRepository) GetMany(key string, value string) ([]BucketModel, error) {
+func (r *BucketRepository) GetMany(key interface{}, value ...interface{}) ([]BucketModel, error) {
 	var files []BucketModel
 
-	err := r.db.Where(key+" = ?", value).Find(&files).Error
+	err := r.db.Where(key, value).Find(&files).Error
 
 	return files, err
 }

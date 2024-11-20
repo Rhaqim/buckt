@@ -12,7 +12,8 @@ type FileModel struct {
 	Path        string     `gorm:"not null"`             // Full path or URL to the file
 	ContentType string     `gorm:"not null"`             // MIME type (e.g., image/png, application/pdf)
 	Size        int64      `gorm:"not null"`             // File size in bytes
-	ParentID    uuid.UUID  `gorm:"type:uuid;not null"`   // Foreign key to BucketModel
+	BucketID    uuid.UUID  `gorm:"type:uuid;not null"`   // Foreign key to BucketModel
+	ParentID    uuid.UUID  `gorm:"type:uuid;not null"`   // Foreign key to FolderModel
 	Hash        string     `gorm:"not null;unique"`      // Hash of the file for integrity checks and uniqueness
 	Tags        []TagModel `gorm:"many2many:file_tags;"` // Establish many-to-many relationship with TagModel
 	gorm.Model
@@ -46,16 +47,16 @@ func (r *FileRepository) Delete(id uuid.UUID) error {
 	return r.db.Delete(&FileModel{}, id).Error
 }
 
-func (r *FileRepository) GetBy(key string, value string) (FileModel, error) {
+func (r *FileRepository) GetBy(key interface{}, value ...interface{}) (FileModel, error) {
 	var file FileModel
-	err := r.db.Where(key+" = ?", value).First(&file).Error
+	err := r.db.Where(key, value...).First(&file).Error
 	return file, err
 }
 
-func (r *FileRepository) GetMany(key string, value string) ([]FileModel, error) {
+func (r *FileRepository) GetMany(key interface{}, value ...interface{}) ([]FileModel, error) {
 	var files []FileModel
 
-	err := r.db.Where(key+" = ?", value).Find(&files).Error
+	err := r.db.Where(key, value).Find(&files).Error
 	return files, err
 }
 
