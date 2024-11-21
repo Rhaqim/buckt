@@ -15,6 +15,7 @@ import (
 	"github.com/Rhaqim/buckt/internal/model"
 	"github.com/Rhaqim/buckt/internal/utils"
 	"github.com/Rhaqim/buckt/pkg/logger"
+	"github.com/google/uuid"
 )
 
 type Store struct {
@@ -37,7 +38,7 @@ func NewStorageService(log *logger.Logger, cfg *config.Config, ownerStore domain
 	return &StorageService{log, cfg, store}
 }
 
-func (s *StorageService) UploadFile(file_ *multipart.FileHeader, bucketName string, folderPath ...string) error {
+func (s *StorageService) UploadFile(file_ *multipart.FileHeader, bucketName string, folderPath string) error {
 	// Read file from request
 	fileName, file, err := utils.ProcessFile(file_)
 	if err != nil {
@@ -52,10 +53,35 @@ func (s *StorageService) UploadFile(file_ *multipart.FileHeader, bucketName stri
 		return errs.ErrBucketNotFound
 	}
 
-	// Check if file already exists in the bucket
-	if _, err := s.fileStore.GetBy("name = ?", name); err == nil {
-		return errs.ErrFileAlreadyExists
+	currentParentID := bucket.ID.String()
+
+	for _, folder := range utils.ValidateFolderPath(folderPath) {
+		// Check if the folder exists under the current parent
+		folderModel, err := s.folderStore.GetBy("name = ? AND parent_id = ?", folder, currentParentID)
+		if err != nil {
+			// Folder does not exist; create it
+			newFolderModel := model.FolderModel{
+				Name:     folder,
+				ParentID: uuid.MustParse(currentParentID), // Convert currentParentID back to UUID
+				BucketID: bucket.ID,
+			}
+
+			if err := s.folderStore.Create(&newFolderModel); err != nil {
+				return fmt.Errorf("failed to create folder: %w", err)
+			}
+
+			// Update currentParentID to the new folder's ID
+			currentParentID = newFolderModel.ID.String()
+		} else {
+			// Folder exists; update currentParentID to its ID
+			currentParentID = folderModel.ID.String()
+		}
 	}
+
+	// Check if file already exists in the bucket
+	// if _, err := s.fileStore.GetBy("name = ?", name); err == nil {
+	// 	return errs.ErrFileAlreadyExists
+	// }
 
 	// Calculate file hash (SHA-256) for uniqueness check and future retrieval
 	hash := fmt.Sprintf("%x", sha256.Sum256(file))
@@ -89,7 +115,7 @@ func (s *StorageService) UploadFile(file_ *multipart.FileHeader, bucketName stri
 		Size:        fileSize,
 		Hash:        hash,
 		BucketID:    bucket.ID, // Associate the file with the existing bucket
-		ParentID:    bucket.ID, // Associate the file with the existing bucket
+		ParentID:    uuid.MustParse(currentParentID),
 	}
 
 	// Insert the file entry into the database

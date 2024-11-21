@@ -73,13 +73,15 @@ func (s *portalService) NewBucket(c *gin.Context) {
 
 func (s *portalService) Upload(c *gin.Context) {
 	bucketName := c.PostForm("bucket_name")
+	folderPath := c.PostForm("folder_path")
+
 	file, err := c.FormFile("file")
 	if err != nil {
 		c.JSON(400, gin.H{"error": "Failed to retrieve file", "message": err.Error()})
 		return
 	}
 
-	err = s.UploadFile(file, bucketName)
+	err = s.UploadFile(file, bucketName, folderPath)
 	if err != nil {
 		c.JSON(500, gin.H{"error": "Failed to upload file", "message": err.Error()})
 		return

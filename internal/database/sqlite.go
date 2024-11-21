@@ -44,7 +44,7 @@ func (db *DB) Close() {
 }
 
 func (db *DB) Migrate() {
-	if err := db.AutoMigrate(&model.FileModel{}, &model.BucketModel{}, &model.OwnerModel{}, &model.TagModel{}); err != nil {
+	if err := db.AutoMigrate(&model.FileModel{}, &model.BucketModel{}, &model.OwnerModel{}, &model.TagModel{}, &model.FolderModel{}); err != nil {
 		db.ErrorLogger.Fatalf("Failed to auto migrate database: %v", err)
 	}
 }

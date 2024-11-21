@@ -3,7 +3,6 @@ package model
 import (
 	"reflect"
 	"testing"
-	"time"
 
 	"github.com/google/uuid"
 	"gorm.io/driver/sqlite"
@@ -40,13 +39,6 @@ func TestGetDescendants(t *testing.T) {
 	descendants, err := db.GetDescendants(rootID)
 	if err != nil {
 		t.Fatalf("GetDescendants() error = %v", err)
-	}
-
-	// Normalize metadata fields for comparison
-	for i := range descendants {
-		descendants[i].CreatedAt = time.Time{}
-		descendants[i].UpdatedAt = time.Time{}
-		descendants[i].DeletedAt = gorm.DeletedAt{}
 	}
 
 	expected := []FolderModel{

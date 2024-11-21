@@ -41,9 +41,9 @@ func (r *FolderRepository) Delete(id uuid.UUID) error {
 	return r.db.Delete(&FolderModel{}, id).Error
 }
 
-func (r *FolderRepository) GetBy(key string, value string) (FolderModel, error) {
+func (r *FolderRepository) GetBy(key interface{}, value ...interface{}) (FolderModel, error) {
 	var file FolderModel
-	err := r.db.Where(key+" = ?", value).First(&file).Error
+	err := r.db.Where(key, value...).First(&file).Error
 	return file, err
 }
 

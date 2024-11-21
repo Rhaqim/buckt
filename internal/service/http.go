@@ -21,8 +21,9 @@ func (s *httpService) Upload(c *gin.Context) {
 	}
 
 	bucketname := c.PostForm("bucketname")
+	folderPath := c.PostForm("folderPath")
 
-	err = s.UploadFile(file, bucketname)
+	err = s.UploadFile(file, bucketname, folderPath)
 	if err != nil {
 		c.JSON(500, gin.H{"error": err.Error()})
 		return
@@ -49,6 +50,7 @@ func (s *httpService) Download(c *gin.Context) {
 		return
 	}
 
+	c.Header("Content-Disposition", "attachment; filename="+filename)
 	c.Data(200, "application/octet-stream", file)
 }
 

@@ -19,7 +19,7 @@ type Buckt interface {
 	Close()
 
 	// Buckt storage service methods
-	UploadFile(file *multipart.FileHeader, bucketName string, folderPath ...string) error
+	UploadFile(file *multipart.FileHeader, bucketName string, folderPath string) error
 	DownloadFile(filename string) ([]byte, error)
 	DeleteFile(filename string) error
 	CreateBucket(name, description, ownerID string) error
@@ -87,8 +87,8 @@ func (b *buckt) Close() {
 	b.db.Close()
 }
 
-func (b *buckt) UploadFile(file *multipart.FileHeader, bucketName string, folderPath ...string) error {
-	return b.StorageFileService.UploadFile(file, bucketName, folderPath...)
+func (b *buckt) UploadFile(file *multipart.FileHeader, bucketName string, folderPath string) error {
+	return b.StorageFileService.UploadFile(file, bucketName, folderPath)
 }
 
 func (b *buckt) DownloadFile(filename string) ([]byte, error) {
