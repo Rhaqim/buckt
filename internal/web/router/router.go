@@ -76,6 +76,8 @@ func (r *Router) Run() error {
 	r.GET("/api/download/:filename", r.httpService.Download)
 	r.DELETE("/api/delete/:filename", r.httpService.Delete)
 	r.GET("/api/serve/:filename", r.httpService.ServeFile)
+	r.GET("/api/fetch", r.httpService.FetchFilesInFolder)
+	r.GET("/api/fetch/folders", r.httpService.FetchSubFolders)
 
 	return r.Engine.Run(r.Server.Port)
 }

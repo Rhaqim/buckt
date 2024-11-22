@@ -225,3 +225,35 @@ func (s *StorageService) GetFiles(bucketName string) ([]interface{}, error) {
 
 	return response, nil
 }
+
+func (s *StorageService) GetFilesInFolder(bucketName, folderPath string) ([]interface{}, error) {
+	var response []interface{}
+
+	files, err := s.folderStore.GetFilesFromPath(bucketName, folderPath)
+	if err != nil {
+		return nil, err
+	}
+
+	fmt.Println("Files returned", files)
+
+	for _, file := range files {
+		response = append(response, file)
+	}
+
+	return response, nil
+}
+
+func (s *StorageService) GetSubFolders(bucketName, folderPath string) ([]interface{}, error) {
+	var response []interface{}
+
+	folders, err := s.folderStore.GetSubfolders(bucketName, folderPath)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, folder := range folders {
+		response = append(response, folder)
+	}
+
+	return response, nil
+}

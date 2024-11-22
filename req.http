@@ -1,0 +1,5 @@
+GET http://localhost:8080/api/fetch?folder_path=image/background&bucket_name=test_bucket
+
+###
+
+GET http://localhost:8080/api/fetch/folders?folder_path=image&bucket_name=test_bucket

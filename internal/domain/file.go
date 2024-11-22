@@ -10,4 +10,6 @@ type StorageFileService interface {
 	DeleteFile(filename string) error
 	GetFiles(bucketName string) ([]interface{}, error)
 	Serve(filename string, serve bool) (string, error)
+	GetFilesInFolder(bucketName, folderPath string) ([]interface{}, error)
+	GetSubFolders(bucketName, folderPath string) ([]interface{}, error)
 }

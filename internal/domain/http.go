@@ -12,4 +12,6 @@ type StorageHTTPService interface {
 	NewBucket(c *gin.Context)
 	ServeFile(*gin.Context)
 	FetchFiles(c *gin.Context)
+	FetchFilesInFolder(c *gin.Context)
+	FetchSubFolders(c *gin.Context)
 }

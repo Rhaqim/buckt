@@ -123,3 +123,35 @@ func (s *portalService) ServeFile(c *gin.Context) {
 
 	c.Data(200, "application/octet-stream", fileData)
 }
+
+func (s *portalService) FetchFilesInFolder(c *gin.Context) {
+	bucketName := c.Query("bucket_name")
+	folderPath := c.Param("folder_path")
+
+	files, err := s.GetFilesInFolder(bucketName, folderPath)
+	if err != nil {
+		c.JSON(500, gin.H{"error": "Failed to retrieve files"})
+		return
+	}
+
+	// Render the partial template to update only the file list section
+	c.HTML(200, "partials/files.html", gin.H{
+		"Files": files,
+	})
+}
+
+func (s *portalService) FetchSubFolders(c *gin.Context) {
+	bucketName := c.Query("bucket_name")
+	folderPath := c.Param("folder_path")
+
+	subfolders, err := s.GetSubFolders(bucketName, folderPath)
+	if err != nil {
+		c.JSON(500, gin.H{"error": "Failed to retrieve subfolders"})
+		return
+	}
+
+	// Render the partial template to update only the folder list section
+	c.HTML(200, "partials/folders.html", gin.H{
+		"Subfolders": subfolders,
+	})
+}

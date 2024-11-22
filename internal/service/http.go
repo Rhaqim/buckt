@@ -134,3 +134,29 @@ func (s *httpService) FetchFiles(c *gin.Context) {
 
 	c.JSON(200, gin.H{"files": files})
 }
+
+func (s *httpService) FetchFilesInFolder(c *gin.Context) {
+	bucketName := c.Query("bucket_name")
+	folderPath := c.Query("folder_path")
+
+	files, err := s.GetFilesInFolder(bucketName, folderPath)
+	if err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(200, gin.H{"files": files})
+}
+
+func (s *httpService) FetchSubFolders(c *gin.Context) {
+	bucketName := c.Query("bucket_name")
+	folderPath := c.Query("folder_path")
+
+	folders, err := s.GetSubFolders(bucketName, folderPath)
+	if err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(200, gin.H{"folders": folders})
+}
