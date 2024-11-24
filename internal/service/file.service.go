@@ -58,10 +58,16 @@ func (bs *BucktService) CreateOwner(name, email string) error {
 }
 
 func (bs *BucktService) CreateBucket(name, description, ownerID string) error {
+	fmt.Printf("ownerID: %s\n", ownerID)
+	parsedId, err := uuid.Parse(ownerID)
+	if err != nil {
+		return errs.ErrInvalidUUID
+	}
+
 	var bucket model.BucketModel = model.BucketModel{
 		Name:        name,
 		Description: description,
-		OwnerID:     uuid.MustParse(ownerID),
+		OwnerID:     parsedId,
 	}
 
 	return bs.bucketStore.Create(&bucket)
@@ -140,6 +146,9 @@ func (bs *BucktService) UploadFile(file_ *multipart.FileHeader, bucketName strin
 		}
 	}
 
+	// Get file content type
+	contentType := mime.TypeByExtension(ext)
+
 	// Calculate file hash (SHA-256) for uniqueness check and future retrieval
 	hash := fmt.Sprintf("%x", sha256.Sum256(file))
 
@@ -151,7 +160,7 @@ func (bs *BucktService) UploadFile(file_ *multipart.FileHeader, bucketName strin
 		Name:        name,
 		ParentID:    uuid.MustParse(currentParentID),
 		BucketID:    bucket.ID,
-		ContentType: ext,
+		ContentType: contentType,
 		Hash:        hash,
 		Size:        fileSize,
 		Path:        filepath.Join(bucketName, folderPath),

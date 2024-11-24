@@ -1,5 +1,36 @@
-GET http://localhost:8080/api/fetch?folder_path=image/background&bucket_name=test_bucket
+POST http://localhost:8080/new_user
+
+{
+    "username": "test",
+    "email": "test@gmail.com"
+}
 
 ###
 
-GET http://localhost:8080/api/fetch/folders?folder_path=image&bucket_name=test_bucket
+POST http://localhost:8080/new_bucket
+
+{
+    "bucket_name": "test_bucket",
+    "description": "test bucket",
+    "owner_id": "788f50fb-812b-46ed-ad36-36130d808dc4"
+}
+
+###
+
+POST http://localhost:8080/files/upload HTTP/1.1
+Content-Type: multipart/form-data; boundary=----MyBoundary
+
+------MyBoundary
+Content-Disposition: form-data; name="bucket_name"
+
+test_bucket
+------MyBoundary
+Content-Disposition: form-data; name="folder_path"
+
+image/background
+------MyBoundary
+Content-Disposition: form-data; name="file"; filename="fukuma.jpg"
+Content-Type: image/jpeg
+
+< /Users/user/Downloads/Wallpapers/fukuma.jpg
+------MyBoundary--

@@ -1,6 +1,8 @@
 package service
 
 import (
+	"fmt"
+
 	"github.com/Rhaqim/buckt/internal/domain"
 	"github.com/Rhaqim/buckt/request"
 	"github.com/gin-gonic/gin"
@@ -18,8 +20,8 @@ func (s *APIService) NewUser(c *gin.Context) {
 	clientType, _ := c.Get("clientType")
 
 	var req struct {
-		Name  string `form:"name"`
-		Email string `form:"email"`
+		Name  string `json:"name"`
+		Email string `json:"email"`
 	}
 
 	if err := c.Bind(&req); err != nil {
@@ -45,15 +47,17 @@ func (s *APIService) NewBucket(c *gin.Context) {
 	clientType, _ := c.Get("clientType")
 
 	var req struct {
-		Name        string `form:"bucket_name"`
-		Description string `form:"description"`
-		OwnerID     string // Example owner ID, adjust as needed
+		Name        string `json:"bucket_name"`
+		Description string `json:"description"`
+		OwnerID     string `json:"owner_id"`
 	}
 
-	if err := c.Bind(&req); err != nil {
+	if err := c.BindJSON(&req); err != nil {
 		c.JSON(400, gin.H{"error": err.Error()})
 		return
 	}
+
+	fmt.Println("Request: ", req)
 
 	err := s.CreateBucket(req.Name, req.Description, req.OwnerID)
 	if err != nil {

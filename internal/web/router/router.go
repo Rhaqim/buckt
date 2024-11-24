@@ -59,8 +59,8 @@ func (r *Router) Run() error {
 		c.HTML(200, "index.html", nil)
 	})
 
-	r.POST("/api/new_user", r.httpService.NewUser)
-	r.POST("/api/new_bucket", r.httpService.NewBucket)
+	r.POST("/new_user", r.httpService.NewUser)
+	r.POST("/new_bucket", r.httpService.NewBucket)
 
 	folders := r.Group("folders")
 	{
@@ -74,7 +74,7 @@ func (r *Router) Run() error {
 
 	files := r.Group("files")
 	{
-		files.GET("/upload", r.httpService.FileUpload)
+		files.POST("/upload", r.httpService.FileUpload)
 		files.GET("/download", r.httpService.FileDownload)
 		files.PUT("/rename", r.httpService.FileRename)
 		files.PUT("/move", r.httpService.FileMove)
