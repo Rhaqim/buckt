@@ -4,18 +4,6 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-type StorageHTTPService interface {
-	Upload(*gin.Context)
-	Download(*gin.Context)
-	Delete(*gin.Context)
-	NewUser(c *gin.Context)
-	NewBucket(c *gin.Context)
-	ServeFile(*gin.Context)
-	FetchFiles(c *gin.Context)
-	FetchFilesInFolder(c *gin.Context)
-	FetchSubFolders(c *gin.Context)
-}
-
 // Upload media - requires a bucket name used as the top level folder, folder path for subsequent folders and the file to be uploaded
 // e.g /upload data = {bucket_name: "bucket_name", folder_path: "folder_path", file: "file"}
 

@@ -1,0 +1,61 @@
+package service
+
+import (
+	"fmt"
+	"os"
+	"path/filepath"
+
+	"github.com/Rhaqim/buckt/config"
+	"github.com/Rhaqim/buckt/internal/domain"
+	"github.com/Rhaqim/buckt/pkg/logger"
+)
+
+type BucktFSService struct {
+	*logger.Logger
+	*config.Config
+}
+
+func NewBucktFSService(log *logger.Logger, cfg *config.Config) domain.BucktFileSystemService {
+
+	return &BucktFSService{log, cfg}
+}
+
+func (bfs *BucktFSService) FSWriteFile(path string, file []byte) error {
+	// File system path
+	filePath := filepath.Join(bfs.Media.Dir, path)
+
+	// Save the file to the file system
+	if err := os.MkdirAll(filepath.Dir(filePath), 0755); err != nil {
+		return fmt.Errorf("failed to create directory: %w", err)
+	}
+	if err := os.WriteFile(filePath, file, 0644); err != nil {
+		return fmt.Errorf("failed to save file: %w", err)
+	}
+
+	return nil
+}
+
+func (bfs *BucktFSService) FSUpdateFile(oldPath, newPath string) error {
+	oldFilePath := filepath.Join(bfs.Media.Dir, oldPath)
+	newFilePath := filepath.Join(bfs.Media.Dir, newPath)
+
+	if err := os.MkdirAll(filepath.Dir(newFilePath), 0755); err != nil {
+		return fmt.Errorf("failed to create directory: %w", err)
+	}
+
+	if err := os.Rename(oldFilePath, newFilePath); err != nil {
+		return fmt.Errorf("failed to move file: %w", err)
+	}
+
+	return nil
+}
+
+func (bfs *BucktFSService) FSDeleteFile(folderPath string) error {
+	filePath := filepath.Join(bfs.Media.Dir, folderPath)
+
+	if err := os.Remove(filePath); err != nil {
+		return fmt.Errorf("failed to delete file: %w", err)
+	}
+
+	return nil
+}

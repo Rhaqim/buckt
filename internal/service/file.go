@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"mime"
 	"mime/multipart"
-	"os"
 	"path/filepath"
 	"strings"
 
@@ -15,22 +14,85 @@ import (
 	"github.com/Rhaqim/buckt/internal/model"
 	"github.com/Rhaqim/buckt/internal/utils"
 	"github.com/Rhaqim/buckt/pkg/logger"
+	"github.com/Rhaqim/buckt/request"
 	"github.com/google/uuid"
 )
 
-type StorageService struct {
+type BucktStore struct {
+	ownerStore  domain.BucktRepository[model.OwnerModel]
+	bucketStore domain.BucktRepository[model.BucketModel]
+	folderStore *model.FolderRepository
+	fileStore   domain.BucktRepository[model.FileModel]
+	tagStore    domain.BucktRepository[model.TagModel]
+}
+
+type BucktService struct {
 	*logger.Logger
 	*config.Config
 	BucktStore
+	domain.BucktFileSystemService
 }
 
-func NewStorageService(log *logger.Logger, cfg *config.Config, ownerStore domain.BucktRepository[model.OwnerModel], bucketStore domain.BucktRepository[model.BucketModel], folderStore *model.FolderRepository, fileStore domain.BucktRepository[model.FileModel], tagStore domain.BucktRepository[model.TagModel]) domain.StorageFileService {
-	store := BucktStore{fileStore: fileStore, bucketStore: bucketStore, ownerStore: ownerStore, tagStore: tagStore, folderStore: folderStore}
+func NewBucktService(log *logger.Logger, cfg *config.Config, ownerStore domain.BucktRepository[model.OwnerModel],
+	bucketStore domain.BucktRepository[model.BucketModel], folderStore *model.FolderRepository,
+	fileStore domain.BucktRepository[model.FileModel], tagStore domain.BucktRepository[model.TagModel]) domain.BucktService {
 
-	return &StorageService{log, cfg, store}
+	store := BucktStore{
+		fileStore:   fileStore,
+		bucketStore: bucketStore,
+		ownerStore:  ownerStore,
+		tagStore:    tagStore,
+		folderStore: folderStore,
+	}
+
+	bfs := NewBucktFSService(log, cfg)
+
+	return &BucktService{log, cfg, store, bfs}
 }
 
-func (s *StorageService) UploadFile(file_ *multipart.FileHeader, bucketName string, folderPath string) error {
+func (bs *BucktService) CreateOwner(name, email string) error {
+	var owner model.OwnerModel = model.OwnerModel{
+		Name:  name,
+		Email: email,
+	}
+
+	return bs.ownerStore.Create(&owner)
+}
+
+func (bs *BucktService) CreateBucket(name, description, ownerID string) error {
+	parsedId, err := uuid.Parse(ownerID)
+	if err != nil {
+		return errs.ErrInvalidUUID
+	}
+
+	var bucket model.BucketModel = model.BucketModel{
+		Name:        name,
+		Description: description,
+		OwnerID:     parsedId,
+	}
+
+	return bs.bucketStore.Create(&bucket)
+}
+
+func (bs *BucktService) DeleteBucket(bucketName string) error {
+	bucket, err := bs.bucketStore.GetBy("name = ?", bucketName)
+	if err != nil {
+		return errs.ErrBucketNotFound
+	}
+
+	return bs.bucketStore.Delete(bucket.ID)
+}
+
+func (bs *BucktService) GetBuckets(ownerID string) ([]interface{}, error) {
+	buckets, err := bs.bucketStore.GetMany("owner_id = ?", ownerID)
+	if err != nil {
+		return nil, errs.ErrBucketNotFound
+	}
+
+	return utils.InterfaceSlice(buckets), nil
+}
+
+func (bs *BucktService) UploadFile(file_ *multipart.FileHeader, bucketName string, folderPath string) error {
 	// Read file from request
 	fileName, file, err := utils.ProcessFile(file_)
 	if err != nil {
@@ -40,7 +102,7 @@ func (s *StorageService) UploadFile(file_ *multipart.FileHeader, bucketName stri
 	name := strings.Split(fileName, ".")[0]
 
 	// Check if bucket exists
-	bucket, err := s.bucketStore.GetBy("name = ?", bucketName)
+	bucket, err := bs.bucketStore.GetBy("name = ?", bucketName)
 	if err != nil {
 		return errs.ErrBucketNotFound
 	}
@@ -49,7 +111,7 @@ func (s *StorageService) UploadFile(file_ *multipart.FileHeader, bucketName stri
 
 	for _, folder := range utils.ValidateFolderPath(folderPath) {
 		// Check if the folder exists under the current parent
-		folderModel, err := s.folderStore.GetBy("name = ? AND parent_id = ?", folder, currentParentID)
+		folderModel, err := bs.folderStore.GetBy("name = ? AND parent_id = ?", folder, currentParentID)
 		if err != nil {
 			// Folder does not exist; create it
 			newFolderModel := model.FolderModel{
@@ -58,22 +120,60 @@ func (s *StorageService) UploadFile(file_ *multipart.FileHeader, bucketName stri
 				BucketID: bucket.ID,
 			}
 
-			if err := s.folderStore.Create(&newFolderModel); err != nil {
-				return fmt.Errorf("failed to create folder: %w", err)
+			if err := bs.folderStore.Create(&newFolderModel); err != nil {
+				return err
 			}
 
-			// Update currentParentID to the new folder's ID
 			currentParentID = newFolderModel.ID.String()
 		} else {
-			// Folder exists; update currentParentID to its ID
 			currentParentID = folderModel.ID.String()
 		}
 	}
 
-	// Check if file already exists in the bucket
-	// if _, err := s.fileStore.GetBy("name = ?", name); err == nil {
-	// 	return errs.ErrFileAlreadyExists
-	// }
+	// Check if file already exists
+	_, err = bs.fileStore.GetBy("name = ? AND parent_id = ?", name, currentParentID)
+	if err == nil {
+		return errs.ErrFileAlreadyExists
+	}
+
+	var tagModels []model.TagModel
+
+	// Create file tags
+	tags := strings.Split(file_.Header.Get("Tags"), ",")
+	for _, tag := range tags {
+		tagModel := model.TagModel{
+			Name: tag,
+		}
+
+		if err := bs.tagStore.Create(&tagModel); err != nil {
+			return err
+		}
+
+		tagModels = append(tagModels, tagModel)
+	}
+
+	// File path
+	path := filepath.Join(bucketName, folderPath, fileName)
+
+	// Save the file to the file system
+	err = bs.FSWriteFile(path, file)
+	if err != nil {
+		return err
+	}
+
+	// Get file extension
+	ext := filepath.Ext(fileName)
+	if ext == "" {
+		exts, err := mime.ExtensionsByType(file_.Header.Get("Content-Type"))
+		if err != nil {
+			ext = ".bin"
+		} else {
+			ext = exts[0]
+		}
+	}
+
+	// Get file content type
+	contentType := mime.TypeByExtension(ext)
 
 	// Calculate file hash (SHA-256) for uniqueness check and future retrieval
 	hash := fmt.Sprintf("%x", sha256.Sum256(file))
@@ -81,171 +181,83 @@ func (s *StorageService) UploadFile(file_ *multipart.FileHeader, bucketName stri
 	// File size in bytes
 	fileSize := int64(len(file))
 
-	// Determine file content type (MIME type)
-	contentType := mime.TypeByExtension(filepath.Ext(fileName))
-	if contentType == "" {
-		contentType = "application/octet-stream" // Default content type
-	}
-
-	// Create the full file path using bucket name and file name
-	// filePath := filepath.Join("/www/media", bucketName, fileName)
-	filePath := filepath.Join(s.Media.Dir, bucketName, fileName)
-
-	// Save the file to the file system
-	if err := os.MkdirAll(filepath.Dir(filePath), 0755); err != nil {
-		return fmt.Errorf("failed to create directory: %w", err)
-	}
-	if err := os.WriteFile(filePath, file, 0644); err != nil {
-		return fmt.Errorf("failed to save file: %w", err)
-	}
-
-	// Save file record to the database
+	// Create file model
 	fileModel := model.FileModel{
 		Name:        name,
-		Path:        filePath,
+		Path:        path,
 		ContentType: contentType,
 		Size:        fileSize,
-		Hash:        hash,
-		BucketID:    bucket.ID, // Associate the file with the existing bucket
+		BucketID:    bucket.ID,
 		ParentID:    uuid.MustParse(currentParentID),
+		Hash:        hash,
+		Tags:        tagModels,
 	}
 
-	// Insert the file entry into the database
-	if err := s.fileStore.Create(&fileModel); err != nil {
-		return fmt.Errorf("failed to save file metadata: %w", err)
+	// Create file
+	if err := bs.fileStore.Create(&fileModel); err != nil {
+		return err
 	}
 
 	return nil
 }
 
-func (s *StorageService) Serve(filename string, serve bool) (string, error) {
-	// Get file from database
-	file, err := s.fileStore.GetBy("name = ?", filename)
+func (bs *BucktService) RenameFile(request request.RenameFileRequest) error {
+	path := filepath.Join(request.BucketName, request.FolderPath, request.Filename)
+
+	file, err := bs.fileStore.GetBy("path = ?", path)
 	if err != nil {
-		return "", err
+		return errs.ErrFileNotFound
 	}
 
-	// Read file from storage
-	filePath := file.Path
-	if _, err := os.Stat(filePath); err != nil {
-		return "", err
-	}
+	newPath := filepath.Join(request.BucketName, request.FolderPath, request.NewFilename)
 
-	if serve {
-		filePath = s.Config.Endpoint.URL + "/server/" + filename
-	}
-
-	return filePath, nil
-}
-
-func (s *StorageService) DownloadFile(filename string) ([]byte, error) {
-	// Get file from database
-	filePath, err := s.Serve(filename, false)
-	if err != nil {
-		return nil, err
-	}
-
-	data, err := os.ReadFile(filePath)
-	if err != nil {
-		return nil, err
-	}
-
-	return data, nil
-}
-
-func (s *StorageService) DeleteFile(filename string) error {
-	// Get file from database
-	file, err := s.fileStore.GetBy("name = ?", filename)
+	err = bs.FSUpdateFile(path, newPath)
 	if err != nil {
 		return err
 	}
 
-	// Delete file from storage
-	filePath := file.Path
-	if err := os.Remove(filePath); err != nil {
-		return err
-	}
+	file.Name = request.NewFilename
+	file.Path = newPath
 
-	// Delete file from database
-	return s.fileStore.Delete(file.ID)
+	return bs.fileStore.Update(&file)
 }
 
-func (s *StorageService) CreateBucket(name, description, owner_ string) error {
-	owner, err := s.ownerStore.GetBy("name = ?", owner_)
-	if err != nil {
-		return err
-	}
-
-	var bucket model.BucketModel = model.BucketModel{
-		Name:        name,
-		Description: description,
-		OwnerID:     owner.ID,
-	}
-
-	return s.bucketStore.Create(&bucket)
+func (bs *BucktService) MoveFile(request.MoveFileRequest) error {
+	panic("implement me")
 }
 
-func (s *StorageService) CreateOwner(name, email string) error {
-	var owner model.OwnerModel = model.OwnerModel{
-		Name:  name,
-		Email: email,
-	}
-
-	return s.ownerStore.Create(&owner)
+func (bs *BucktService) ServeFile(request.FileRequest, bool) (string, error) {
+	panic("implement me")
 }
 
-func (s *StorageService) GetBuckets() ([]model.BucketModel, error) {
-	return s.bucketStore.GetAll()
+func (bs *BucktService) DownloadFile(request.FileRequest) ([]byte, error) {
+	panic("implement me")
 }
 
-func (s *StorageService) GetFiles(bucketName string) ([]interface{}, error) {
-	var response []interface{}
-
-	bucket, err := s.bucketStore.GetBy("name = ?", bucketName)
-	if err != nil {
-		return nil, err
-	}
-
-	files, err := s.fileStore.GetMany("bucket_id = ?", bucket.ID.String())
-	if err != nil {
-		return nil, err
-	}
-
-	for _, file := range files {
-		response = append(response, file)
-	}
-
-	return response, nil
+func (bs *BucktService) DeleteFile(request.FileRequest) error {
+	panic("implement me")
 }
 
-func (s *StorageService) GetFilesInFolder(bucketName, folderPath string) ([]interface{}, error) {
-	var response []interface{}
-
-	files, err := s.folderStore.GetFilesFromPath(bucketName, folderPath)
-	if err != nil {
-		return nil, err
-	}
-
-	fmt.Println("Files returned", files)
-
-	for _, file := range files {
-		response = append(response, file)
-	}
-
-	return response, nil
+func (bs *BucktService) CreateFolder(bucketName, folderPath string) error {
+	panic("implement me")
 }
 
-func (s *StorageService) GetSubFolders(bucketName, folderPath string) ([]interface{}, error) {
-	var response []interface{}
+func (bs *BucktService) RenameFolder(request.RenameFolderRequest) error {
+	panic("implement me")
+}
 
-	folders, err := s.folderStore.GetSubfolders(bucketName, folderPath)
-	if err != nil {
-		return nil, err
-	}
+func (bs *BucktService) MoveFolder(request.MoveFolderRequest) error {
+	panic("implement me")
+}
 
-	for _, folder := range folders {
-		response = append(response, folder)
-	}
+func (bs *BucktService) DeleteFolder(request.BaseFileRequest) error {
+	panic("implement me")
+}
 
-	return response, nil
+func (bs *BucktService) GetFilesInFolder(request.BaseFileRequest) ([]interface{}, error) {
+	panic("implement me")
+}
+
+func (bs *BucktService) GetSubFolders(request.BaseFileRequest) ([]interface{}, error) {
+	panic("implement me")
 }

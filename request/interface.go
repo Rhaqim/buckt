@@ -11,12 +11,13 @@ type FileRequest struct {
 }
 
 type RenameFileRequest struct {
-	FileRequest
+	BaseFileRequest
+	Filename    string `json:"filename"`
 	NewFilename string `json:"new_filename"`
 }
 
 type MoveFileRequest struct {
-	FileRequest
+	OldFolderPath string `json:"old_folder_path"`
 	NewFolderPath string `json:"new_folder_path"`
 }
 

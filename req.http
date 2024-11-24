@@ -12,7 +12,7 @@ POST http://localhost:8080/new_bucket
 {
     "bucket_name": "test_bucket",
     "description": "test bucket",
-    "owner_id": "788f50fb-812b-46ed-ad36-36130d808dc4"
+    "owner_id": "6e45ecfb-5922-46b8-a62c-bc7bc59e75b9"
 }
 
 ###
