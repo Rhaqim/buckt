@@ -14,15 +14,13 @@ func NewPortalService(s domain.StorageFileService) domain.StorageHTTPService {
 }
 
 func (s *portalService) FetchFiles(c *gin.Context) {
-	// bucketName := c.Param("bucket_name")
+	bucketName := c.Param("bucket_name")
 
-	// files, err := s.GetFiles(bucketName)
-	// if err != nil {
-	// 	c.JSON(500, gin.H{"error": "Failed to retrieve files"})
-	// 	return
-	// }
-
-	files := []string{"file1.txt", "file2.txt", "file3.txt"} // Replace with actual files
+	files, err := s.GetFiles(bucketName)
+	if err != nil {
+		c.JSON(500, gin.H{"error": "Failed to retrieve files"})
+		return
+	}
 
 	// Render the partial template to update only the file list section
 	c.HTML(200, "partials/files.html", gin.H{

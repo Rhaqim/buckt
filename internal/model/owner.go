@@ -17,7 +17,7 @@ type OwnerRepository struct {
 	db *gorm.DB
 }
 
-func NewOwnerRepository(db *gorm.DB) domain.Repository[OwnerModel] {
+func NewOwnerRepository(db *gorm.DB) domain.BucktRepository[OwnerModel] {
 	return &OwnerRepository{db}
 }
 
@@ -25,13 +25,17 @@ func (r *OwnerRepository) Create(owner *OwnerModel) error {
 	return r.db.Create(owner).Error
 }
 
-func (r *OwnerRepository) FindAll() ([]OwnerModel, error) {
+func (r *OwnerRepository) Update(owner *OwnerModel) error {
+	return r.db.Save(owner).Error
+}
+
+func (r *OwnerRepository) GetAll() ([]OwnerModel, error) {
 	var owners []OwnerModel
 	err := r.db.Find(&owners).Error
 	return owners, err
 }
 
-func (r *OwnerRepository) FindByID(id uuid.UUID) (OwnerModel, error) {
+func (r *OwnerRepository) GetByID(id uuid.UUID) (OwnerModel, error) {
 	var owner OwnerModel
 	err := r.db.First(&owner, id).Error
 	return owner, err

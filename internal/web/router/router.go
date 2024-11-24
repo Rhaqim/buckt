@@ -6,6 +6,7 @@ import (
 
 	"github.com/Rhaqim/buckt/config"
 	"github.com/Rhaqim/buckt/internal/domain"
+	"github.com/Rhaqim/buckt/internal/web/middleware"
 	"github.com/Rhaqim/buckt/pkg/logger"
 	"github.com/gin-gonic/gin"
 )
@@ -44,6 +45,10 @@ func NewRouter(log *logger.Logger, cfg *config.Config, httpService, portalServic
 	// Load templates using the specified pattern
 	r.LoadHTMLGlob(templatePath)
 
+	// Set the client type middleware i.e. portal or api
+	middleware := middleware.ClientTypeMiddleware()
+	r.Use(middleware)
+
 	return &Router{r, log, cfg, httpService, portalService}
 }
 
@@ -79,5 +84,26 @@ func (r *Router) Run() error {
 	r.GET("/api/fetch", r.httpService.FetchFilesInFolder)
 	r.GET("/api/fetch/folders", r.httpService.FetchSubFolders)
 
+	// folders := r.Group("folders")
+	// {
+	// 	folders.GET("/fetch", r.httpService.FetchSubFolders)
+	// 	folders.GET("/fetch/files", r.httpService.FetchFilesInFolder)
+	// 	folders.PUT("/rename", r.httpService.RenameFolder)
+	// 	folders.PUT("/move", r.httpService.MoveFolder)
+	// 	folders.DELETE("/delete", r.httpService.DeleteFolder)
+
+	// }
+
+	// files := r.Group("files")
+	// {
+	// 	files.PUT("/rename", r.httpService.RenameFile)
+	// 	files.PUT("/move", r.httpService.MoveFile)
+	// 	files.DELETE("/delete", r.httpService.DeleteFile)
+	// 	files.GET("/download", r.httpService.Download)
+	// 	files.GET("/serve", r.httpService.ServeFile)
+	// }
+
 	return r.Engine.Run(r.Server.Port)
 }
+
+// Define the routes for the router

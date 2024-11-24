@@ -18,22 +18,14 @@ import (
 	"github.com/google/uuid"
 )
 
-type Store struct {
-	ownerStore  domain.Repository[model.OwnerModel]
-	bucketStore domain.Repository[model.BucketModel]
-	folderStore *model.FolderRepository
-	fileStore   domain.Repository[model.FileModel]
-	tagStore    domain.Repository[model.TagModel]
-}
-
 type StorageService struct {
 	*logger.Logger
 	*config.Config
-	Store
+	BucktStore
 }
 
-func NewStorageService(log *logger.Logger, cfg *config.Config, ownerStore domain.Repository[model.OwnerModel], bucketStore domain.Repository[model.BucketModel], folderStore *model.FolderRepository, fileStore domain.Repository[model.FileModel], tagStore domain.Repository[model.TagModel]) domain.StorageFileService {
-	store := Store{fileStore: fileStore, bucketStore: bucketStore, ownerStore: ownerStore, tagStore: tagStore, folderStore: folderStore}
+func NewStorageService(log *logger.Logger, cfg *config.Config, ownerStore domain.BucktRepository[model.OwnerModel], bucketStore domain.BucktRepository[model.BucketModel], folderStore *model.FolderRepository, fileStore domain.BucktRepository[model.FileModel], tagStore domain.BucktRepository[model.TagModel]) domain.StorageFileService {
+	store := BucktStore{fileStore: fileStore, bucketStore: bucketStore, ownerStore: ownerStore, tagStore: tagStore, folderStore: folderStore}
 
 	return &StorageService{log, cfg, store}
 }
@@ -203,7 +195,7 @@ func (s *StorageService) CreateOwner(name, email string) error {
 }
 
 func (s *StorageService) GetBuckets() ([]model.BucketModel, error) {
-	return s.bucketStore.FindAll()
+	return s.bucketStore.GetAll()
 }
 
 func (s *StorageService) GetFiles(bucketName string) ([]interface{}, error) {

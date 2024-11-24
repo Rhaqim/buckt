@@ -19,7 +19,7 @@ type BucketRepository struct {
 	db *gorm.DB
 }
 
-func NewBucketRepository(db *gorm.DB) domain.Repository[BucketModel] {
+func NewBucketRepository(db *gorm.DB) domain.BucktRepository[BucketModel] {
 	return &BucketRepository{db}
 }
 
@@ -27,13 +27,17 @@ func (r *BucketRepository) Create(file *BucketModel) error {
 	return r.db.Create(file).Error
 }
 
-func (r *BucketRepository) FindAll() ([]BucketModel, error) {
+func (r *BucketRepository) Update(file *BucketModel) error {
+	return r.db.Save(file).Error
+}
+
+func (r *BucketRepository) GetAll() ([]BucketModel, error) {
 	var files []BucketModel
 	err := r.db.Find(&files).Error
 	return files, err
 }
 
-func (r *BucketRepository) FindByID(id uuid.UUID) (BucketModel, error) {
+func (r *BucketRepository) GetByID(id uuid.UUID) (BucketModel, error) {
 	var file BucketModel
 	err := r.db.First(&file, id).Error
 	return file, err

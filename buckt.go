@@ -52,14 +52,17 @@ func NewBuckt(configFile string, logToFileAndTerminal bool, saveDir string) (Buc
 	db.Migrate()
 
 	// Initialize the stores
-	var tagStore domain.Repository[model.TagModel] = model.NewTagRepository(db.DB)
-	var fileStore domain.Repository[model.FileModel] = model.NewFileRepository(db.DB)
+	var tagStore domain.BucktRepository[model.TagModel] = model.NewTagRepository(db.DB)
+	var fileStore domain.BucktRepository[model.FileModel] = model.NewFileRepository(db.DB)
 	var folderStore *model.FolderRepository = model.NewFolderRepository(db.DB)
-	var bucketStore domain.Repository[model.BucketModel] = model.NewBucketRepository(db.DB)
-	var ownerStore domain.Repository[model.OwnerModel] = model.NewOwnerRepository(db.DB)
+	var bucketStore domain.BucktRepository[model.BucketModel] = model.NewBucketRepository(db.DB)
+	var ownerStore domain.BucktRepository[model.OwnerModel] = model.NewOwnerRepository(db.DB)
 
 	// Initialize the services
-	var fileService domain.StorageFileService = service.NewStorageService(log, cfg, ownerStore, bucketStore, folderStore, fileStore, tagStore)
+	var fileService domain.StorageFileService = service.NewStorageService(
+		log, cfg, ownerStore,
+		bucketStore, folderStore,
+		fileStore, tagStore)
 
 	// Http service
 	var httpService domain.StorageHTTPService = service.NewHTTPService(fileService)

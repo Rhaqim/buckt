@@ -16,7 +16,7 @@ type TagRepository struct {
 	db *gorm.DB
 }
 
-func NewTagRepository(db *gorm.DB) domain.Repository[TagModel] {
+func NewTagRepository(db *gorm.DB) domain.BucktRepository[TagModel] {
 	return &TagRepository{db}
 }
 
@@ -24,13 +24,17 @@ func (r *TagRepository) Create(tag *TagModel) error {
 	return r.db.Create(tag).Error
 }
 
-func (r *TagRepository) FindAll() ([]TagModel, error) {
+func (r *TagRepository) Update(tag *TagModel) error {
+	return r.db.Save(tag).Error
+}
+
+func (r *TagRepository) GetAll() ([]TagModel, error) {
 	var tags []TagModel
 	err := r.db.Find(&tags).Error
 	return tags, err
 }
 
-func (r *TagRepository) FindByID(id uuid.UUID) (TagModel, error) {
+func (r *TagRepository) GetByID(id uuid.UUID) (TagModel, error) {
 	var tag TagModel
 	err := r.db.First(&tag, id).Error
 	return tag, err
