@@ -2,7 +2,7 @@ package service
 
 import (
 	"github.com/Rhaqim/buckt/internal/domain"
-	"github.com/Rhaqim/buckt/internal/request"
+	"github.com/Rhaqim/buckt/request"
 	"github.com/gin-gonic/gin"
 )
 

@@ -10,6 +10,7 @@ import (
 	"github.com/Rhaqim/buckt/internal/service"
 	"github.com/Rhaqim/buckt/internal/web/router"
 	"github.com/Rhaqim/buckt/pkg/logger"
+	"github.com/Rhaqim/buckt/request"
 )
 
 // Buckt is the interface for the Buckt service
@@ -20,18 +21,16 @@ type Buckt interface {
 
 	// Buckt storage service methods
 	UploadFile(file *multipart.FileHeader, bucketName string, folderPath string) error
-	DownloadFile(filename string) ([]byte, error)
-	DeleteFile(filename string) error
+	DownloadFile(req request.FileRequest) ([]byte, error)
+	DeleteFile(req request.FileRequest) error
 	CreateBucket(name, description, ownerID string) error
 	CreateOwner(name, email string) error
-	Serve(filename string, serve bool) (string, error)
+	Serve(req request.FileRequest, serve bool) (string, error)
 }
 
 type buckt struct {
-	cfg *config.Config
-	log *logger.Logger
-	db  *database.DB
-	domain.StorageFileService
+	db *database.DB
+	domain.BucktService
 	router *router.Router
 }
 
@@ -59,23 +58,18 @@ func NewBuckt(configFile string, logToFileAndTerminal bool, saveDir string) (Buc
 	var ownerStore domain.BucktRepository[model.OwnerModel] = model.NewOwnerRepository(db.DB)
 
 	// Initialize the services
-	var fileService domain.StorageFileService = service.NewStorageService(
+	var fileService domain.BucktService = service.NewBucktService(
 		log, cfg, ownerStore,
 		bucketStore, folderStore,
 		fileStore, tagStore)
 
-	// Http service
-	var httpService domain.StorageHTTPService = service.NewHTTPService(fileService)
-
-	// Http service
-	var portalService domain.StorageHTTPService = service.NewPortalService(fileService)
+	// API service
+	var httpService domain.APIHTTPService = service.NewAPIService(fileService)
 
 	// Run the router
-	router := router.NewRouter(log, cfg, httpService, portalService)
+	router := router.NewRouter(log, cfg, httpService)
 
 	return &buckt{
-		cfg,
-		log,
 		db,
 		fileService,
 		router,
@@ -91,25 +85,25 @@ func (b *buckt) Close() {
 }
 
 func (b *buckt) UploadFile(file *multipart.FileHeader, bucketName string, folderPath string) error {
-	return b.StorageFileService.UploadFile(file, bucketName, folderPath)
+	return b.BucktService.UploadFile(file, bucketName, folderPath)
 }
 
-func (b *buckt) DownloadFile(filename string) ([]byte, error) {
-	return b.StorageFileService.DownloadFile(filename)
+func (b *buckt) DownloadFile(req request.FileRequest) ([]byte, error) {
+	return b.BucktService.DownloadFile(req)
 }
 
-func (b *buckt) DeleteFile(filename string) error {
-	return b.StorageFileService.DeleteFile(filename)
+func (b *buckt) DeleteFile(req request.FileRequest) error {
+	return b.BucktService.DeleteFile(req)
 }
 
 func (b *buckt) CreateBucket(name, description, ownerID string) error {
-	return b.StorageFileService.CreateBucket(name, description, ownerID)
+	return b.BucktService.CreateBucket(name, description, ownerID)
 }
 
 func (b *buckt) CreateOwner(name, email string) error {
-	return b.StorageFileService.CreateOwner(name, email)
+	return b.BucktService.CreateOwner(name, email)
 }
 
-func (b *buckt) Serve(filename string, serve bool) (string, error) {
-	return b.StorageFileService.Serve(filename, serve)
+func (b *buckt) Serve(req request.FileRequest, serve bool) (string, error) {
+	return b.BucktService.ServeFile(req, serve)
 }

@@ -15,12 +15,11 @@ type Router struct {
 	*gin.Engine
 	*logger.Logger
 	*config.Config
-	httpService   domain.StorageHTTPService
-	portalService domain.StorageHTTPService
+	httpService domain.APIHTTPService
 }
 
 // NewRouter creates a new router with the given logger and config.
-func NewRouter(log *logger.Logger, cfg *config.Config, httpService, portalService domain.StorageHTTPService) *Router {
+func NewRouter(log *logger.Logger, cfg *config.Config, httpService domain.APIHTTPService) *Router {
 	r := gin.New()
 
 	// Set logger
@@ -49,7 +48,7 @@ func NewRouter(log *logger.Logger, cfg *config.Config, httpService, portalServic
 	middleware := middleware.ClientTypeMiddleware()
 	r.Use(middleware)
 
-	return &Router{r, log, cfg, httpService, portalService}
+	return &Router{r, log, cfg, httpService}
 }
 
 // Run starts the router.
@@ -60,50 +59,28 @@ func (r *Router) Run() error {
 		c.HTML(200, "index.html", nil)
 	})
 
-	// Route for creating a new bucket
-	r.POST("/new_bucket", r.portalService.NewBucket)
-
-	// Route for uploading a new file
-	r.POST("/upload", r.portalService.Upload)
-
-	// Route for downloading an existing file
-	r.GET("/download/:filename", r.portalService.Download)
-
-	// Route for deleting an existing file
-	r.DELETE("/delete/:filename", r.portalService.Delete)
-
-	// Route for viewing files in a specific bucket
-	r.GET("/view/:bucket_name", r.portalService.FetchFiles)
-
 	r.POST("/api/new_user", r.httpService.NewUser)
 	r.POST("/api/new_bucket", r.httpService.NewBucket)
-	r.POST("/api/upload", r.httpService.Upload)
-	r.GET("/api/download/:filename", r.httpService.Download)
-	r.DELETE("/api/delete/:filename", r.httpService.Delete)
-	r.GET("/api/serve/:filename", r.httpService.ServeFile)
-	r.GET("/api/fetch", r.httpService.FetchFilesInFolder)
-	r.GET("/api/fetch/folders", r.httpService.FetchSubFolders)
 
-	// folders := r.Group("folders")
-	// {
-	// 	folders.GET("/fetch", r.httpService.FetchSubFolders)
-	// 	folders.GET("/fetch/files", r.httpService.FetchFilesInFolder)
-	// 	folders.PUT("/rename", r.httpService.RenameFolder)
-	// 	folders.PUT("/move", r.httpService.MoveFolder)
-	// 	folders.DELETE("/delete", r.httpService.DeleteFolder)
+	folders := r.Group("folders")
+	{
+		folders.GET("/fetch", r.httpService.FolderSubFolders)
+		folders.GET("/fetch/files", r.httpService.FolderFiles)
+		folders.PUT("/rename", r.httpService.FolderRename)
+		folders.PUT("/move", r.httpService.FolderMove)
+		folders.DELETE("/delete", r.httpService.FolderDelete)
 
-	// }
+	}
 
-	// files := r.Group("files")
-	// {
-	// 	files.PUT("/rename", r.httpService.RenameFile)
-	// 	files.PUT("/move", r.httpService.MoveFile)
-	// 	files.DELETE("/delete", r.httpService.DeleteFile)
-	// 	files.GET("/download", r.httpService.Download)
-	// 	files.GET("/serve", r.httpService.ServeFile)
-	// }
+	files := r.Group("files")
+	{
+		files.GET("/upload", r.httpService.FileUpload)
+		files.GET("/download", r.httpService.FileDownload)
+		files.PUT("/rename", r.httpService.FileRename)
+		files.PUT("/move", r.httpService.FileMove)
+		files.GET("/serve", r.httpService.FileServe)
+		files.DELETE("/delete", r.httpService.FileDelete)
+	}
 
 	return r.Engine.Run(r.Server.Port)
 }
-
-// Define the routes for the router

@@ -13,9 +13,9 @@ import (
 	"github.com/Rhaqim/buckt/internal/domain"
 	errs "github.com/Rhaqim/buckt/internal/error"
 	"github.com/Rhaqim/buckt/internal/model"
-	"github.com/Rhaqim/buckt/internal/request"
 	"github.com/Rhaqim/buckt/internal/utils"
 	"github.com/Rhaqim/buckt/pkg/logger"
+	"github.com/Rhaqim/buckt/request"
 	"github.com/google/uuid"
 )
 

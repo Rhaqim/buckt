@@ -3,7 +3,7 @@ package domain
 import (
 	"mime/multipart"
 
-	"github.com/Rhaqim/buckt/internal/request"
+	"github.com/Rhaqim/buckt/request"
 )
 
 type StorageFileService interface {
