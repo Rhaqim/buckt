@@ -296,13 +296,7 @@ func (bs *BucktService) GetFilesInFolder(request request.BaseFileRequest) ([]int
 		return nil, err
 	}
 
-	var response []interface{}
-
-	for _, file := range files {
-		response = append(response, file)
-	}
-
-	return response, nil
+	return utils.InterfaceSlice(files), nil
 }
 
 func (bs *BucktService) GetSubFolders(request request.BaseFileRequest) ([]interface{}, error) {
@@ -342,11 +336,5 @@ func (bs *BucktService) GetSubFolders(request request.BaseFileRequest) ([]interf
 		return nil, err
 	}
 
-	var response []interface{}
-
-	for _, folder := range subfolders {
-		response = append(response, folder)
-	}
-
-	return response, nil
+	return utils.InterfaceSlice(subfolders), nil
 }
