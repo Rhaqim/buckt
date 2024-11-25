@@ -24,7 +24,7 @@ func (s *APIService) NewUser(c *gin.Context) {
 		Email string `json:"email"`
 	}
 
-	if err := c.Bind(&req); err != nil {
+	if err := c.BindJSON(&req); err != nil {
 		c.JSON(400, gin.H{"error": err.Error()})
 		return
 	}
@@ -103,7 +103,7 @@ func (s *APIService) FileDownload(c *gin.Context) {
 
 	var req request.FileRequest
 
-	if err := c.Bind(&req); err != nil {
+	if err := c.BindJSON(&req); err != nil {
 		c.JSON(400, gin.H{"error": err.Error()})
 		return
 	}
@@ -124,7 +124,7 @@ func (s *APIService) FileRename(c *gin.Context) {
 
 	var req request.RenameFileRequest
 
-	if err := c.Bind(&req); err != nil {
+	if err := c.BindJSON(&req); err != nil {
 		c.JSON(400, gin.H{"error": err.Error()})
 		return
 	}
@@ -148,7 +148,7 @@ func (s *APIService) FileMove(c *gin.Context) {
 
 	var req request.MoveFileRequest
 
-	if err := c.Bind(&req); err != nil {
+	if err := c.BindJSON(&req); err != nil {
 		c.JSON(400, gin.H{"error": err.Error()})
 		return
 	}
@@ -168,27 +168,15 @@ func (s *APIService) FileMove(c *gin.Context) {
 }
 
 func (s *APIService) FileServe(c *gin.Context) {
-	clientType, _ := c.Get("clientType")
+	filepath := c.Query("filepath")
 
-	var req request.FileRequest
-
-	if err := c.Bind(&req); err != nil {
-		c.JSON(400, gin.H{"error": err.Error()})
-		return
-	}
-
-	fileData, err := s.ServeFile(req, true)
+	fileData, err := s.ServeFile(filepath)
 	if err != nil {
 		c.JSON(500, gin.H{"error": err.Error()})
 		return
 	}
 
-	switch clientType {
-	case "portal":
-		c.HTML(200, "partials/files.html", gin.H{"message": "File served successfully"})
-	default:
-		c.File(fileData)
-	}
+	c.File(fileData)
 }
 
 func (s *APIService) FileDelete(c *gin.Context) {
@@ -196,7 +184,7 @@ func (s *APIService) FileDelete(c *gin.Context) {
 
 	var req request.FileRequest
 
-	if err := c.Bind(&req); err != nil {
+	if err := c.BindJSON(&req); err != nil {
 		c.JSON(400, gin.H{"error": err.Error()})
 		return
 	}
@@ -220,7 +208,7 @@ func (s *APIService) FolderFiles(c *gin.Context) {
 
 	var req request.BaseFileRequest
 
-	if err := c.Bind(&req); err != nil {
+	if err := c.BindJSON(&req); err != nil {
 		c.JSON(400, gin.H{"error": err.Error()})
 		return
 	}
@@ -244,7 +232,7 @@ func (s *APIService) FolderSubFolders(c *gin.Context) {
 
 	var req request.BaseFileRequest
 
-	if err := c.Bind(&req); err != nil {
+	if err := c.BindJSON(&req); err != nil {
 		c.JSON(400, gin.H{"error": err.Error()})
 		return
 	}
@@ -268,7 +256,7 @@ func (s *APIService) FolderRename(c *gin.Context) {
 
 	var req request.RenameFolderRequest
 
-	if err := c.Bind(&req); err != nil {
+	if err := c.BindJSON(&req); err != nil {
 		c.JSON(400, gin.H{"error": err.Error()})
 		return
 	}
@@ -292,7 +280,7 @@ func (s *APIService) FolderMove(c *gin.Context) {
 
 	var req request.MoveFolderRequest
 
-	if err := c.Bind(&req); err != nil {
+	if err := c.BindJSON(&req); err != nil {
 		c.JSON(400, gin.H{"error": err.Error()})
 		return
 	}
@@ -316,7 +304,7 @@ func (s *APIService) FolderDelete(c *gin.Context) {
 
 	var req request.BaseFileRequest
 
-	if err := c.Bind(&req); err != nil {
+	if err := c.BindJSON(&req); err != nil {
 		c.JSON(400, gin.H{"error": err.Error()})
 		return
 	}

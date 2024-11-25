@@ -48,7 +48,7 @@ func main() {
 	}
 
 	// Serve a file
-	url, err := b.Serve(request.FileRequest{Filename: "hello.txt"}, true)
+	url, err := b.Serve("/hello/world/hello.txt")
 	if err != nil {
 		log.Fatalf("Failed to serve file: %v", err)
 	}

@@ -226,12 +226,24 @@ func (bs *BucktService) MoveFile(request.MoveFileRequest) error {
 	panic("implement me")
 }
 
-func (bs *BucktService) ServeFile(request.FileRequest, bool) (string, error) {
-	panic("implement me")
+func (bs *BucktService) DownloadFile(request request.FileRequest) ([]byte, error) {
+	path := filepath.Join(request.BucketName, request.FolderPath, request.Filename)
+
+	file, err := bs.fileStore.GetBy("path = ?", path)
+	if err != nil {
+		return nil, errs.ErrFileNotFound
+	}
+
+	return bs.FSGetFile(file.Path)
 }
 
-func (bs *BucktService) DownloadFile(request.FileRequest) ([]byte, error) {
-	panic("implement me")
+func (bs *BucktService) ServeFile(filepath string) (string, error) {
+	fullPath, err := bs.FSValidatePath(filepath)
+	if err != nil {
+		return "", err
+	}
+
+	return fullPath, nil
 }
 
 func (bs *BucktService) DeleteFile(request.FileRequest) error {

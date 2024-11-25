@@ -12,7 +12,7 @@ POST http://localhost:8080/new_bucket
 {
     "bucket_name": "test_bucket",
     "description": "test bucket",
-    "owner_id": "6e45ecfb-5922-46b8-a62c-bc7bc59e75b9"
+    "owner_id": "51458b9b-5251-4d6d-bc09-5d4152859f63"
 }
 
 ###
@@ -34,3 +34,17 @@ Content-Type: image/jpeg
 
 < /Users/user/Downloads/Wallpapers/fukuma.jpg
 ------MyBoundary--
+
+###
+
+POST http://localhost:8080/files/download HTTP/1.1
+
+{
+    "bucket_name": "test_bucket",
+    "folder_path": "image/background",
+    "filename": "fukuma.jpg"
+}
+
+###
+
+GET http://localhost:8080/files/serve?filepath=test_bucket/image/background/fukuma.jpg HTTP/1.1

@@ -18,7 +18,7 @@ type FileService interface {
 	DownloadFile(request.FileRequest) ([]byte, error)
 	RenameFile(request.RenameFileRequest) error
 	MoveFile(request.MoveFileRequest) error
-	ServeFile(request.FileRequest, bool) (string, error)
+	ServeFile(string) (string, error)
 	DeleteFile(request.FileRequest) error
 }
 

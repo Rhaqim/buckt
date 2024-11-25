@@ -20,6 +20,17 @@ func NewBucktFSService(log *logger.Logger, cfg *config.Config) domain.BucktFileS
 	return &BucktFSService{log, cfg}
 }
 
+func (bfs *BucktFSService) FSGetFile(path string) ([]byte, error) {
+	filePath := filepath.Join(bfs.Media.Dir, path)
+
+	file, err := os.ReadFile(filePath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read file: %w", err)
+	}
+
+	return file, nil
+}
+
 func (bfs *BucktFSService) FSWriteFile(path string, file []byte) error {
 	// File system path
 	filePath := filepath.Join(bfs.Media.Dir, path)
@@ -58,4 +69,14 @@ func (bfs *BucktFSService) FSDeleteFile(folderPath string) error {
 	}
 
 	return nil
+}
+
+func (bfs *BucktFSService) FSValidatePath(path string) (string, error) {
+	filePath := filepath.Join(bfs.Media.Dir, path)
+
+	if _, err := os.Stat(filePath); err != nil {
+		return "", fmt.Errorf("file not found: %w", err)
+	}
+
+	return filePath, nil
 }

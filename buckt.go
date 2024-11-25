@@ -25,7 +25,7 @@ type Buckt interface {
 	DeleteFile(req request.FileRequest) error
 	CreateBucket(name, description, ownerID string) error
 	CreateOwner(name, email string) error
-	Serve(req request.FileRequest, serve bool) (string, error)
+	Serve(filepath string) (string, error)
 }
 
 type buckt struct {
@@ -104,6 +104,6 @@ func (b *buckt) CreateOwner(name, email string) error {
 	return b.BucktService.CreateOwner(name, email)
 }
 
-func (b *buckt) Serve(req request.FileRequest, serve bool) (string, error) {
-	return b.BucktService.ServeFile(req, serve)
+func (b *buckt) Serve(filepath string) (string, error) {
+	return b.BucktService.ServeFile(filepath)
 }
