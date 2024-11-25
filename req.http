@@ -8,7 +8,7 @@ GET http://localhost:8080/portal HTTP/1.1
 
 ### Create user
 
-POST http://localhost:8080/new_user
+POST http://localhost:8080/new_user HTTP/1.1
 
 {
     "username": "test",
@@ -17,7 +17,7 @@ POST http://localhost:8080/new_user
 
 ### Create bucket
 
-POST http://localhost:8080/new_bucket
+POST http://localhost:8080/new_bucket HTTP/1.1
 
 {
     "bucket_name": "test_bucket",
@@ -58,3 +58,21 @@ POST http://localhost:8080/files/download HTTP/1.1
 ### Serve file
 
 GET http://localhost:8080/files/serve?filepath=test_bucket/image/background/fukuma.jpg HTTP/1.1
+
+### Fetch Subfolders
+
+POST http://localhost:8080/folders/fetch/folders HTTP/1.1
+
+{
+    "bucket_name": "test_bucket",
+    "folder_path": "image"
+}
+
+### Fetch Files in Folder
+
+POST http://localhost:8080/folders/fetch/files HTTP/1.1
+
+{
+    "bucket_name": "test_bucket",
+    "folder_path": "image/background"
+}

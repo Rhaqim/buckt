@@ -1,6 +1,9 @@
 package domain
 
-import "github.com/google/uuid"
+import (
+	"github.com/google/uuid"
+	"gorm.io/gorm"
+)
 
 type BucktRepository[T any] interface {
 	Create(*T) error
@@ -10,4 +13,5 @@ type BucktRepository[T any] interface {
 	GetByID(uuid.UUID) (T, error)
 	GetBy(interface{}, ...interface{}) (T, error)
 	GetMany(interface{}, ...interface{}) ([]T, error)
+	RawQuery(string, ...interface{}) *gorm.DB
 }

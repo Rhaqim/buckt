@@ -58,6 +58,10 @@ func (r *OwnerRepository) GetMany(key interface{}, value ...interface{}) ([]Owne
 	return owners, err
 }
 
+func (r *OwnerRepository) RawQuery(query string, args ...interface{}) *gorm.DB {
+	return r.db.Raw(query, args...)
+}
+
 // BeforeCreate hook for OwnerModel to add a prefixed UUID
 func (owner *OwnerModel) BeforeCreate(tx *gorm.DB) (err error) {
 	owner.ID = uuid.New()

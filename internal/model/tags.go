@@ -57,6 +57,10 @@ func (r *TagRepository) GetMany(key interface{}, value ...interface{}) ([]TagMod
 	return tags, err
 }
 
+func (r *TagRepository) RawQuery(query string, values ...interface{}) *gorm.DB {
+	return r.db.Raw(query, values)
+}
+
 // BeforeCreate hook for TagModel to add a prefixed UUID
 func (tag *TagModel) BeforeCreate(tx *gorm.DB) (err error) {
 	tag.ID = uuid.New()

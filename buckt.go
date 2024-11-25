@@ -55,7 +55,7 @@ func NewBuckt(configFile string, logToFileAndTerminal bool, saveDir string) (Buc
 	// Initialize the stores
 	var tagStore domain.BucktRepository[model.TagModel] = model.NewTagRepository(db.DB)
 	var fileStore domain.BucktRepository[model.FileModel] = model.NewFileRepository(db.DB)
-	var folderStore *model.FolderRepository = model.NewFolderRepository(db.DB)
+	var folderStore domain.BucktRepository[model.FolderModel] = model.NewFolderRepository(db.DB)
 	var bucketStore domain.BucktRepository[model.BucketModel] = model.NewBucketRepository(db.DB)
 	var ownerStore domain.BucktRepository[model.OwnerModel] = model.NewOwnerRepository(db.DB)
 

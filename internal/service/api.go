@@ -204,7 +204,7 @@ func (s *APIService) FileDelete(c *gin.Context) {
 }
 
 func (s *APIService) FolderFiles(c *gin.Context) {
-	clientType, _ := c.Get("clientType")
+	// clientType, _ := c.Get("clientType")
 
 	var req request.BaseFileRequest
 
@@ -219,16 +219,17 @@ func (s *APIService) FolderFiles(c *gin.Context) {
 		return
 	}
 
-	switch clientType {
-	case "portal":
-		c.HTML(200, "partials/files.html", gin.H{"files": files})
-	default:
-		c.JSON(200, gin.H{"files": files})
-	}
+	// switch clientType {
+	// case "portal":
+	// 	c.HTML(200, "partials/files.html", gin.H{"files": files})
+	// default:
+	// 	c.JSON(200, gin.H{"files": files})
+	// }
+	c.JSON(200, gin.H{"files": files})
 }
 
 func (s *APIService) FolderSubFolders(c *gin.Context) {
-	clientType, _ := c.Get("clientType")
+	// clientType, _ := c.Get("clientType")
 
 	var req request.BaseFileRequest
 
@@ -243,12 +244,13 @@ func (s *APIService) FolderSubFolders(c *gin.Context) {
 		return
 	}
 
-	switch clientType {
-	case "portal":
-		c.HTML(200, "partials/folders.html", gin.H{"folders": folders})
-	default:
-		c.JSON(200, gin.H{"folders": folders})
-	}
+	// switch clientType {
+	// case "portal":
+	// 	c.HTML(200, "partials/folders.html", gin.H{"folders": folders})
+	// default:
+	// 	c.JSON(200, gin.H{"folders": folders})
+	// }
+	c.JSON(200, gin.H{"folders": folders})
 }
 
 func (s *APIService) FolderRename(c *gin.Context) {

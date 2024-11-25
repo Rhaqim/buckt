@@ -1,9 +1,7 @@
 package model
 
 import (
-	"errors"
-	"strings"
-
+	"github.com/Rhaqim/buckt/internal/domain"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
@@ -20,7 +18,7 @@ type FolderRepository struct {
 	db *gorm.DB
 }
 
-func NewFolderRepository(db *gorm.DB) *FolderRepository {
+func NewFolderRepository(db *gorm.DB) domain.BucktRepository[FolderModel] {
 	return &FolderRepository{db}
 }
 
@@ -28,13 +26,17 @@ func (r *FolderRepository) Create(file *FolderModel) error {
 	return r.db.Create(file).Error
 }
 
-func (r *FolderRepository) FindAll() ([]FolderModel, error) {
+func (r *FolderRepository) Update(file *FolderModel) error {
+	return r.db.Save(file).Error
+}
+
+func (r *FolderRepository) GetAll() ([]FolderModel, error) {
 	var files []FolderModel
 	err := r.db.Find(&files).Error
 	return files, err
 }
 
-func (r *FolderRepository) FindByID(id uuid.UUID) (FolderModel, error) {
+func (r *FolderRepository) GetByID(id uuid.UUID) (FolderModel, error) {
 	var file FolderModel
 	err := r.db.First(&file, id).Error
 	return file, err
@@ -50,11 +52,15 @@ func (r *FolderRepository) GetBy(key interface{}, value ...interface{}) (FolderM
 	return file, err
 }
 
-func (r *FolderRepository) GetMany(key string, value string) ([]FolderModel, error) {
+func (r *FolderRepository) GetMany(key interface{}, value ...interface{}) ([]FolderModel, error) {
 	var files []FolderModel
 
-	err := r.db.Where(key+" = ?", value).Find(&files).Error
+	err := r.db.Where(key, value...).Find(&files).Error
 	return files, err
+}
+
+func (r *FolderRepository) RawQuery(query string, args ...interface{}) *gorm.DB {
+	return r.db.Raw(query, args...)
 }
 
 // BeforeCreate hook for FolderModel to add a prefixed UUID
@@ -105,77 +111,6 @@ func (repo *FolderRepository) GetDescendants(folderID uuid.UUID) ([]FolderModel,
 		return nil, err
 	}
 	return descendants, nil
-}
-
-func (repo *FolderRepository) GetSubfolders(bucketName, folderPath string) ([]FolderModel, error) {
-	// Split the folderPath into individual folder names
-	folderNames := strings.Split(folderPath, "/")
-	if len(folderNames) < 1 {
-		return nil, errors.New("path must include at least one folder")
-	}
-
-	// Define the slice to store the result
-	var subfolders []FolderModel
-
-	query := `
-        WITH RECURSIVE folder_hierarchy AS (
-            -- Get the first folder under the specified bucket
-            SELECT id, name, parent_id
-            FROM folder_models
-            WHERE name = ? AND parent_id = (SELECT id FROM bucket_models WHERE name = ?)
-            UNION ALL
-            SELECT fm.id, fm.name, fm.parent_id
-            FROM folder_models fm
-            INNER JOIN folder_hierarchy fh ON fm.parent_id = fh.id
-        )
-        -- Fetch the immediate subfolders of the target folder (the last folder in the path)
-        SELECT * 
-        FROM folder_models
-        WHERE parent_id = (
-            SELECT id 
-            FROM folder_hierarchy 
-            WHERE name = ? 
-            -- ORDER BY created_at DESC
-            LIMIT 1
-        );
-    `
-	// Run the query with the bucket name, first folder, and last folder name in the path
-	if err := repo.db.Raw(query, folderNames[0], bucketName, folderNames[len(folderNames)-1]).Scan(&subfolders).Error; err != nil {
-		return nil, err
-	}
-	return subfolders, nil
-}
-
-func (repo *FolderRepository) GetFilesFromPath(bucketName, folderPath string) ([]FileModel, error) {
-	// Split the folderPath into individual folder names
-	folderNames := strings.Split(folderPath, "/")
-	if len(folderNames) < 2 {
-		return nil, errors.New("path must include at least one parent and one child folder")
-	}
-
-	var files []FileModel
-
-	query := `
-        WITH RECURSIVE folder_hierarchy AS (
-            SELECT id, name, parent_id
-            FROM folder_models
-            WHERE name = ? AND parent_id = (SELECT id FROM bucket_models WHERE name = ?)
-            UNION ALL
-            SELECT fm.id, fm.name, fm.parent_id
-            FROM folder_models fm
-            INNER JOIN folder_hierarchy fh ON fm.parent_id = fh.id
-        )
-        SELECT f.* 
-        FROM folder_hierarchy fh
-        JOIN file_models f ON f.parent_id = fh.id
-        WHERE fh.name = ?;
-    `
-
-	// Execute query using the first folder name and the bucket name
-	if err := repo.db.Raw(query, folderNames[0], bucketName, folderNames[len(folderNames)-1]).Scan(&files).Error; err != nil {
-		return nil, err
-	}
-	return files, nil
 }
 
 // MoveFolder moves a folder to a new parent

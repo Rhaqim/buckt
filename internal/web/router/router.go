@@ -68,8 +68,8 @@ func (r *Router) registerRoutes() {
 
 	folders := r.Group("folders")
 	{
-		folders.GET("/fetch", r.httpService.FolderSubFolders)
-		folders.GET("/fetch/files", r.httpService.FolderFiles)
+		folders.POST("/fetch/folders", r.httpService.FolderSubFolders)
+		folders.POST("/fetch/files", r.httpService.FolderFiles)
 		folders.PUT("/rename", r.httpService.FolderRename)
 		folders.PUT("/move", r.httpService.FolderMove)
 		folders.DELETE("/delete", r.httpService.FolderDelete)

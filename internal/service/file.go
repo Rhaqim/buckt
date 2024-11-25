@@ -21,7 +21,7 @@ import (
 type BucktStore struct {
 	ownerStore  domain.BucktRepository[model.OwnerModel]
 	bucketStore domain.BucktRepository[model.BucketModel]
-	folderStore *model.FolderRepository
+	folderStore domain.BucktRepository[model.FolderModel]
 	fileStore   domain.BucktRepository[model.FileModel]
 	tagStore    domain.BucktRepository[model.TagModel]
 }
@@ -34,7 +34,7 @@ type BucktService struct {
 }
 
 func NewBucktService(log *logger.Logger, cfg *config.Config, ownerStore domain.BucktRepository[model.OwnerModel],
-	bucketStore domain.BucktRepository[model.BucketModel], folderStore *model.FolderRepository,
+	bucketStore domain.BucktRepository[model.BucketModel], folderStore domain.BucktRepository[model.FolderModel],
 	fileStore domain.BucktRepository[model.FileModel], tagStore domain.BucktRepository[model.TagModel]) domain.BucktService {
 
 	store := BucktStore{
@@ -266,10 +266,87 @@ func (bs *BucktService) DeleteFolder(request.BaseFileRequest) error {
 	panic("implement me")
 }
 
-func (bs *BucktService) GetFilesInFolder(request.BaseFileRequest) ([]interface{}, error) {
-	panic("implement me")
+func (bs *BucktService) GetFilesInFolder(request request.BaseFileRequest) ([]interface{}, error) {
+	// Split the folderPath into individual folder names
+	folderNames := strings.Split(request.FolderPath, "/")
+	if len(folderNames) < 2 {
+		return nil, errs.ErrMinParentMinChild
+	}
+
+	var files []model.FileModel
+
+	query := `
+        WITH RECURSIVE folder_hierarchy AS (
+            SELECT id, name, parent_id
+            FROM folder_models
+            WHERE name = ? AND parent_id = (SELECT id FROM bucket_models WHERE name = ?)
+            UNION ALL
+            SELECT fm.id, fm.name, fm.parent_id
+            FROM folder_models fm
+            INNER JOIN folder_hierarchy fh ON fm.parent_id = fh.id
+        )
+        SELECT f.* 
+        FROM folder_hierarchy fh
+        JOIN file_models f ON f.parent_id = fh.id
+        WHERE fh.name = ?;
+    `
+
+	// Execute query using the first folder name and the bucket name
+	if err := bs.folderStore.RawQuery(query, folderNames[0], request.BucketName, folderNames[len(folderNames)-1]).Scan(&files).Error; err != nil {
+		return nil, err
+	}
+
+	var response []interface{}
+
+	for _, file := range files {
+		response = append(response, file)
+	}
+
+	return response, nil
 }
 
-func (bs *BucktService) GetSubFolders(request.BaseFileRequest) ([]interface{}, error) {
-	panic("implement me")
+func (bs *BucktService) GetSubFolders(request request.BaseFileRequest) ([]interface{}, error) {
+	// Split the folderPath into individual folder names
+	folderNames := strings.Split(request.FolderPath, "/")
+	if len(folderNames) < 1 {
+		return nil, errs.ErrFolderNotInPath
+	}
+
+	// Define the slice to store the result
+	var subfolders []model.FolderModel
+
+	query := `
+        WITH RECURSIVE folder_hierarchy AS (
+            -- Get the first folder under the specified bucket
+            SELECT id, name, parent_id
+            FROM folder_models
+            WHERE name = ? AND parent_id = (SELECT id FROM bucket_models WHERE name = ?)
+            UNION ALL
+            SELECT fm.id, fm.name, fm.parent_id
+            FROM folder_models fm
+            INNER JOIN folder_hierarchy fh ON fm.parent_id = fh.id
+        )
+        -- Fetch the immediate subfolders of the target folder (the last folder in the path)
+        SELECT * 
+        FROM folder_models
+        WHERE parent_id = (
+            SELECT id 
+            FROM folder_hierarchy 
+            WHERE name = ? 
+            -- ORDER BY created_at DESC
+            LIMIT 1
+        );
+    `
+	// Run the query with the bucket name, first folder, and last folder name in the path
+	if err := bs.folderStore.RawQuery(query, folderNames[0], request.BucketName, folderNames[len(folderNames)-1]).Scan(&subfolders).Error; err != nil {
+		return nil, err
+	}
+
+	var response []interface{}
+
+	for _, folder := range subfolders {
+		response = append(response, folder)
+	}
+
+	return response, nil
 }

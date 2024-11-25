@@ -62,6 +62,10 @@ func (r *BucketRepository) GetMany(key interface{}, value ...interface{}) ([]Buc
 	return files, err
 }
 
+func (r *BucketRepository) RawQuery(query string, values ...interface{}) *gorm.DB {
+	return r.db.Raw(query, values...)
+}
+
 // BeforeCreate hook for BucketModel to add a prefixed UUID
 func (bucket *BucketModel) BeforeCreate(tx *gorm.DB) (err error) {
 	bucket.ID = uuid.New()

@@ -64,6 +64,10 @@ func (r *FileRepository) GetMany(key interface{}, value ...interface{}) ([]FileM
 	return files, err
 }
 
+func (r *FileRepository) RawQuery(query string, args ...interface{}) *gorm.DB {
+	return r.db.Raw(query, args...)
+}
+
 // BeforeCreate hook for FileModel to add a prefixed UUID
 func (file *FileModel) BeforeCreate(tx *gorm.DB) (err error) {
 	file.ID = uuid.New()
