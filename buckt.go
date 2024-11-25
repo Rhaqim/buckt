@@ -2,6 +2,7 @@ package buckt
 
 import (
 	"mime/multipart"
+	"net/http"
 
 	"github.com/Rhaqim/buckt/config"
 	"github.com/Rhaqim/buckt/internal/database"
@@ -16,7 +17,8 @@ import (
 // Buckt is the interface for the Buckt service
 type Buckt interface {
 	// Buckt HTTP service methods
-	Start() error
+	GetHandler() http.Handler
+	StartServer(port ...string) error
 	Close()
 
 	// Buckt storage service methods
@@ -76,8 +78,12 @@ func NewBuckt(configFile string, logToFileAndTerminal bool, saveDir string) (Buc
 	}, nil
 }
 
-func (b *buckt) Start() error {
-	return b.router.Run()
+func (b *buckt) GetHandler() http.Handler {
+	return b.router.Engine
+}
+
+func (b *buckt) StartServer(port ...string) error {
+	return b.router.Engine.Run(port...)
 }
 
 func (b *buckt) Close() {

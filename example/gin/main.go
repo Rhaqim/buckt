@@ -14,7 +14,7 @@ func main() {
 	defer b.Close() // Ensure resources are cleaned up
 
 	// Start the router (optional, based on user choice)
-	if err := b.Start(); err != nil {
+	if err := b.StartServer(":8080"); err != nil {
 		log.Fatalf("Failed to start Buckt: %v", err)
 	}
 }

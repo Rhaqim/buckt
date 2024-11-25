@@ -1,6 +1,7 @@
 package router
 
 import (
+	"net/http"
 	"path/filepath"
 	"runtime"
 
@@ -48,14 +49,17 @@ func NewRouter(log *logger.Logger, cfg *config.Config, httpService domain.APIHTT
 	middleware := middleware.ClientTypeMiddleware()
 	r.Use(middleware)
 
-	return &Router{r, log, cfg, httpService}
+	router := &Router{r, log, cfg, httpService}
+	router.registerRoutes()
+
+	return router
 }
 
 // Run starts the router.
-func (r *Router) Run() error {
+func (r *Router) registerRoutes() {
 
 	// Route for the main admin page (view files)
-	r.GET("/", func(c *gin.Context) {
+	r.GET("/portal", func(c *gin.Context) {
 		c.HTML(200, "index.html", nil)
 	})
 
@@ -82,5 +86,9 @@ func (r *Router) Run() error {
 		files.DELETE("/delete", r.httpService.FileDelete)
 	}
 
-	return r.Engine.Run(r.Server.Port)
+}
+
+// ServeHTTP makes Router compatible with http.Handler
+func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+	r.Engine.ServeHTTP(w, req)
 }
