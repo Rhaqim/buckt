@@ -1,3 +1,5 @@
+### Create user
+
 POST http://localhost:8080/new_user
 
 {
@@ -5,7 +7,7 @@ POST http://localhost:8080/new_user
     "email": "test@gmail.com"
 }
 
-###
+### Create bucket
 
 POST http://localhost:8080/new_bucket
 
@@ -15,7 +17,7 @@ POST http://localhost:8080/new_bucket
     "owner_id": "51458b9b-5251-4d6d-bc09-5d4152859f63"
 }
 
-###
+### Upload file
 
 POST http://localhost:8080/files/upload HTTP/1.1
 Content-Type: multipart/form-data; boundary=----MyBoundary
@@ -35,7 +37,7 @@ Content-Type: image/jpeg
 < /Users/user/Downloads/Wallpapers/fukuma.jpg
 ------MyBoundary--
 
-###
+### Download file
 
 POST http://localhost:8080/files/download HTTP/1.1
 
@@ -45,6 +47,6 @@ POST http://localhost:8080/files/download HTTP/1.1
     "filename": "fukuma.jpg"
 }
 
-###
+### Serve file
 
 GET http://localhost:8080/files/serve?filepath=test_bucket/image/background/fukuma.jpg HTTP/1.1

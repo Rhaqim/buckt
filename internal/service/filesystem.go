@@ -20,15 +20,14 @@ func NewBucktFSService(log *logger.Logger, cfg *config.Config) domain.BucktFileS
 	return &BucktFSService{log, cfg}
 }
 
-func (bfs *BucktFSService) FSGetFile(path string) ([]byte, error) {
+func (bfs *BucktFSService) FSValidatePath(path string) (string, error) {
 	filePath := filepath.Join(bfs.Media.Dir, path)
 
-	file, err := os.ReadFile(filePath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read file: %w", err)
+	if _, err := os.Stat(filePath); err != nil {
+		return "", fmt.Errorf("file not found: %w", err)
 	}
 
-	return file, nil
+	return filePath, nil
 }
 
 func (bfs *BucktFSService) FSWriteFile(path string, file []byte) error {
@@ -46,9 +45,30 @@ func (bfs *BucktFSService) FSWriteFile(path string, file []byte) error {
 	return nil
 }
 
+func (bfs *BucktFSService) FSGetFile(path string) ([]byte, error) {
+	filePath, err := bfs.FSValidatePath(path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to validate file path: %w", err)
+	}
+
+	file, err := os.ReadFile(filePath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read file: %w", err)
+	}
+
+	return file, nil
+}
+
 func (bfs *BucktFSService) FSUpdateFile(oldPath, newPath string) error {
-	oldFilePath := filepath.Join(bfs.Media.Dir, oldPath)
-	newFilePath := filepath.Join(bfs.Media.Dir, newPath)
+	oldFilePath, err := bfs.FSValidatePath(oldPath)
+	if err != nil {
+		return fmt.Errorf("failed to validate old file path: %w", err)
+	}
+
+	newFilePath, err := bfs.FSValidatePath(newPath)
+	if err != nil {
+		return fmt.Errorf("failed to validate new file path: %w", err)
+	}
 
 	if err := os.MkdirAll(filepath.Dir(newFilePath), 0755); err != nil {
 		return fmt.Errorf("failed to create directory: %w", err)
@@ -62,21 +82,14 @@ func (bfs *BucktFSService) FSUpdateFile(oldPath, newPath string) error {
 }
 
 func (bfs *BucktFSService) FSDeleteFile(folderPath string) error {
-	filePath := filepath.Join(bfs.Media.Dir, folderPath)
+	filePath, err := bfs.FSValidatePath(folderPath)
+	if err != nil {
+		return fmt.Errorf("failed to validate file path: %w", err)
+	}
 
 	if err := os.Remove(filePath); err != nil {
 		return fmt.Errorf("failed to delete file: %w", err)
 	}
 
 	return nil
-}
-
-func (bfs *BucktFSService) FSValidatePath(path string) (string, error) {
-	filePath := filepath.Join(bfs.Media.Dir, path)
-
-	if _, err := os.Stat(filePath); err != nil {
-		return "", fmt.Errorf("file not found: %w", err)
-	}
-
-	return filePath, nil
 }
