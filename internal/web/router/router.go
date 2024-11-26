@@ -33,7 +33,7 @@ func NewRouter(log *logger.Logger, cfg *config.Config, httpService domain.APIHTT
 	// Determine base path for templates
 	_, b, _, _ := runtime.Caller(0)
 	basePath := filepath.Dir(b)
-	templatePath := cfg.Templates
+	templatePath := cfg.TemplatesDir
 
 	// If no specific template path is set, use the default pattern
 	if templatePath == "" {

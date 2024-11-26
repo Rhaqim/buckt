@@ -9,7 +9,7 @@ import (
 )
 
 func main() {
-	b, err := buckt.NewBuckt("config.yaml", true, "/logs")
+	b, err := buckt.NewBuckt("config.yaml")
 	if err != nil {
 		log.Fatalf("Failed to initialize Buckt: %v", err)
 	}

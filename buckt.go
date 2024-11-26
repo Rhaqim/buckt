@@ -37,12 +37,12 @@ type buckt struct {
 	router *router.Router
 }
 
-func NewBuckt(configFile string, logToFileAndTerminal bool, saveDir string) (Buckt, error) {
+func NewBuckt(configFile string) (Buckt, error) {
 	// Load config
 	cfg := config.LoadConfig(configFile)
 
 	// Initialize logger
-	log := logger.NewLogger(false, logToFileAndTerminal, saveDir)
+	log := logger.NewLogger(cfg.Log.LoGfILE, cfg.Log.LogTerminal)
 
 	// Initialize database
 	db, err := database.NewSQLite(cfg, log)

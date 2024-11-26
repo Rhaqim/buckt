@@ -21,7 +21,7 @@ func NewBucktFSService(log *logger.Logger, cfg *config.Config) domain.BucktFileS
 }
 
 func (bfs *BucktFSService) FSValidatePath(path string) (string, error) {
-	filePath := filepath.Join(bfs.Media.Dir, path)
+	filePath := filepath.Join(bfs.MediaDir, path)
 
 	if _, err := os.Stat(filePath); err != nil {
 		return "", fmt.Errorf("file not found: %w", err)
@@ -32,7 +32,7 @@ func (bfs *BucktFSService) FSValidatePath(path string) (string, error) {
 
 func (bfs *BucktFSService) FSWriteFile(path string, file []byte) error {
 	// File system path
-	filePath := filepath.Join(bfs.Media.Dir, path)
+	filePath := filepath.Join(bfs.MediaDir, path)
 
 	// Save the file to the file system
 	if err := os.MkdirAll(filepath.Dir(filePath), 0755); err != nil {
