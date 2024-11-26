@@ -9,6 +9,7 @@ import (
 	"github.com/Rhaqim/buckt/internal/domain"
 	"github.com/Rhaqim/buckt/internal/model"
 	"github.com/Rhaqim/buckt/internal/service"
+	"github.com/Rhaqim/buckt/internal/web/middleware"
 	"github.com/Rhaqim/buckt/internal/web/router"
 	"github.com/Rhaqim/buckt/pkg/logger"
 	"github.com/Rhaqim/buckt/request"
@@ -68,8 +69,11 @@ func NewBuckt(configFile string, logToFileAndTerminal bool, saveDir string) (Buc
 	// API service
 	var httpService domain.APIHTTPService = service.NewAPIService(fileService)
 
+	// middleware server
+	middleware := middleware.NewBucketMiddleware(ownerStore)
+
 	// Run the router
-	router := router.NewRouter(log, cfg, httpService)
+	router := router.NewRouter(log, cfg, httpService, middleware)
 
 	return &buckt{
 		db,

@@ -83,7 +83,17 @@ func (bs *BucktService) DeleteBucket(bucketName string) error {
 	return bs.bucketStore.Delete(bucket.ID)
 }
 
-func (bs *BucktService) GetBuckets(ownerID string) ([]interface{}, error) {
+func (bs *BucktService) GetBucket(bucketName string) (interface{}, error) {
+	bucket, err := bs.bucketStore.GetBy("name = ?", bucketName)
+	if err != nil {
+		return nil, errs.ErrBucketNotFound
+	}
+
+	return bucket, nil
+}
+
+func (bs *BucktService) GetBuckets(ownerID uuid.UUID) ([]interface{}, error) {
+
 	buckets, err := bs.bucketStore.GetMany("owner_id = ?", ownerID)
 	if err != nil {
 		return nil, errs.ErrBucketNotFound
@@ -300,6 +310,20 @@ func (bs *BucktService) GetFilesInFolder(request request.BaseFileRequest) ([]int
 }
 
 func (bs *BucktService) GetSubFolders(request request.BaseFileRequest) ([]interface{}, error) {
+	if request.FolderPath == "" {
+		bucket, err := bs.bucketStore.GetBy("name = ?", request.BucketName)
+		if err != nil {
+			return nil, errs.ErrBucketNotFound
+		}
+
+		subfolders, err := bs.GetDescendants(bucket.ID)
+		if err != nil {
+			return nil, errs.ErrFolderNotFound
+		}
+
+		return subfolders, nil
+	}
+
 	// Split the folderPath into individual folder names
 	folderNames := strings.Split(request.FolderPath, "/")
 	if len(folderNames) < 1 {
@@ -337,4 +361,15 @@ func (bs *BucktService) GetSubFolders(request request.BaseFileRequest) ([]interf
 	}
 
 	return utils.InterfaceSlice(subfolders), nil
+}
+
+func (bs *BucktService) GetDescendants(ID uuid.UUID) ([]interface{}, error) {
+	var descendants []model.FolderModel
+
+	descendants, err := bs.folderStore.GetMany("parent_id = ?", ID)
+	if err != nil {
+		return nil, errs.ErrFolderNotFound
+	}
+
+	return utils.InterfaceSlice(descendants), nil
 }

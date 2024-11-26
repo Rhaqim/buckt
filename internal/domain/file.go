@@ -4,13 +4,15 @@ import (
 	"mime/multipart"
 
 	"github.com/Rhaqim/buckt/request"
+	"github.com/google/uuid"
 )
 
 type ManagerService interface {
 	CreateOwner(name, email string) error
 	CreateBucket(name, description, ownerID string) error
 	DeleteBucket(bucketName string) error
-	GetBuckets(ownerID string) ([]interface{}, error)
+	GetBucket(bucketName string) (interface{}, error)
+	GetBuckets(ownerID uuid.UUID) ([]interface{}, error)
 }
 
 type FileService interface {
@@ -29,6 +31,7 @@ type FolderService interface {
 	DeleteFolder(request.BaseFileRequest) error
 	GetFilesInFolder(request.BaseFileRequest) ([]interface{}, error)
 	GetSubFolders(request.BaseFileRequest) ([]interface{}, error)
+	GetDescendants(uuid.UUID) ([]interface{}, error)
 }
 
 type BucktService interface {

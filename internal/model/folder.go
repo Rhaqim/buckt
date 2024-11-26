@@ -110,6 +110,23 @@ func (repo *FolderRepository) GetDescendants(folderID uuid.UUID) ([]FolderModel,
 	if err := repo.db.Raw(query, folderID).Scan(&descendants).Error; err != nil {
 		return nil, err
 	}
+
+	// query := `
+	//     WITH RECURSIVE folder_hierarchy AS (
+	//         SELECT id, name, parent_id
+	//         FROM folder_models
+	//         WHERE parent_id = ?
+	//         UNION ALL
+	//         SELECT fm.id, fm.name, fm.parent_id
+	//         FROM folder_models fm
+	//         INNER JOIN folder_hierarchy fh ON fh.id = fm.parent_id
+	//     )
+	//     SELECT * FROM folder_hierarchy;
+	// `
+	// if err := bs.folderStore.RawQuery(query, bucket.ID).Scan(&descendants).Error; err != nil {
+	// 	return nil, err
+	// }
+
 	return descendants, nil
 }
 

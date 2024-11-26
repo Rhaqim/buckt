@@ -35,6 +35,9 @@ import (
 type APIHTTPService interface {
 	NewUser(*gin.Context)
 	NewBucket(*gin.Context)
+	AllBuckets(*gin.Context)
+	ViewBucket(*gin.Context)
+	RemoveBucket(*gin.Context)
 
 	// File operations
 	FileUpload(*gin.Context)

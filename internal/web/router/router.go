@@ -17,10 +17,11 @@ type Router struct {
 	*logger.Logger
 	*config.Config
 	httpService domain.APIHTTPService
+	middleware.BucketMiddleware
 }
 
 // NewRouter creates a new router with the given logger and config.
-func NewRouter(log *logger.Logger, cfg *config.Config, httpService domain.APIHTTPService) *Router {
+func NewRouter(log *logger.Logger, cfg *config.Config, httpService domain.APIHTTPService, middleware middleware.BucketMiddleware) *Router {
 	r := gin.New()
 
 	// Set logger
@@ -46,10 +47,10 @@ func NewRouter(log *logger.Logger, cfg *config.Config, httpService domain.APIHTT
 	r.LoadHTMLGlob(templatePath)
 
 	// Set the client type middleware i.e. portal or api
-	middleware := middleware.ClientTypeMiddleware()
-	r.Use(middleware)
+	// middleware := middleware.ClientTypeMiddleware()
+	r.Use(middleware.ClientTypeMiddleware())
 
-	router := &Router{r, log, cfg, httpService}
+	router := &Router{r, log, cfg, httpService, middleware}
 	router.registerRoutes()
 
 	return router
@@ -64,7 +65,15 @@ func (r *Router) registerRoutes() {
 	})
 
 	r.POST("/new_user", r.httpService.NewUser)
-	r.POST("/new_bucket", r.httpService.NewBucket)
+
+	buckets := r.Group("buckets")
+	buckets.Use(r.AuthMiddleware())
+	{
+		buckets.POST("/new_bucket", r.httpService.NewBucket)
+		buckets.GET("/fetch", r.httpService.AllBuckets)
+		buckets.GET("/fetch/bucket", r.httpService.ViewBucket)
+		buckets.DELETE("/delete", r.httpService.RemoveBucket)
+	}
 
 	folders := r.Group("folders")
 	{

@@ -11,4 +11,5 @@ var (
 	ErrFileNotFound      = errors.New("file not found")
 	ErrFolderNotInPath   = errors.New("path must include at least one folder")
 	ErrMinParentMinChild = errors.New("path must include at least one parent and one child folder")
+	ErrFolderNotFound    = errors.New("folder not found")
 )

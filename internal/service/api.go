@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/Rhaqim/buckt/internal/domain"
+	"github.com/Rhaqim/buckt/internal/model"
 	"github.com/Rhaqim/buckt/request"
 	"github.com/gin-gonic/gin"
 )
@@ -70,6 +71,69 @@ func (s *APIService) NewBucket(c *gin.Context) {
 		c.HTML(200, "partials/files.html", gin.H{"message": "Bucket created successfully"})
 	default:
 		c.JSON(200, gin.H{"message": "Bucket created successfully"})
+	}
+}
+
+func (s *APIService) AllBuckets(c *gin.Context) {
+	owner_, ok := c.Get("owner")
+	if !ok {
+		c.JSON(401, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	clientType, _ := c.Get("clientType")
+
+	buckets, err := s.GetBuckets(owner_.(model.OwnerModel).ID)
+	if err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+
+	switch clientType {
+	case "portal":
+		c.HTML(200, "partials/buckets.html", gin.H{"buckets": buckets})
+	default:
+		c.JSON(200, gin.H{"buckets": buckets})
+	}
+}
+
+func (s *APIService) ViewBucket(c *gin.Context) {
+	clientType, _ := c.Get("clientType")
+
+	bucketName := c.Query("bucket")
+	var req request.BaseFileRequest
+	req.BucketName = bucketName
+
+	bucket, err := s.GetSubFolders(req)
+	if err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+
+	switch clientType {
+	case "portal":
+		c.HTML(200, "partials/buckets.html", gin.H{"bucket": bucket})
+	default:
+		c.JSON(200, gin.H{"bucket": bucket})
+	}
+}
+
+func (s *APIService) RemoveBucket(c *gin.Context) {
+	clientType, _ := c.Get("clientType")
+
+	bucketName := c.Query("bucket")
+
+	err := s.DeleteBucket(bucketName)
+	if err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+
+	switch clientType {
+	case "portal":
+		c.HTML(200, "partials/buckets.html", gin.H{"message": "Bucket deleted successfully"})
+	default:
+		c.JSON(200, gin.H{"message": "Bucket deleted successfully"})
 	}
 }
 

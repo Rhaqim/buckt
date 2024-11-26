@@ -113,9 +113,9 @@
 
     <!-- Display existing files -->
     <h2>Existing Files</h2>
-    <div id="files-container" hx-get="/view/all_buckets" hx-trigger="load">
+    <div id="files-container" hx-get="/buckets/fetch" hx-trigger="load">
         <!-- File listing will be dynamically injected here -->
-        {{ template "partials/files.html" . }}
+        {{ template "partials/buckets.html" . }}
     </div>
 
     <!-- Messages -->
