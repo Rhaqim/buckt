@@ -18,32 +18,14 @@ import (
 	"github.com/google/uuid"
 )
 
-type BucktStore struct {
-	ownerStore  domain.BucktRepository[model.OwnerModel]
-	bucketStore domain.BucktRepository[model.BucketModel]
-	folderStore domain.BucktRepository[model.FolderModel]
-	fileStore   domain.BucktRepository[model.FileModel]
-	tagStore    domain.BucktRepository[model.TagModel]
-}
-
 type BucktService struct {
 	*logger.Logger
 	*config.Config
-	BucktStore
+	*model.BucktStore
 	domain.BucktFileSystemService
 }
 
-func NewBucktService(log *logger.Logger, cfg *config.Config, ownerStore domain.BucktRepository[model.OwnerModel],
-	bucketStore domain.BucktRepository[model.BucketModel], folderStore domain.BucktRepository[model.FolderModel],
-	fileStore domain.BucktRepository[model.FileModel], tagStore domain.BucktRepository[model.TagModel]) domain.BucktService {
-
-	store := BucktStore{
-		fileStore:   fileStore,
-		bucketStore: bucketStore,
-		ownerStore:  ownerStore,
-		tagStore:    tagStore,
-		folderStore: folderStore,
-	}
+func NewBucktService(log *logger.Logger, cfg *config.Config, store *model.BucktStore) domain.BucktService {
 
 	bfs := NewBucktFSService(log, cfg)
 
@@ -56,7 +38,7 @@ func (bs *BucktService) CreateOwner(name, email string) error {
 		Email: email,
 	}
 
-	return bs.ownerStore.Create(&owner)
+	return bs.OwnerStore.Create(&owner)
 }
 
 func (bs *BucktService) CreateBucket(name, description, ownerID string) error {
@@ -71,20 +53,20 @@ func (bs *BucktService) CreateBucket(name, description, ownerID string) error {
 		OwnerID:     parsedId,
 	}
 
-	return bs.bucketStore.Create(&bucket)
+	return bs.BucketStore.Create(&bucket)
 }
 
 func (bs *BucktService) DeleteBucket(bucketName string) error {
-	bucket, err := bs.bucketStore.GetBy("name = ?", bucketName)
+	bucket, err := bs.BucketStore.GetBy("name = ?", bucketName)
 	if err != nil {
 		return errs.ErrBucketNotFound
 	}
 
-	return bs.bucketStore.Delete(bucket.ID)
+	return bs.BucketStore.Delete(bucket.ID)
 }
 
 func (bs *BucktService) GetBucket(bucketName string) (interface{}, error) {
-	bucket, err := bs.bucketStore.GetBy("name = ?", bucketName)
+	bucket, err := bs.BucketStore.GetBy("name = ?", bucketName)
 	if err != nil {
 		return nil, errs.ErrBucketNotFound
 	}
@@ -94,7 +76,7 @@ func (bs *BucktService) GetBucket(bucketName string) (interface{}, error) {
 
 func (bs *BucktService) GetBuckets(ownerID uuid.UUID) ([]interface{}, error) {
 
-	buckets, err := bs.bucketStore.GetMany("owner_id = ?", ownerID)
+	buckets, err := bs.BucketStore.GetMany("owner_id = ?", ownerID)
 	if err != nil {
 		return nil, errs.ErrBucketNotFound
 	}
@@ -112,7 +94,7 @@ func (bs *BucktService) UploadFile(file_ *multipart.FileHeader, bucketName strin
 	name := strings.Split(fileName, ".")[0]
 
 	// Check if bucket exists
-	bucket, err := bs.bucketStore.GetBy("name = ?", bucketName)
+	bucket, err := bs.BucketStore.GetBy("name = ?", bucketName)
 	if err != nil {
 		return errs.ErrBucketNotFound
 	}
@@ -121,7 +103,7 @@ func (bs *BucktService) UploadFile(file_ *multipart.FileHeader, bucketName strin
 
 	for _, folder := range utils.ValidateFolderPath(folderPath) {
 		// Check if the folder exists under the current parent
-		folderModel, err := bs.folderStore.GetBy("name = ? AND parent_id = ?", folder, currentParentID)
+		folderModel, err := bs.FolderStore.GetBy("name = ? AND parent_id = ?", folder, currentParentID)
 		if err != nil {
 			// Folder does not exist; create it
 			newFolderModel := model.FolderModel{
@@ -130,7 +112,7 @@ func (bs *BucktService) UploadFile(file_ *multipart.FileHeader, bucketName strin
 				BucketID: bucket.ID,
 			}
 
-			if err := bs.folderStore.Create(&newFolderModel); err != nil {
+			if err := bs.FolderStore.Create(&newFolderModel); err != nil {
 				return err
 			}
 
@@ -141,7 +123,7 @@ func (bs *BucktService) UploadFile(file_ *multipart.FileHeader, bucketName strin
 	}
 
 	// Check if file already exists
-	_, err = bs.fileStore.GetBy("name = ? AND parent_id = ?", name, currentParentID)
+	_, err = bs.FileStore.GetBy("name = ? AND parent_id = ?", name, currentParentID)
 	if err == nil {
 		return errs.ErrFileAlreadyExists
 	}
@@ -155,7 +137,7 @@ func (bs *BucktService) UploadFile(file_ *multipart.FileHeader, bucketName strin
 			Name: tag,
 		}
 
-		if err := bs.tagStore.Create(&tagModel); err != nil {
+		if err := bs.TagStore.Create(&tagModel); err != nil {
 			return err
 		}
 
@@ -204,7 +186,7 @@ func (bs *BucktService) UploadFile(file_ *multipart.FileHeader, bucketName strin
 	}
 
 	// Create file
-	if err := bs.fileStore.Create(&fileModel); err != nil {
+	if err := bs.FileStore.Create(&fileModel); err != nil {
 		return err
 	}
 
@@ -214,7 +196,7 @@ func (bs *BucktService) UploadFile(file_ *multipart.FileHeader, bucketName strin
 func (bs *BucktService) RenameFile(request request.RenameFileRequest) error {
 	path := filepath.Join(request.BucketName, request.FolderPath, request.Filename)
 
-	file, err := bs.fileStore.GetBy("path = ?", path)
+	file, err := bs.FileStore.GetBy("path = ?", path)
 	if err != nil {
 		return errs.ErrFileNotFound
 	}
@@ -229,7 +211,7 @@ func (bs *BucktService) RenameFile(request request.RenameFileRequest) error {
 	file.Name = request.NewFilename
 	file.Path = newPath
 
-	return bs.fileStore.Update(&file)
+	return bs.FileStore.Update(&file)
 }
 
 func (bs *BucktService) MoveFile(request.MoveFileRequest) error {
@@ -239,7 +221,7 @@ func (bs *BucktService) MoveFile(request.MoveFileRequest) error {
 func (bs *BucktService) DownloadFile(request request.FileRequest) ([]byte, error) {
 	path := filepath.Join(request.BucketName, request.FolderPath, request.Filename)
 
-	file, err := bs.fileStore.GetBy("path = ?", path)
+	file, err := bs.FileStore.GetBy("path = ?", path)
 	if err != nil {
 		return nil, errs.ErrFileNotFound
 	}
@@ -302,7 +284,7 @@ func (bs *BucktService) GetFilesInFolder(request request.BaseFileRequest) ([]int
     `
 
 	// Execute query using the first folder name and the bucket name
-	if err := bs.folderStore.RawQuery(query, folderNames[0], request.BucketName, folderNames[len(folderNames)-1]).Scan(&files).Error; err != nil {
+	if err := bs.FolderStore.RawQuery(query, folderNames[0], request.BucketName, folderNames[len(folderNames)-1]).Scan(&files).Error; err != nil {
 		return nil, err
 	}
 
@@ -311,7 +293,7 @@ func (bs *BucktService) GetFilesInFolder(request request.BaseFileRequest) ([]int
 
 func (bs *BucktService) GetSubFolders(request request.BaseFileRequest) ([]interface{}, error) {
 	if request.FolderPath == "" {
-		bucket, err := bs.bucketStore.GetBy("name = ?", request.BucketName)
+		bucket, err := bs.BucketStore.GetBy("name = ?", request.BucketName)
 		if err != nil {
 			return nil, errs.ErrBucketNotFound
 		}
@@ -356,7 +338,7 @@ func (bs *BucktService) GetSubFolders(request request.BaseFileRequest) ([]interf
         );
     `
 	// Run the query with the bucket name, first folder, and last folder name in the path
-	if err := bs.folderStore.RawQuery(query, folderNames[0], request.BucketName, folderNames[len(folderNames)-1]).Scan(&subfolders).Error; err != nil {
+	if err := bs.FolderStore.RawQuery(query, folderNames[0], request.BucketName, folderNames[len(folderNames)-1]).Scan(&subfolders).Error; err != nil {
 		return nil, err
 	}
 
@@ -366,7 +348,7 @@ func (bs *BucktService) GetSubFolders(request request.BaseFileRequest) ([]interf
 func (bs *BucktService) GetDescendants(ID uuid.UUID) ([]interface{}, error) {
 	var descendants []model.FolderModel
 
-	descendants, err := bs.folderStore.GetMany("parent_id = ?", ID)
+	descendants, err := bs.FolderStore.GetMany("parent_id = ?", ID)
 	if err != nil {
 		return nil, errs.ErrFolderNotFound
 	}

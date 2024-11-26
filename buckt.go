@@ -60,11 +60,16 @@ func NewBuckt(configFile string, logToFileAndTerminal bool, saveDir string) (Buc
 	var bucketStore domain.BucktRepository[model.BucketModel] = model.NewBucketRepository(db.DB)
 	var ownerStore domain.BucktRepository[model.OwnerModel] = model.NewOwnerRepository(db.DB)
 
+	store := &model.BucktStore{
+		OwnerStore:  ownerStore,
+		BucketStore: bucketStore,
+		FolderStore: folderStore,
+		FileStore:   fileStore,
+		TagStore:    tagStore,
+	}
+
 	// Initialize the services
-	var fileService domain.BucktService = service.NewBucktService(
-		log, cfg, ownerStore,
-		bucketStore, folderStore,
-		fileStore, tagStore)
+	var fileService domain.BucktService = service.NewBucktService(log, cfg, store)
 
 	// API service
 	var httpService domain.APIHTTPService = service.NewAPIService(fileService)
