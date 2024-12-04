@@ -1,13 +1,17 @@
 <!-- Example in files.html -->
 {{ define "partials/files.html" }}
-<!-- Template content goes here -->
-
-{{ range .Files }}
-<div>
-    <p>{{ . }}</p>
-    <button hx-get="/download/{{ . }}">Download</button>
-    <button hx-delete="/delete/{{ . }}">Delete</button>
-</div>
-{{ end }}
-
+    {{ range . }}
+        <div class="bg-white shadow rounded p-4">
+            <h3 class="font-bold">{{ .Name }}</h3>
+            <p class="text-sm text-gray-500">Size: {{ .Size }} KB</p>
+            <p class="text-sm text-gray-500">Created: {{ .CreatedAt }}</p>
+            <div class="mt-2 flex justify-between">
+                <a href="/files/{{ .Bucket }}/download/{{ .ID }}" class="text-blue-500">Download</a>
+                <button class="text-red-500" 
+                        hx-post="/delete?id={{ .ID }}" 
+                        hx-target="#file-{{ .ID }}" 
+                        hx-swap="outerHTML">Delete</button>
+            </div>
+        </div>
+    {{ end }}
 {{ end }}

@@ -101,7 +101,12 @@ func (bs *BucktService) UploadFile(file_ *multipart.FileHeader, bucketName strin
 
 	currentParentID := bucket.ID.String()
 
+	// For each folder in folderPath, create the path for the folder
+	pathConstruct := bucketName
+
 	for _, folder := range utils.ValidateFolderPath(folderPath) {
+		pathConstruct = filepath.Join(pathConstruct, folder)
+
 		// Check if the folder exists under the current parent
 		folderModel, err := bs.FolderStore.GetBy("name = ? AND parent_id = ?", folder, currentParentID)
 		if err != nil {
@@ -110,6 +115,7 @@ func (bs *BucktService) UploadFile(file_ *multipart.FileHeader, bucketName strin
 				Name:     folder,
 				ParentID: uuid.MustParse(currentParentID), // Convert currentParentID back to UUID
 				BucketID: bucket.ID,
+				Path:     pathConstruct,
 			}
 
 			if err := bs.FolderStore.Create(&newFolderModel); err != nil {
@@ -256,6 +262,29 @@ func (bs *BucktService) MoveFolder(request.MoveFolderRequest) error {
 
 func (bs *BucktService) DeleteFolder(request.BaseFileRequest) error {
 	panic("implement me")
+}
+
+func (bs *BucktService) GetFolderContent(path string) ([]interface{}, []interface{}, error) {
+	var err error
+
+	// get the parent folder with the given path
+	parentFolder, err := bs.FolderStore.GetBy("path = ?", path)
+	if err != nil {
+		return nil, nil, errs.ErrFolderNotFound
+	}
+
+	// get all the files and folders with the parent folder id
+	files, err := bs.FileStore.GetMany("parent_id = ?", parentFolder.ID)
+	if err != nil {
+		return nil, nil, errs.ErrFileNotFound
+	}
+
+	folders, err := bs.FolderStore.GetMany("parent_id = ?", parentFolder.ID)
+	if err != nil {
+		return nil, nil, errs.ErrFolderNotFound
+	}
+
+	return utils.InterfaceSlice(files), utils.InterfaceSlice(folders), nil
 }
 
 func (bs *BucktService) GetFilesInFolder(request request.BaseFileRequest) ([]interface{}, error) {

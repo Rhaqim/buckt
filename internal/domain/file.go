@@ -29,6 +29,7 @@ type FolderService interface {
 	RenameFolder(request.RenameFolderRequest) error
 	MoveFolder(request.MoveFolderRequest) error
 	DeleteFolder(request.BaseFileRequest) error
+	GetFolderContent(string) ([]interface{}, []interface{}, error)
 	GetFilesInFolder(request.BaseFileRequest) ([]interface{}, error)
 	GetSubFolders(request.BaseFileRequest) ([]interface{}, error)
 	GetDescendants(uuid.UUID) ([]interface{}, error)

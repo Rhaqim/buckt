@@ -34,6 +34,11 @@ import (
 
 type APIHTTPService interface {
 	NewUser(*gin.Context)
+
+	// Portal operations
+	Dashboard(*gin.Context)
+
+	// Bucket operations
 	NewBucket(*gin.Context)
 	AllBuckets(*gin.Context)
 	ViewBucket(*gin.Context)
@@ -48,6 +53,7 @@ type APIHTTPService interface {
 	FileDelete(*gin.Context)
 
 	// Folder operations
+	FolderContent(*gin.Context)
 	FolderFiles(*gin.Context)
 	FolderSubFolders(*gin.Context)
 	FolderRename(*gin.Context)

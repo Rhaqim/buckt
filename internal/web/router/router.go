@@ -60,9 +60,7 @@ func NewRouter(log *logger.Logger, cfg *config.Config, httpService domain.APIHTT
 func (r *Router) registerRoutes() {
 
 	// Route for the main admin page (view files)
-	r.GET("/portal", func(c *gin.Context) {
-		c.HTML(200, "index.html", nil)
-	})
+	r.GET("/", r.httpService.Dashboard)
 
 	r.POST("/new_user", r.httpService.NewUser)
 
@@ -75,17 +73,18 @@ func (r *Router) registerRoutes() {
 		buckets.DELETE("/delete", r.httpService.RemoveBucket)
 	}
 
-	folders := r.Group("folders")
+	folders := r.Group("folders/:bucket")
 	{
-		folders.POST("/fetch/folders", r.httpService.FolderSubFolders)
-		folders.POST("/fetch/files", r.httpService.FolderFiles)
+		folders.GET("", r.httpService.FolderContent)
+		folders.GET("/fetch/folders", r.httpService.FolderSubFolders)
+		folders.GET("/fetch/files", r.httpService.FolderFiles)
 		folders.PUT("/rename", r.httpService.FolderRename)
 		folders.PUT("/move", r.httpService.FolderMove)
 		folders.DELETE("/delete", r.httpService.FolderDelete)
 
 	}
 
-	files := r.Group("files")
+	files := r.Group("files/:bucket")
 	{
 		files.POST("/upload", r.httpService.FileUpload)
 		files.GET("/download", r.httpService.FileDownload)

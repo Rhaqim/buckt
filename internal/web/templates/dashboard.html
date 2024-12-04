@@ -1,0 +1,28 @@
+{{ template "head.html" }}
+    <div>
+        <div class="flex justify-between items-center mb-4">
+            <h2 class="text-2xl font-bold">Dashboard</h2>
+            <button class="bg-green-500 text-white px-4 py-2 rounded" 
+                    hx-get="/upload" 
+                    hx-target="#modal" 
+                    hx-swap="innerHTML">
+                Upload Files
+            </button>
+        </div>
+
+         <!-- Folder Tracker -->
+         <div class="mb-4">
+            <span class="text-sm text-gray-500">Current Folder: </span>
+            <span class="font-bold">{{ .Path }}</span>
+        </div>
+
+        <div class="grid grid-cols-3 gap-4" id="file-list">
+            <!-- Render Folders -->
+            {{ template "partials/folders.html"  .Folders }}
+            
+            <!-- Render Files -->
+            {{ template "partials/files.html"  .Files }}
+        </div>
+    </div>
+    <div id="modal"></div>
+{{ template "tail.html" }}

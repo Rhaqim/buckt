@@ -17,6 +17,30 @@ func NewAPIService(s domain.BucktService) domain.APIHTTPService {
 	return &APIService{s}
 }
 
+func (s *APIService) Dashboard(c *gin.Context) {
+	// bucketNmae := c.Query("bucket")
+	bucketNmae := "test_bucket"
+
+	var req request.BaseFileRequest = request.BaseFileRequest{
+		BucketName: bucketNmae,
+	}
+
+	folders, err := s.GetSubFolders(req)
+	if err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+
+	folderPath := "/" + bucketNmae
+
+	// Render the dashboard page with the files
+	c.HTML(200, "dashboard.html", gin.H{
+		"Title":   "Dashboard",
+		"Folders": folders,
+		"Path":    folderPath,
+	})
+}
+
 func (s *APIService) NewUser(c *gin.Context) {
 	clientType, _ := c.Get("clientType")
 
@@ -140,8 +164,8 @@ func (s *APIService) RemoveBucket(c *gin.Context) {
 func (s *APIService) FileUpload(c *gin.Context) {
 	clientType, _ := c.Get("clientType")
 
-	bucketName := c.PostForm("bucket_name")
-	folderPath := c.PostForm("folder_path")
+	bucketName := c.Param("bucket")
+	folderPath := c.PostForm("folder")
 
 	file, err := c.FormFile("file")
 	if err != nil {
@@ -164,6 +188,7 @@ func (s *APIService) FileUpload(c *gin.Context) {
 }
 
 func (s *APIService) FileDownload(c *gin.Context) {
+	bucketName := c.Param("bucket")
 
 	var req request.FileRequest
 
@@ -171,6 +196,8 @@ func (s *APIService) FileDownload(c *gin.Context) {
 		c.JSON(400, gin.H{"error": err.Error()})
 		return
 	}
+
+	req.BucketName = bucketName
 
 	fileData, err := s.DownloadFile(req)
 	if err != nil {
@@ -186,12 +213,16 @@ func (s *APIService) FileDownload(c *gin.Context) {
 func (s *APIService) FileRename(c *gin.Context) {
 	clientType, _ := c.Get("clientType")
 
+	bucketName := c.Param("bucket")
+
 	var req request.RenameFileRequest
 
 	if err := c.BindJSON(&req); err != nil {
 		c.JSON(400, gin.H{"error": err.Error()})
 		return
 	}
+
+	req.BucketName = bucketName
 
 	err := s.RenameFile(req)
 	if err != nil {
@@ -246,12 +277,16 @@ func (s *APIService) FileServe(c *gin.Context) {
 func (s *APIService) FileDelete(c *gin.Context) {
 	clientType, _ := c.Get("clientType")
 
+	bucketName := c.Param("bucket")
+
 	var req request.FileRequest
 
 	if err := c.BindJSON(&req); err != nil {
 		c.JSON(400, gin.H{"error": err.Error()})
 		return
 	}
+
+	req.BucketName = bucketName
 
 	err := s.DeleteFile(req)
 	if err != nil {
@@ -267,14 +302,34 @@ func (s *APIService) FileDelete(c *gin.Context) {
 	}
 }
 
+func (s *APIService) FolderContent(c *gin.Context) {
+	var req request.BaseFileRequest = request.BaseFileRequest{
+		FolderPath: c.Query("folder"),
+	}
+
+	files, folders, err := s.GetFolderContent(req.FolderPath)
+	if err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Update folder path
+	folderPath := "/" + req.FolderPath
+
+	// Render with updated folder context
+	c.HTML(200, "dashboard.html", gin.H{
+		"Files":   files,
+		"Folders": folders,
+		"Path":    folderPath,
+	})
+}
+
 func (s *APIService) FolderFiles(c *gin.Context) {
 	// clientType, _ := c.Get("clientType")
 
-	var req request.BaseFileRequest
-
-	if err := c.BindJSON(&req); err != nil {
-		c.JSON(400, gin.H{"error": err.Error()})
-		return
+	var req request.BaseFileRequest = request.BaseFileRequest{
+		BucketName: c.Param("bucket"),
+		FolderPath: c.Query("folder"),
 	}
 
 	files, err := s.GetFilesInFolder(req)
@@ -295,11 +350,9 @@ func (s *APIService) FolderFiles(c *gin.Context) {
 func (s *APIService) FolderSubFolders(c *gin.Context) {
 	// clientType, _ := c.Get("clientType")
 
-	var req request.BaseFileRequest
-
-	if err := c.BindJSON(&req); err != nil {
-		c.JSON(400, gin.H{"error": err.Error()})
-		return
+	var req request.BaseFileRequest = request.BaseFileRequest{
+		BucketName: c.Param("bucket"),
+		FolderPath: c.Query("folder"),
 	}
 
 	folders, err := s.GetSubFolders(req)

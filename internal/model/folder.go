@@ -11,6 +11,7 @@ type FolderModel struct {
 	Name     string    `gorm:"not null"`             // File name
 	BucketID uuid.UUID `gorm:"type:uuid;not null"`   // Foreign key to BucketModel
 	ParentID uuid.UUID `gorm:"type:uuid"`            // Foreign key to FolderModel
+	Path     string    `gorm:"not null"`             // Full path or URL to the file
 	gorm.Model
 }
 

@@ -1,7 +1,7 @@
 log:
   level: "debug"
   logTerminal: true
-  logFile: "log.txt"
+  logFile: "logs"
 
 database:
   dsn: "db.sqlite"
