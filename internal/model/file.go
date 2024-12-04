@@ -23,7 +23,7 @@ type FileRepository struct {
 	db *gorm.DB
 }
 
-func NewFileRepository(db *gorm.DB) domain.Repository[FileModel] {
+func NewFileRepository(db *gorm.DB) domain.BucktRepository[FileModel] {
 	return &FileRepository{db}
 }
 
@@ -31,13 +31,17 @@ func (r *FileRepository) Create(file *FileModel) error {
 	return r.db.Create(file).Error
 }
 
-func (r *FileRepository) FindAll() ([]FileModel, error) {
+func (r *FileRepository) Update(file *FileModel) error {
+	return r.db.Save(file).Error
+}
+
+func (r *FileRepository) GetAll() ([]FileModel, error) {
 	var files []FileModel
 	err := r.db.Find(&files).Error
 	return files, err
 }
 
-func (r *FileRepository) FindByID(id uuid.UUID) (FileModel, error) {
+func (r *FileRepository) GetByID(id uuid.UUID) (FileModel, error) {
 	var file FileModel
 	err := r.db.First(&file, id).Error
 	return file, err
@@ -58,6 +62,10 @@ func (r *FileRepository) GetMany(key interface{}, value ...interface{}) ([]FileM
 
 	err := r.db.Where(key, value).Find(&files).Error
 	return files, err
+}
+
+func (r *FileRepository) RawQuery(query string, args ...interface{}) *gorm.DB {
+	return r.db.Raw(query, args...)
 }
 
 // BeforeCreate hook for FileModel to add a prefixed UUID

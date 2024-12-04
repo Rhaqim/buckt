@@ -15,27 +15,18 @@ type Server struct {
 	Port string `yaml:"port"`
 }
 
-type Media struct {
-	Dir string `yaml:"dir"`
-}
-
 type Log struct {
-	Level                string `yaml:"level"`
-	LogToFileAndTerminal bool   `yaml:"logToFileAndTerminal"`
-	SaveDir              string `yaml:"saveDir"`
-}
-
-type Endpoint struct {
-	URL string `yaml:"url"`
+	Level       string `yaml:"level"`
+	LogTerminal bool   `yaml:"logTerminal"`
+	LoGfILE     string `yaml:"logFile"`
 }
 
 type Config struct {
-	Log       Log      `yaml:"log"`
-	Database  Database `yaml:"database"`
-	Server    Server   `yaml:"server"`
-	Media     Media    `yaml:"media"`
-	Endpoint  Endpoint `yaml:"endpoint"`
-	Templates string   `yaml:"templates"`
+	Log          Log      `yaml:"log"`
+	Database     Database `yaml:"database"`
+	Server       Server   `yaml:"server"`
+	MediaDir     string   `yaml:"mediaDir"`
+	TemplatesDir string   `yaml:"templatesDir"`
 }
 
 // LoadConfig loads the configuration from the given file.

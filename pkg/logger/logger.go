@@ -13,21 +13,17 @@ type Logger struct {
 	ErrorLogger *log.Logger
 }
 
-func NewLogger(logFile bool, logTerminal bool, saveDir string) *Logger {
+func NewLogger(logFile string, logTerminal bool) *Logger {
 	// Default to logging to terminal if neither option is explicitly set
-	if !logFile && !logTerminal {
+	if !logTerminal && logFile == "" {
 		logTerminal = true
 	}
 
 	var infoWriter io.Writer = os.Stdout
 	var errorWriter io.Writer = os.Stderr
 
-	if logFile {
-		if saveDir == "" {
-			log.Fatal("Save directory must be provided when logging to file")
-		}
-
-		logDir := filepath.Join(saveDir, "logs", time.Now().Format("2006-01-02"))
+	if logFile != "" {
+		logDir := filepath.Join(logFile, "logs", time.Now().Format("2006-01-02"))
 		if err := os.MkdirAll(logDir, 0755); err != nil {
 			log.Fatal("Failed to create log directory:", err)
 		}

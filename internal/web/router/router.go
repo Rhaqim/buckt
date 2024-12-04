@@ -1,11 +1,13 @@
 package router
 
 import (
+	"net/http"
 	"path/filepath"
 	"runtime"
 
 	"github.com/Rhaqim/buckt/config"
 	"github.com/Rhaqim/buckt/internal/domain"
+	"github.com/Rhaqim/buckt/internal/web/middleware"
 	"github.com/Rhaqim/buckt/pkg/logger"
 	"github.com/gin-gonic/gin"
 )
@@ -14,12 +16,12 @@ type Router struct {
 	*gin.Engine
 	*logger.Logger
 	*config.Config
-	httpService   domain.StorageHTTPService
-	portalService domain.StorageHTTPService
+	httpService domain.APIHTTPService
+	middleware.BucketMiddleware
 }
 
 // NewRouter creates a new router with the given logger and config.
-func NewRouter(log *logger.Logger, cfg *config.Config, httpService, portalService domain.StorageHTTPService) *Router {
+func NewRouter(log *logger.Logger, cfg *config.Config, httpService domain.APIHTTPService, middleware middleware.BucketMiddleware) *Router {
 	r := gin.New()
 
 	// Set logger
@@ -31,7 +33,7 @@ func NewRouter(log *logger.Logger, cfg *config.Config, httpService, portalServic
 	// Determine base path for templates
 	_, b, _, _ := runtime.Caller(0)
 	basePath := filepath.Dir(b)
-	templatePath := cfg.Templates
+	templatePath := cfg.TemplatesDir
 
 	// If no specific template path is set, use the default pattern
 	if templatePath == "" {
@@ -44,40 +46,58 @@ func NewRouter(log *logger.Logger, cfg *config.Config, httpService, portalServic
 	// Load templates using the specified pattern
 	r.LoadHTMLGlob(templatePath)
 
-	return &Router{r, log, cfg, httpService, portalService}
+	// Set the client type middleware i.e. portal or api
+	// middleware := middleware.ClientTypeMiddleware()
+	r.Use(middleware.ClientTypeMiddleware())
+
+	router := &Router{r, log, cfg, httpService, middleware}
+	router.registerRoutes()
+
+	return router
 }
 
 // Run starts the router.
-func (r *Router) Run() error {
+func (r *Router) registerRoutes() {
 
 	// Route for the main admin page (view files)
-	r.GET("/", func(c *gin.Context) {
+	r.GET("/portal", func(c *gin.Context) {
 		c.HTML(200, "index.html", nil)
 	})
 
-	// Route for creating a new bucket
-	r.POST("/new_bucket", r.portalService.NewBucket)
+	r.POST("/new_user", r.httpService.NewUser)
 
-	// Route for uploading a new file
-	r.POST("/upload", r.portalService.Upload)
+	buckets := r.Group("buckets")
+	buckets.Use(r.AuthMiddleware())
+	{
+		buckets.POST("/new_bucket", r.httpService.NewBucket)
+		buckets.GET("/fetch", r.httpService.AllBuckets)
+		buckets.GET("/fetch/bucket", r.httpService.ViewBucket)
+		buckets.DELETE("/delete", r.httpService.RemoveBucket)
+	}
 
-	// Route for downloading an existing file
-	r.GET("/download/:filename", r.portalService.Download)
+	folders := r.Group("folders")
+	{
+		folders.POST("/fetch/folders", r.httpService.FolderSubFolders)
+		folders.POST("/fetch/files", r.httpService.FolderFiles)
+		folders.PUT("/rename", r.httpService.FolderRename)
+		folders.PUT("/move", r.httpService.FolderMove)
+		folders.DELETE("/delete", r.httpService.FolderDelete)
 
-	// Route for deleting an existing file
-	r.DELETE("/delete/:filename", r.portalService.Delete)
+	}
 
-	// Route for viewing files in a specific bucket
-	r.GET("/view/:bucket_name", r.portalService.FetchFiles)
+	files := r.Group("files")
+	{
+		files.POST("/upload", r.httpService.FileUpload)
+		files.GET("/download", r.httpService.FileDownload)
+		files.PUT("/rename", r.httpService.FileRename)
+		files.PUT("/move", r.httpService.FileMove)
+		files.GET("/serve", r.httpService.FileServe)
+		files.DELETE("/delete", r.httpService.FileDelete)
+	}
 
-	r.POST("/api/new_user", r.httpService.NewUser)
-	r.POST("/api/new_bucket", r.httpService.NewBucket)
-	r.POST("/api/upload", r.httpService.Upload)
-	r.GET("/api/download/:filename", r.httpService.Download)
-	r.DELETE("/api/delete/:filename", r.httpService.Delete)
-	r.GET("/api/serve/:filename", r.httpService.ServeFile)
-	r.GET("/api/fetch", r.httpService.FetchFilesInFolder)
-	r.GET("/api/fetch/folders", r.httpService.FetchSubFolders)
+}
 
-	return r.Engine.Run(r.Server.Port)
+// ServeHTTP makes Router compatible with http.Handler
+func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+	r.Engine.ServeHTTP(w, req)
 }

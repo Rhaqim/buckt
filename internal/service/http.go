@@ -1,162 +1,157 @@
 package service
 
-import (
-	"github.com/Rhaqim/buckt/internal/domain"
-	"github.com/gin-gonic/gin"
-)
+// type httpService struct {
+// 	domain.StorageFileService
+// }
 
-type httpService struct {
-	domain.StorageFileService
-}
+// func NewHTTPService(s domain.StorageFileService) domain.StorageHTTPService {
+// 	return &httpService{s}
+// }
 
-func NewHTTPService(s domain.StorageFileService) domain.StorageHTTPService {
-	return &httpService{s}
-}
+// func (s *httpService) Upload(c *gin.Context) {
+// 	file, err := c.FormFile("file")
+// 	if err != nil {
+// 		c.JSON(400, gin.H{"error": err.Error()})
+// 		return
+// 	}
 
-func (s *httpService) Upload(c *gin.Context) {
-	file, err := c.FormFile("file")
-	if err != nil {
-		c.JSON(400, gin.H{"error": err.Error()})
-		return
-	}
+// 	bucketname := c.PostForm("bucketname")
+// 	folderPath := c.PostForm("folderPath")
 
-	bucketname := c.PostForm("bucketname")
-	folderPath := c.PostForm("folderPath")
+// 	err = s.UploadFile(file, bucketname, folderPath)
+// 	if err != nil {
+// 		c.JSON(500, gin.H{"error": err.Error()})
+// 		return
+// 	}
 
-	err = s.UploadFile(file, bucketname, folderPath)
-	if err != nil {
-		c.JSON(500, gin.H{"error": err.Error()})
-		return
-	}
+// 	path, err := s.Serve(file.Filename, true)
+// 	if err != nil {
+// 		c.JSON(500, gin.H{"error": err.Error()})
+// 		return
+// 	}
 
-	path, err := s.Serve(file.Filename, true)
-	if err != nil {
-		c.JSON(500, gin.H{"error": err.Error()})
-		return
-	}
+// 	c.JSON(200, gin.H{
+// 		"message": "File uploaded successfully",
+// 		"path":    path,
+// 	})
+// }
 
-	c.JSON(200, gin.H{
-		"message": "File uploaded successfully",
-		"path":    path,
-	})
-}
+// func (s *httpService) Download(c *gin.Context) {
+// 	filename := c.Param("filename")
 
-func (s *httpService) Download(c *gin.Context) {
-	filename := c.Param("filename")
+// 	file, err := s.DownloadFile(filename)
+// 	if err != nil {
+// 		c.JSON(500, gin.H{"error": err.Error()})
+// 		return
+// 	}
 
-	file, err := s.DownloadFile(filename)
-	if err != nil {
-		c.JSON(500, gin.H{"error": err.Error()})
-		return
-	}
+// 	c.Header("Content-Disposition", "attachment; filename="+filename)
+// 	c.Data(200, "application/octet-stream", file)
+// }
 
-	c.Header("Content-Disposition", "attachment; filename="+filename)
-	c.Data(200, "application/octet-stream", file)
-}
+// func (s *httpService) ServeFile(c *gin.Context) {
+// 	filename := c.Param("filename")
 
-func (s *httpService) ServeFile(c *gin.Context) {
-	filename := c.Param("filename")
+// 	path, err := s.Serve(filename, false)
+// 	if err != nil {
+// 		c.JSON(500, gin.H{"error": err.Error()})
+// 		return
+// 	}
 
-	path, err := s.Serve(filename, false)
-	if err != nil {
-		c.JSON(500, gin.H{"error": err.Error()})
-		return
-	}
+// 	c.File(path)
+// }
 
-	c.File(path)
-}
+// func (s *httpService) Delete(c *gin.Context) {
+// 	filename := c.Param("filename")
 
-func (s *httpService) Delete(c *gin.Context) {
-	filename := c.Param("filename")
+// 	err := s.DeleteFile(filename)
+// 	if err != nil {
+// 		c.JSON(500, gin.H{"error": err.Error()})
+// 		return
+// 	}
 
-	err := s.DeleteFile(filename)
-	if err != nil {
-		c.JSON(500, gin.H{"error": err.Error()})
-		return
-	}
+// 	c.JSON(200, gin.H{"message": "File deleted successfully"})
+// }
 
-	c.JSON(200, gin.H{"message": "File deleted successfully"})
-}
+// func (s *httpService) NewUser(c *gin.Context) {
 
-func (s *httpService) NewUser(c *gin.Context) {
+// 	req := struct {
+// 		Name  string
+// 		Email string
+// 	}{}
 
-	req := struct {
-		Name  string
-		Email string
-	}{}
+// 	err := c.ShouldBindJSON(&req)
+// 	if err != nil {
+// 		c.JSON(400, gin.H{"error": err.Error()})
+// 		return
+// 	}
 
-	err := c.ShouldBindJSON(&req)
-	if err != nil {
-		c.JSON(400, gin.H{"error": err.Error()})
-		return
-	}
+// 	err = s.CreateOwner(req.Name, req.Email)
+// 	if err != nil {
+// 		c.JSON(500, gin.H{"error": err.Error()})
+// 		return
+// 	}
 
-	err = s.CreateOwner(req.Name, req.Email)
-	if err != nil {
-		c.JSON(500, gin.H{"error": err.Error()})
-		return
-	}
+// 	c.JSON(200, gin.H{"message": "User created successfully"})
+// }
 
-	c.JSON(200, gin.H{"message": "User created successfully"})
-}
+// func (s *httpService) NewBucket(c *gin.Context) {
 
-func (s *httpService) NewBucket(c *gin.Context) {
+// 	req := struct {
+// 		Name        string
+// 		Description string
+// 		OwnerID     string `json:"owner_id"`
+// 	}{}
 
-	req := struct {
-		Name        string
-		Description string
-		OwnerID     string `json:"owner_id"`
-	}{}
+// 	err := c.ShouldBindJSON(&req)
+// 	if err != nil {
+// 		c.JSON(400, gin.H{"error": err.Error()})
+// 		return
+// 	}
 
-	err := c.ShouldBindJSON(&req)
-	if err != nil {
-		c.JSON(400, gin.H{"error": err.Error()})
-		return
-	}
+// 	err = s.CreateBucket(req.Name, req.Description, req.OwnerID)
+// 	if err != nil {
+// 		c.JSON(500, gin.H{"error": err.Error()})
+// 		return
+// 	}
 
-	err = s.CreateBucket(req.Name, req.Description, req.OwnerID)
-	if err != nil {
-		c.JSON(500, gin.H{"error": err.Error()})
-		return
-	}
+// 	c.JSON(200, gin.H{"message": "Bucket created successfully"})
+// }
 
-	c.JSON(200, gin.H{"message": "Bucket created successfully"})
-}
+// func (s *httpService) FetchFiles(c *gin.Context) {
+// 	bucketname := c.Param("bucketname")
 
-func (s *httpService) FetchFiles(c *gin.Context) {
-	bucketname := c.Param("bucketname")
+// 	files, err := s.GetFiles(bucketname)
+// 	if err != nil {
+// 		c.JSON(500, gin.H{"error": err.Error()})
+// 		return
+// 	}
 
-	files, err := s.GetFiles(bucketname)
-	if err != nil {
-		c.JSON(500, gin.H{"error": err.Error()})
-		return
-	}
+// 	c.JSON(200, gin.H{"files": files})
+// }
 
-	c.JSON(200, gin.H{"files": files})
-}
+// func (s *httpService) FetchFilesInFolder(c *gin.Context) {
+// 	bucketName := c.Query("bucket_name")
+// 	folderPath := c.Query("folder_path")
 
-func (s *httpService) FetchFilesInFolder(c *gin.Context) {
-	bucketName := c.Query("bucket_name")
-	folderPath := c.Query("folder_path")
+// 	files, err := s.GetFilesInFolder(bucketName, folderPath)
+// 	if err != nil {
+// 		c.JSON(500, gin.H{"error": err.Error()})
+// 		return
+// 	}
 
-	files, err := s.GetFilesInFolder(bucketName, folderPath)
-	if err != nil {
-		c.JSON(500, gin.H{"error": err.Error()})
-		return
-	}
+// 	c.JSON(200, gin.H{"files": files})
+// }
 
-	c.JSON(200, gin.H{"files": files})
-}
+// func (s *httpService) FetchSubFolders(c *gin.Context) {
+// 	bucketName := c.Query("bucket_name")
+// 	folderPath := c.Query("folder_path")
 
-func (s *httpService) FetchSubFolders(c *gin.Context) {
-	bucketName := c.Query("bucket_name")
-	folderPath := c.Query("folder_path")
+// 	folders, err := s.GetSubFolders(bucketName, folderPath)
+// 	if err != nil {
+// 		c.JSON(500, gin.H{"error": err.Error()})
+// 		return
+// 	}
 
-	folders, err := s.GetSubFolders(bucketName, folderPath)
-	if err != nil {
-		c.JSON(500, gin.H{"error": err.Error()})
-		return
-	}
-
-	c.JSON(200, gin.H{"folders": folders})
-}
+// 	c.JSON(200, gin.H{"folders": folders})
+// }

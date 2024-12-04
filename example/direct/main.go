@@ -5,10 +5,11 @@ import (
 	"mime/multipart"
 
 	"github.com/Rhaqim/buckt"
+	"github.com/Rhaqim/buckt/request"
 )
 
 func main() {
-	b, err := buckt.NewBuckt("config.yaml", true, "/logs")
+	b, err := buckt.NewBuckt("config.yaml")
 	if err != nil {
 		log.Fatalf("Failed to initialize Buckt: %v", err)
 	}
@@ -22,14 +23,14 @@ func main() {
 	b.UploadFile(file, "mybucket", "hello/world")
 
 	// Download a file
-	data, err := b.DownloadFile("hello.txt")
+	data, err := b.DownloadFile(request.FileRequest{Filename: "hello.txt"})
 	if err != nil {
 		log.Fatalf("Failed to download file: %v", err)
 	}
 	log.Printf("Downloaded file: %s", string(data))
 
 	// Delete a file
-	err = b.DeleteFile("hello.txt")
+	err = b.DeleteFile(request.FileRequest{Filename: "hello.txt"})
 	if err != nil {
 		log.Fatalf("Failed to delete file: %v", err)
 	}
@@ -47,7 +48,7 @@ func main() {
 	}
 
 	// Serve a file
-	url, err := b.Serve("hello.txt", true)
+	url, err := b.Serve("/hello/world/hello.txt")
 	if err != nil {
 		log.Fatalf("Failed to serve file: %v", err)
 	}

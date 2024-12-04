@@ -1,5 +1,87 @@
-GET http://localhost:8080/api/fetch?folder_path=image/background&bucket_name=test_bucket
+### Index
 
-###
+GET http://localhost:8080/ HTTP/1.1
+X-Client-Type: api
 
-GET http://localhost:8080/api/fetch/folders?folder_path=image&bucket_name=test_bucket
+### Portal
+
+GET http://localhost:8080/portal HTTP/1.1
+X-Client-Type: api
+
+### Create user
+
+POST http://localhost:8080/new_user HTTP/1.1
+X-Client-Type: api
+
+{
+    "username": "test",
+    "email": "test@gmail.com"
+}
+
+### Create bucket
+
+POST http://localhost:8080/new_bucket HTTP/1.1
+X-Client-Type: api
+
+{
+    "bucket_name": "test_bucket",
+    "description": "test bucket",
+    "owner_id": "51458b9b-5251-4d6d-bc09-5d4152859f63"
+}
+
+### Upload file
+
+POST http://localhost:8080/files/upload HTTP/1.1
+X-Client-Type: api
+Content-Type: multipart/form-data; boundary=----MyBoundary
+
+------MyBoundary
+Content-Disposition: form-data; name="bucket_name"
+
+test_bucket
+------MyBoundary
+Content-Disposition: form-data; name="folder_path"
+
+image/background
+------MyBoundary
+Content-Disposition: form-data; name="file"; filename="fukuma.jpg"
+Content-Type: image/jpeg
+
+< /Users/user/Downloads/Wallpapers/fukuma.jpg
+------MyBoundary--
+
+### Download file
+
+POST http://localhost:8080/files/download HTTP/1.1
+X-Client-Type: api
+
+{
+    "bucket_name": "test_bucket",
+    "folder_path": "image/background",
+    "filename": "fukuma.jpg"
+}
+
+### Serve file
+
+GET http://localhost:8080/files/serve?filepath=test_bucket/image/background/fukuma.jpg HTTP/1.1
+X-Client-Type: api
+
+### Fetch Subfolders
+
+POST http://localhost:8080/folders/fetch/folders HTTP/1.1
+X-Client-Type: api
+
+{
+    "bucket_name": "test_bucket",
+    "folder_path": "image"
+}
+
+### Fetch Files in Folder
+
+POST http://localhost:8080/folders/fetch/files HTTP/1.1
+X-Client-Type: api
+
+{
+    "bucket_name": "test_bucket",
+    "folder_path": "image/background"
+}
