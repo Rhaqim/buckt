@@ -1,6 +1,8 @@
 package database
 
 import (
+	"time"
+
 	"github.com/Rhaqim/buckt/config"
 	"github.com/Rhaqim/buckt/internal/model"
 	"github.com/Rhaqim/buckt/pkg/logger"
@@ -17,7 +19,6 @@ type DB struct {
 
 // NewSQLite creates a new SQLite database connection.
 func NewSQLite(cfg *config.Config, log *logger.Logger) (*DB, error) {
-	var _DB *DB
 
 	db, err := gorm.Open(sqlite.Open(cfg.Database.DSN), &gorm.Config{
 		Logger: gormLogger.Default.LogMode(gormLogger.Info),
@@ -26,9 +27,23 @@ func NewSQLite(cfg *config.Config, log *logger.Logger) (*DB, error) {
 		return nil, err
 	}
 
-	_DB = &DB{db, log}
+	// Access the underlying *sql.DB object
+	sqlDB, err := db.DB()
+	if err != nil {
+		return nil, err
+	}
 
-	return _DB, nil
+	// Set connection pooling
+	sqlDB.SetMaxOpenConns(10)                  // Max open connections
+	sqlDB.SetMaxIdleConns(5)                   // Max idle connections
+	sqlDB.SetConnMaxLifetime(30 * time.Minute) // Max connection lifetime
+
+	// Optionally: Ping the database to ensure it's accessible
+	if err := sqlDB.Ping(); err != nil {
+		return nil, err
+	}
+
+	return &DB{db, log}, nil
 }
 
 // Close closes the database connection.
