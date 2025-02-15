@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/Rhaqim/buckt/config"
+	"github.com/Rhaqim/buckt/internal/api"
 	"github.com/Rhaqim/buckt/internal/database"
 	"github.com/Rhaqim/buckt/internal/domain"
 	"github.com/Rhaqim/buckt/internal/model"
@@ -72,7 +73,7 @@ func NewBuckt(configFile string) (Buckt, error) {
 	var fileService domain.BucktService = service.NewBucktService(log, cfg, store)
 
 	// API service
-	var httpService domain.APIHTTPService = service.NewAPIService(fileService)
+	var httpService domain.APIHTTPService = api.NewAPIService(fileService)
 
 	// middleware server
 	middleware := middleware.NewBucketMiddleware(ownerStore)
