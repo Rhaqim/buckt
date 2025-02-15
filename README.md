@@ -10,7 +10,8 @@ The Buckt package provides a flexible media storage service with optional integr
 
 - [Buckt Package Documentation](#buckt-package-documentation)
   - [Table of Contents](#table-of-contents)
-  - [Installation](#installation)
+  - [Features](#features)
+  - [Getting Started](#getting-started)
   - [Usage](#usage)
     - [Initialization](#initialization)
     - [Configuration](#configuration)
@@ -23,8 +24,16 @@ The Buckt package provides a flexible media storage service with optional integr
     - [With Built-in Gin Server](#with-built-in-gin-server)
     - [Using with Other Routers](#using-with-other-routers)
   - [License](#license)
+  
+## Features
 
-## Installation
+- **Flexible Storage** – Store and manage media files with ease.
+- **Gin Gonic Integration** – Use with Gin for HTTP-based file management.
+- **Logging Support** – Log to files or the terminal for better debugging.
+- **SQLite Support** – Store metadata in an SQLite database.
+- **Direct & HTTP Access** – Interact with Buckt programmatically or via API.
+
+## Getting Started
 
 You can install the package using go get:
 
