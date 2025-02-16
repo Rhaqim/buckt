@@ -3,8 +3,6 @@ package app
 import (
 	"fmt"
 
-	"github.com/Rhaqim/buckt/internal/constant"
-
 	"github.com/Rhaqim/buckt/internal/domain"
 	"github.com/Rhaqim/buckt/internal/utils"
 	"github.com/Rhaqim/buckt/pkg/response"
@@ -35,9 +33,6 @@ func (a *APIService) CreateFolder(c *gin.Context) {
 
 	// get the parent_id from the request
 	parentID := c.PostForm("parent_id")
-	if parentID == "" {
-		parentID = "00000000-0000-0000-0000-000000000000"
-	}
 
 	// get the folder name from the request
 	folderName := c.PostForm("folder_name")
@@ -131,9 +126,6 @@ func (a *APIService) UploadFile(c *gin.Context) {
 
 	// get the parent_id from the request
 	parentID := c.PostForm("parent_id")
-	if parentID == "" {
-		parentID = constant.DEFAULT_PARENT_FOLDER_ID
-	}
 
 	// Read file from request
 	fileName, fileByte, err := utils.ProcessFile(file)
@@ -151,22 +143,6 @@ func (a *APIService) UploadFile(c *gin.Context) {
 	c.JSON(200, response.Success("file uploaded"))
 }
 
-func (a *APIService) getUser(c *gin.Context) (string, error) {
-	// get the user_id from the context
-	user_id, ok := c.Get("user_id")
-	if !ok {
-		return "", fmt.Errorf("unauthorized")
-	}
-
-	// convert the user_id to string
-	userID, ok := user_id.(string)
-	if !ok {
-		return "", fmt.Errorf("failed to parse user_id")
-	}
-
-	return userID, nil
-}
-
 // DownloadFile implements domain.APIService.
 func (a *APIService) DownloadFile(c *gin.Context) {
 	// get the file_id from the request
@@ -181,4 +157,22 @@ func (a *APIService) DownloadFile(c *gin.Context) {
 	c.Header("Content-Disposition", "attachment; filename="+file.Name)
 	c.Header("Content-Type", file.ContentType)
 	c.Data(200, file.ContentType, file.Data)
+}
+
+/* Helper functions */
+
+func (a *APIService) getUser(c *gin.Context) (string, error) {
+	// get the user_id from the context
+	user_id, ok := c.Get("user_id")
+	if !ok {
+		return "", fmt.Errorf("unauthorized")
+	}
+
+	// convert the user_id to string
+	userID, ok := user_id.(string)
+	if !ok {
+		return "", fmt.Errorf("failed to parse user_id")
+	}
+
+	return userID, nil
 }

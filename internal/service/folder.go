@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"path/filepath"
 
+	"github.com/Rhaqim/buckt/internal/constant"
 	"github.com/Rhaqim/buckt/internal/domain"
 	"github.com/Rhaqim/buckt/internal/model"
 	"github.com/Rhaqim/buckt/pkg/logger"
@@ -27,6 +28,10 @@ func NewFolderService(log *logger.Logger, folderRepository domain.FolderReposito
 func (f *FolderService) CreateFolder(user_id, parent_id, folder_name, description string) error {
 	var err error
 	var parentFolder *model.FolderModel
+
+	if parent_id == "" {
+		parent_id = constant.DEFAULT_PARENT_FOLDER_ID
+	}
 
 	parentID, err := uuid.Parse(parent_id)
 	if err != nil {
@@ -64,6 +69,10 @@ func (f *FolderService) CreateFolder(user_id, parent_id, folder_name, descriptio
 // GetFolder implements domain.FolderService.
 // Subtle: this method shadows the method (FolderRepository).GetFolder of FolderService.FolderRepository.
 func (f *FolderService) GetFolder(folder_id string) (*model.FolderModel, error) {
+	if folder_id == "" {
+		folder_id = constant.DEFAULT_PARENT_FOLDER_ID
+	}
+
 	id, err := uuid.Parse(folder_id)
 	if err != nil {
 		return nil, f.WrapError("failed to parse uuid", err)
