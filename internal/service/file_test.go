@@ -25,14 +25,14 @@ func (m *MockFileRepository) GetFile(fileID uuid.UUID) (*model.FileModel, error)
 }
 
 // RestoreFileByPath implements domain.FileRepository.
-func (m *MockFileRepository) RestoreFile(path string) error {
+func (m *MockFileRepository) RestoreFile(path string) (*model.FileModel, error) {
 	args := m.Called(path)
-	return args.Error(0)
+	return args.Get(0).(*model.FileModel), args.Error(1)
 }
 
-func (m *MockFileRepository) GetFiles(parentID uuid.UUID) ([]model.FileModel, error) {
+func (m *MockFileRepository) GetFiles(parentID uuid.UUID) ([]*model.FileModel, error) {
 	args := m.Called(parentID)
-	return args.Get(0).([]model.FileModel), args.Error(1)
+	return args.Get(0).([]*model.FileModel), args.Error(1)
 }
 
 func (m *MockFileRepository) Update(file *model.FileModel) error {
@@ -131,7 +131,7 @@ func TestCreateFile(t *testing.T) {
 	mockFileSystemService.On("FSWriteFile", "/parent/folder/file.txt", []byte("file data")).Return(nil)
 	mockFileRepo.On("Create", mock.Anything).Return(nil)
 
-	err := fileService.CreateFile("user_123", "parent_id", "file.txt", "text/plain", []byte("file data"))
+	_, err := fileService.CreateFile("user_123", "parent_id", "file.txt", "text/plain", []byte("file data"))
 	assert.NoError(t, err)
 }
 

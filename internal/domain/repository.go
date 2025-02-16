@@ -18,7 +18,7 @@ type FileRepository interface {
 	Create(file *model.FileModel) error
 	Update(file *model.FileModel) error
 	GetFile(id uuid.UUID) (*model.FileModel, error)
-	RestoreFile(hash string) error
-	GetFiles(parent_id uuid.UUID) ([]model.FileModel, error)
+	RestoreFile(hash string) (*model.FileModel, error)
+	GetFiles(parent_id uuid.UUID) ([]*model.FileModel, error)
 	DeleteFile(id uuid.UUID) error
 }

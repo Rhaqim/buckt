@@ -24,9 +24,12 @@ func (f *FileRepository) Create(file *model.FileModel) error {
 }
 
 // RestoreFileByPath implements domain.FileRepository.
-func (f *FileRepository) RestoreFile(hash string) error {
-	// if it already exists, overwrite it and set the deleted_at to nil
-	return f.DB.Unscoped().Model(&model.FileModel{}).Where("hash = ?", hash).Update("deleted_at", nil).Error
+// if it already exists, overwrite it and set the deleted_at to nil
+func (f *FileRepository) RestoreFile(hash string) (*model.FileModel, error) {
+	var file model.FileModel
+	err := f.DB.Unscoped().Model(&model.FileModel{}).Where("hash = ?", hash).Update("deleted_at", nil).Scan(&file).Error
+
+	return &file, err
 }
 
 // DeleteFile implements domain.FileRepository.
@@ -42,8 +45,8 @@ func (f *FileRepository) GetFile(id uuid.UUID) (*model.FileModel, error) {
 }
 
 // GetFiles implements domain.FileRepository.
-func (f *FileRepository) GetFiles(parent_id uuid.UUID) ([]model.FileModel, error) {
-	var files []model.FileModel
+func (f *FileRepository) GetFiles(parent_id uuid.UUID) ([]*model.FileModel, error) {
+	var files []*model.FileModel
 	err := f.DB.Where("parent_id = ?", parent_id).Find(&files).Error
 	return files, err
 }

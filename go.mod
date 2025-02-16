@@ -5,6 +5,7 @@ go 1.24.0
 require (
 	github.com/gin-gonic/gin v1.10.0
 	github.com/google/uuid v1.6.0
+	github.com/nfnt/resize v0.0.0-20180221191011-83c6a9932646
 	github.com/stretchr/testify v1.10.0
 	gopkg.in/yaml.v3 v3.0.1
 	gorm.io/driver/sqlite v1.5.7

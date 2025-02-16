@@ -70,7 +70,17 @@ func (a *APIService) GetFolderContent(c *gin.Context) {
 
 // GetFilesInFolder implements domain.APIService.
 func (a *APIService) GetFilesInFolder(c *gin.Context) {
-	panic("unimplemented")
+	// get the parent_id from the request
+	parentID := c.PostForm("parent_id")
+
+	// get the files in the folder
+	files, err := a.FileService.GetFiles(parentID)
+	if err != nil {
+		c.AbortWithStatusJSON(500, response.WrapError("failed to get files", err))
+		return
+	}
+
+	c.JSON(200, response.Success(files))
 }
 
 // GetSubFolders implements domain.APIService.
@@ -125,13 +135,15 @@ func (a *APIService) UploadFile(c *gin.Context) {
 		return
 	}
 
-	err = a.FileService.CreateFile(user_id, parentID, fileName, file.Header.Get("Content-Type"), fileByte)
+	fileID, err := a.FileService.CreateFile(user_id, parentID, fileName, file.Header.Get("Content-Type"), fileByte)
 	if err != nil {
 		c.AbortWithStatusJSON(500, response.WrapError("failed to create file", err))
 		return
 	}
 
-	c.JSON(200, response.Success("file uploaded"))
+	url := a.constructURL(fileID)
+
+	c.JSON(200, response.Success(url))
 }
 
 // DownloadFile implements domain.APIService.
@@ -153,7 +165,11 @@ func (a *APIService) DownloadFile(c *gin.Context) {
 // ServeFile implements domain.APIService.
 func (a *APIService) ServeFile(c *gin.Context) {
 	// get the file_id from the request
-	fileID := c.PostForm("file_id")
+	fileID := c.Param("file_id")
+	if fileID == "" {
+		c.AbortWithStatusJSON(400, response.Error("file_id is required", ""))
+		return
+	}
 
 	file, err := a.FileService.GetFile(fileID)
 	if err != nil {
@@ -199,4 +215,8 @@ func (a *APIService) getUser(c *gin.Context) (string, error) {
 	}
 
 	return userID, nil
+}
+
+func (f *APIService) constructURL(s string) string {
+	return fmt.Sprintf("/api/serve/%s", s)
 }

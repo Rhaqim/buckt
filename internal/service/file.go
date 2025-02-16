@@ -35,26 +35,26 @@ func NewFileService(
 }
 
 // CreateFile implements domain.FileService.
-func (f *FileService) CreateFile(user_id, parent_id, file_name, content_type string, file_data []byte) error {
+func (f *FileService) CreateFile(user_id, parent_id, file_name, content_type string, file_data []byte) (string, error) {
+	var err error
+
 	// Get the parent folder
 	parentFolder, err := f.FolderService.GetFolder(parent_id)
 	if err != nil {
 		parentFolder, err = f.FolderService.GetRootFolder(user_id)
 		if err != nil {
-			return err
+			return "", err
 		}
 	}
 
 	// Get the file path
-	// path := parentFolder.Path + "/" + file_name
-
 	path := filepath.Join(parentFolder.Path, file_name)
 
 	// Calculate the file hash, for data verification
-	hash := fmt.Sprintf("%x", sha256.Sum256(file_data))
+	combinedData := append([]byte(path), file_data...)
+	hash := fmt.Sprintf("%x", sha256.Sum256(combinedData))
 
 	// Size of the file
-	// File size in bytes
 	fileSize := int64(len(file_data))
 
 	// Create the file model
@@ -69,25 +69,23 @@ func (f *FileService) CreateFile(user_id, parent_id, file_name, content_type str
 
 	// Write the file to the file system
 	if err := f.FileSystemService.FSWriteFile(path, file_data); err != nil {
-		return err
+		return "", err
 	}
 
-	// check if the file already exists
-	if err := f.FileRepository.RestoreFile(hash); err != nil {
-		if err.Error() != "record not found" {
-			// Create the file
-			if err := f.FileRepository.Create(file); err != nil {
-				return f.WrapError("failed to create file", err)
+	// Create the file
+	err = f.FileRepository.Create(file)
+	if err != nil {
+		if err.Error() == "UNIQUE constraint failed: file_models.hash" {
+			file, err = f.FileRepository.RestoreFile(hash)
+			if err != nil {
+				return "", f.WrapError("failed to restore file", err)
 			}
 		} else {
-			// Update the file
-			if err := f.FileRepository.Update(file); err != nil {
-				return f.WrapError("failed to update file", err)
-			}
+			return "", f.WrapError("failed to create file", err)
 		}
 	}
 
-	return nil
+	return file.ID.String(), nil
 }
 
 // GetFile implements domain.FileService.
@@ -129,6 +127,7 @@ func (f *FileService) GetFiles(parent_id string) ([]model.FileModel, error) {
 	}
 
 	// Create the file models
+	var fileModels []model.FileModel
 	for _, file := range files {
 		// Get the file data
 		fileData, err := f.FileSystemService.FSGetFile(file.Path)
@@ -137,9 +136,10 @@ func (f *FileService) GetFiles(parent_id string) ([]model.FileModel, error) {
 		}
 
 		file.Data = fileData
+		fileModels = append(fileModels, *file)
 	}
 
-	return files, nil
+	return fileModels, nil
 }
 
 // UpdateFile implements domain.FileService.

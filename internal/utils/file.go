@@ -1,11 +1,66 @@
 package utils
 
 import (
+	"fmt"
 	"io"
 	"mime/multipart"
+	"os/exec"
 	"strings"
 	"unicode"
+
+	"image"
+	"image/jpeg"
+	"image/png"
+	"os"
+
+	"github.com/nfnt/resize"
 )
+
+func GenerateThumbnail(inputPath, outputPath string, width uint) error {
+	file, err := os.Open(inputPath)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	img, format, err := image.Decode(file)
+	if err != nil {
+		return err
+	}
+
+	// Resize image
+	thumbnail := resize.Resize(width, 0, img, resize.Lanczos3)
+
+	// Save the thumbnail
+	outFile, err := os.Create(outputPath)
+	if err != nil {
+		return err
+	}
+	defer outFile.Close()
+
+	if format == "png" {
+		return png.Encode(outFile, thumbnail)
+	}
+	return jpeg.Encode(outFile, thumbnail, nil)
+}
+
+func GenerateVideoPreview(inputPath, outputPath string) error {
+	cmd := exec.Command("ffmpeg", "-i", inputPath, "-ss", "00:00:02", "-vframes", "1", outputPath)
+	err := cmd.Run()
+	if err != nil {
+		return fmt.Errorf("failed to generate video preview: %v", err)
+	}
+	return nil
+}
+
+func GeneratePDFPreview(inputPath, outputPath string) error {
+	cmd := exec.Command("convert", "-density", "150", inputPath+"[0]", "-quality", "90", outputPath)
+	err := cmd.Run()
+	if err != nil {
+		return fmt.Errorf("failed to generate PDF preview: %v", err)
+	}
+	return nil
+}
 
 func ProcessFile(file *multipart.FileHeader) (string, []byte, error) {
 	f, err := file.Open()

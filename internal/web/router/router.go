@@ -69,7 +69,7 @@ func (r *Router) registerRoutes() {
 	/* API Routes */
 	api := r.Group("/api")
 
-	api.GET("/serve", r.APIService.ServeFile)
+	api.GET("/serve/:file_id", r.APIService.ServeFile)
 
 	api.Use(r.AuthMiddleware())
 	{
