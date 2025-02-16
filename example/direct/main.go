@@ -5,7 +5,7 @@ import (
 	"mime/multipart"
 
 	"github.com/Rhaqim/buckt"
-	"github.com/Rhaqim/buckt/request"
+	"github.com/Rhaqim/buckt/pkg/request"
 )
 
 func main() {
