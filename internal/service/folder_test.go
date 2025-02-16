@@ -15,6 +15,12 @@ type MockFolderRepository struct {
 	mock.Mock
 }
 
+// GetRootFolder implements domain.FolderRepository.
+func (m *MockFolderRepository) GetRootFolder(user_id string) (*model.FolderModel, error) {
+	args := m.Called(user_id)
+	return args.Get(0).(*model.FolderModel), args.Error(1)
+}
+
 func (m *MockFolderRepository) Create(folder *model.FolderModel) error {
 	args := m.Called(folder)
 	return args.Error(0)

@@ -8,6 +8,7 @@ import (
 type FolderRepository interface {
 	Create(folder *model.FolderModel) error
 	GetFolder(folder_id uuid.UUID) (*model.FolderModel, error)
+	GetRootFolder(user_id string) (*model.FolderModel, error)
 	GetFolders(bucket_id uuid.UUID) ([]model.FolderModel, error)
 	MoveFolder(folder_id, new_parent_id uuid.UUID) error
 	RenameFolder(folder_id uuid.UUID, new_name string) error
@@ -19,10 +20,4 @@ type FileRepository interface {
 	GetFile(id uuid.UUID) (*model.FileModel, error)
 	GetFiles(parent_id uuid.UUID) ([]model.FileModel, error)
 	DeleteFile(id uuid.UUID) error
-}
-
-type TagRepository interface {
-	Create(tag *model.TagModel) error
-	GetTag(id uuid.UUID) (*model.TagModel, error)
-	GetTags() ([]model.TagModel, error)
 }

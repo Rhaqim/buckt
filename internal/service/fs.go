@@ -31,15 +31,12 @@ func (bfs *FileSystemService) FSValidatePath(path string) (string, error) {
 	return filePath, nil
 }
 
-func (bfs *FileSystemService) FSWriteFile(path string, file []byte) error {
+func (bfs *FileSystemService) FSWriteFile(filePath string, file []byte) error {
 	// File system path
-	filePath, err := bfs.FSValidatePath(path)
-	if err != nil {
-		return err
-	}
+	filePath = filepath.Join(bfs.MediaDir, filePath)
 
 	// Save the file to the file system
-	if err := os.MkdirAll(filepath.Dir(filePath), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(filePath), os.ModePerm); err != nil {
 		return bfs.WrapError("failed to create directory", err)
 	}
 

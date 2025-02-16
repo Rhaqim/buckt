@@ -43,6 +43,12 @@ type MockFolderService struct {
 	mock.Mock
 }
 
+// GetRootFolder implements domain.FolderService.
+func (m *MockFolderService) GetRootFolder(user_id string) (*model.FolderModel, error) {
+	args := m.Called(user_id)
+	return args.Get(0).(*model.FolderModel), args.Error(1)
+}
+
 // CreateFolder implements domain.FolderService.
 func (m *MockFolderService) CreateFolder(user_id string, parent_id string, folder_name string, description string) error {
 	args := m.Called(user_id, parent_id, folder_name, description)
@@ -119,7 +125,7 @@ func TestCreateFile(t *testing.T) {
 	mockFileSystemService.On("FSWriteFile", "/parent/folder/file.txt", []byte("file data")).Return(nil)
 	mockFileRepo.On("Create", mock.Anything).Return(nil)
 
-	err := fileService.CreateFile("parent_id", "file.txt", "text/plain", []byte("file data"))
+	err := fileService.CreateFile("user_123", "parent_id", "file.txt", "text/plain", []byte("file data"))
 	assert.NoError(t, err)
 }
 
@@ -142,7 +148,7 @@ func TestGetFile(t *testing.T) {
 	file, err := fileService.GetFile(fileID.String())
 	assert.NoError(t, err)
 	assert.Equal(t, fileModel.ID, file.FileModel.ID)
-	assert.Equal(t, []byte("file data"), file.File)
+	assert.Equal(t, []byte("file data"), file.Data)
 }
 
 func TestGetFiles(t *testing.T) {
@@ -165,8 +171,8 @@ func TestGetFiles(t *testing.T) {
 	files, err := fileService.GetFiles(parentID.String())
 	assert.NoError(t, err)
 	assert.Len(t, files, 2)
-	assert.Equal(t, []byte("file1 data"), files[0].File)
-	assert.Equal(t, []byte("file2 data"), files[1].File)
+	assert.Equal(t, []byte("file1 data"), files[0].Data)
+	assert.Equal(t, []byte("file2 data"), files[1].Data)
 }
 
 func TestUpdateFile(t *testing.T) {

@@ -10,9 +10,9 @@ type FolderModel struct {
 	ID          uuid.UUID     `gorm:"type:uuid;primaryKey"` // Unique identifier for the file
 	UserID      string        `gorm:"not null"`             // ID of the user who owns the bucket
 	ParentID    uuid.UUID     `gorm:"type:uuid"`            // Foreign key to FolderModel
-	Name        string        `gorm:"not null"`             // File name
+	Name        string        `gorm:"not null;unique"`      // Folder name
 	Description string        `gorm:"type:text"`            // Optional description of the bucket
-	Path        string        `gorm:"not null"`             // Full path or URL to the file
+	Path        string        `gorm:"not null;unique"`      // File path
 	Folders     []FolderModel `gorm:"foreignKey:ParentID"`  // Establish one-to-many relationship with FolderModel
 	Files       []FileModel   `gorm:"foreignKey:ParentID"`  // Establish one-to-many relationship with FileModel
 }

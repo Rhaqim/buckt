@@ -3,6 +3,7 @@ package service
 import (
 	"crypto/sha256"
 	"fmt"
+	"path/filepath"
 
 	"github.com/Rhaqim/buckt/internal/domain"
 	"github.com/Rhaqim/buckt/internal/model"
@@ -34,18 +35,27 @@ func NewFileService(
 }
 
 // CreateFile implements domain.FileService.
-func (f *FileService) CreateFile(parent_id, file_name, content_type string, file_data []byte) error {
+func (f *FileService) CreateFile(user_id, parent_id, file_name, content_type string, file_data []byte) error {
 	// Get the parent folder
 	parentFolder, err := f.FolderService.GetFolder(parent_id)
 	if err != nil {
-		return err
+		parentFolder, err = f.FolderService.GetRootFolder(user_id)
+		if err != nil {
+			return err
+		}
 	}
 
 	// Get the file path
-	path := parentFolder.Path + "/" + file_name
+	// path := parentFolder.Path + "/" + file_name
+
+	path := filepath.Join(parentFolder.Path, file_name)
 
 	// Calculate the file hash, for data verification
 	hash := fmt.Sprintf("%x", sha256.Sum256(file_data))
+
+	// Size of the file
+	// File size in bytes
+	fileSize := int64(len(file_data))
 
 	// Create the file model
 	file := &model.FileModel{
@@ -54,6 +64,7 @@ func (f *FileService) CreateFile(parent_id, file_name, content_type string, file
 		Path:        path,
 		Hash:        hash,
 		ContentType: content_type,
+		Size:        fileSize,
 	}
 
 	// Write the file to the file system
@@ -91,7 +102,7 @@ func (f *FileService) GetFile(file_id string) (*model.File, error) {
 	// Create the file model
 	fileModel := &model.File{
 		FileModel: *file,
-		File:      fileData,
+		Data:      fileData,
 	}
 
 	return fileModel, nil
@@ -121,7 +132,7 @@ func (f *FileService) GetFiles(parent_id string) ([]model.File, error) {
 
 		fileModels[i] = model.File{
 			FileModel: file,
-			File:      fileData,
+			Data:      fileData,
 		}
 	}
 

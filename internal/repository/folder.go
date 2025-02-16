@@ -30,6 +30,36 @@ func (f *FolderRepository) GetFolder(folder_id uuid.UUID) (*model.FolderModel, e
 	return &folder, err
 }
 
+// GetRootFolder implements domain.FolderRepository.
+// look for a folder called root and return it, if root doesn't exist, create it
+func (f *FolderRepository) GetRootFolder(user_id string) (*model.FolderModel, error) {
+	root := model.FolderModel{}
+
+	root_folder := "root_folder"
+
+	err := f.DB.Where("name = ? AND user_id = ?", root_folder, user_id).First(&root).Error
+	if err != nil {
+		if err.Error() != "record not found" {
+			return nil, err
+		}
+
+		path := "/" + user_id + "/" + root_folder
+
+		if err := f.DB.Create(&model.FolderModel{
+			UserID:      user_id,
+			Name:        root_folder,
+			Description: "Root folder",
+			Path:        path,
+		}).Error; err != nil {
+			return nil, err
+		}
+
+		return f.GetRootFolder(user_id)
+	}
+
+	return &root, nil
+}
+
 // GetFolders implements domain.FolderRepository.
 func (f *FolderRepository) GetFolders(bucket_id uuid.UUID) ([]model.FolderModel, error) {
 	var folders []model.FolderModel

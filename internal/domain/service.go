@@ -35,6 +35,7 @@ type BucktFileSystemServiceMock struct {
 
 type FolderService interface {
 	CreateFolder(user_id, parent_id, folder_name, description string) error
+	GetRootFolder(user_id string) (*model.FolderModel, error)
 	GetFolder(folder_id string) (*model.FolderModel, error)
 	GetFolders(parent_id string) ([]model.FolderModel, error)
 	MoveFolder(folder_id, new_parent_id string) error
@@ -42,7 +43,7 @@ type FolderService interface {
 }
 
 type FileService interface {
-	CreateFile(parent_id, file_name, content_type string, file_data []byte) error
+	CreateFile(user_id, parent_id, file_name, content_type string, file_data []byte) error
 	UpdateFile(file_id, new_file_name string, new_file_data []byte) error
 	GetFile(file_id string) (*model.File, error)
 	GetFiles(parent_id string) ([]model.File, error)

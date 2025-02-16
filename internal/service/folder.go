@@ -1,6 +1,9 @@
 package service
 
 import (
+	"fmt"
+	"path/filepath"
+
 	"github.com/Rhaqim/buckt/internal/domain"
 	"github.com/Rhaqim/buckt/internal/model"
 	"github.com/Rhaqim/buckt/pkg/logger"
@@ -22,21 +25,30 @@ func NewFolderService(log *logger.Logger, folderRepository domain.FolderReposito
 
 // CreateFolder implements domain.FolderService.
 func (f *FolderService) CreateFolder(user_id, parent_id, folder_name, description string) error {
+	var err error
+	var parentFolder *model.FolderModel
+
 	parentID, err := uuid.Parse(parent_id)
 	if err != nil {
 		return f.WrapError("failed to parse uuid", err)
 	}
 	// Get the parent folder
-	parentFolder, err := f.FolderRepository.GetFolder(parentID)
+	parentFolder, err = f.FolderRepository.GetFolder(parentID)
 	if err != nil {
-		return f.WrapError("failed to get parent folder", err)
+		parentFolder, err = f.GetRootFolder(user_id)
+		if err != nil {
+			return err
+		}
 	}
 
-	path := parentFolder.Name + "/" + folder_name
+	fmt.Println("parentFolder.ID: ", parentFolder.ID)
+	fmt.Println("parentFolder.Path: ", parentFolder.Path)
+
+	path := filepath.Join(parentFolder.Path, folder_name)
 
 	folder := &model.FolderModel{
 		UserID:      user_id,
-		ParentID:    parentID,
+		ParentID:    parentFolder.ID,
 		Name:        folder_name,
 		Description: description,
 		Path:        path,
@@ -63,6 +75,17 @@ func (f *FolderService) GetFolder(folder_id string) (*model.FolderModel, error) 
 	}
 
 	return folder, nil
+}
+
+// GetRootFolder implements domain.FolderService.
+func (f *FolderService) GetRootFolder(user_id string) (*model.FolderModel, error) {
+
+	rootFolder, err := f.FolderRepository.GetRootFolder(user_id)
+	if err != nil {
+		return nil, f.WrapError("failed to get root folder", err)
+	}
+
+	return rootFolder, nil
 }
 
 // GetFolders implements domain.FolderService.
