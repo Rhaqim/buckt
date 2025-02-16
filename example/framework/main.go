@@ -19,8 +19,8 @@ func main() {
 	// Create a custom multiplexer
 	mux := http.NewServeMux()
 
-	// Mount the Buckt router under /api
-	mux.Handle("/api/", http.StripPrefix("/api", handler))
+	// Mount the Buckt router under /buckt
+	mux.Handle("/buckt/", http.StripPrefix("/buckt", handler))
 
 	// Add additional routes
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {

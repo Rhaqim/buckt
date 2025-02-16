@@ -35,18 +35,6 @@ func main() {
 		log.Fatalf("Failed to delete file: %v", err)
 	}
 
-	// Create a bucket
-	err = b.CreateBucket("mybucket", "My bucket", "ownerID")
-	if err != nil {
-		log.Fatalf("Failed to create bucket: %v", err)
-	}
-
-	// Create an owner
-	err = b.CreateOwner("owner", "owner@gmail.com")
-	if err != nil {
-		log.Fatalf("Failed to create owner: %v", err)
-	}
-
 	// Serve a file
 	url, err := b.Serve("/hello/world/hello.txt")
 	if err != nil {

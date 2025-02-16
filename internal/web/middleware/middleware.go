@@ -38,7 +38,7 @@ func (b *bucketMiddleware) AuthMiddleware() gin.HandlerFunc {
 		// 	return
 		// }
 
-		// c.Set("owner", owner)
+		c.Set("user_id", "1234")
 
 		c.Next()
 	}
