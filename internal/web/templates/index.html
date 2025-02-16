@@ -1,33 +1,38 @@
 {{ template "head.html" . }}
-    <h1>File Management</h1>
+<h1>File Management</h1>
 
-    <!-- Create Bucket Form -->
-    <form hx-post="/new_bucket" hx-target="#message" hx-swap="innerHTML">
-        <h2>Create New Bucket</h2>
-        <label for="bucket_name">Bucket Name:</label>
-        <input type="text" id="bucket_name" name="bucket_name" required>
-        <label for="description">Description:</label>
-        <input type="text" id="description" name="description" required>
-        <button type="submit">Create Bucket</button>
-    </form>
+<!-- Create Bucket Form -->
+<form hx-post="/new_bucket" hx-target="#message" hx-swap="innerHTML">
+	<h2>Create New Bucket</h2>
+	<label for="bucket_name">Bucket Name:</label>
+	<input type="text" id="bucket_name" name="bucket_name" required />
+	<label for="description">Description:</label>
+	<input type="text" id="description" name="description" required />
+	<button type="submit">Create Bucket</button>
+</form>
 
-    <!-- File Upload Form -->
-    <form hx-post="/upload" hx-encoding="multipart/form-data" hx-target="#message" hx-swap="innerHTML">
-        <h2>Upload New File</h2>
-        <label for="bucket_name_upload">Bucket Name:</label>
-        <input type="text" id="bucket_name_upload" name="bucket_name" required>
-        <label for="file">File:</label>
-        <input type="file" id="file" name="file" required>
-        <button type="submit">Upload</button>
-    </form>
+<!-- File Upload Form -->
+<form
+	hx-post="/upload"
+	hx-encoding="multipart/form-data"
+	hx-target="#message"
+	hx-swap="innerHTML"
+>
+	<h2>Upload New File</h2>
+	<label for="bucket_name_upload">Bucket Name:</label>
+	<input type="text" id="bucket_name_upload" name="bucket_name" required />
+	<label for="file">File:</label>
+	<input type="file" id="file" name="file" required />
+	<button type="submit">Upload</button>
+</form>
 
-    <!-- Display existing files -->
-    <h2>Existing Files</h2>
-    <div id="files-container" hx-get="/buckets/fetch" hx-trigger="load">
-        <!-- File listing will be dynamically injected here -->
-        {{ template "partials/buckets.html" . }}
-    </div>
+<!-- Display existing files -->
+<h2>Existing Files</h2>
+<div id="files-container" hx-get="/buckets/fetch" hx-trigger="load">
+	<!-- File listing will be dynamically injected here -->
+	{{ template "partials/buckets.html" . }}
+</div>
 
-    <!-- Messages -->
-    <div id="message"></div>
+<!-- Messages -->
+<div id="message"></div>
 {{ template "tail.html" . }}

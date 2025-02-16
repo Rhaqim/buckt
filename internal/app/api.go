@@ -25,11 +25,7 @@ func NewAPIService(fs domain.FolderService, f domain.FileService) domain.APIServ
 // Subtle: this method shadows the method (FolderService).CreateFolder of APIService.FolderService.
 func (a *APIService) CreateFolder(c *gin.Context) {
 	// get the user_id from the context
-	user_id, err := a.getUser(c)
-	if err != nil {
-		c.AbortWithStatusJSON(401, response.WrapError("unauthorized", err))
-		return
-	}
+	user_id := c.GetString("owner_id")
 
 	// get the parent_id from the request
 	parentID := c.PostForm("parent_id")
@@ -55,11 +51,13 @@ func (a *APIService) CreateFolder(c *gin.Context) {
 
 // GetFolderContent implements domain.APIService.
 func (a *APIService) GetFolderContent(c *gin.Context) {
+	user_id := c.GetString("owner_id")
+
 	// get the folder_id from the request
 	folderID := c.PostForm("folder_id")
 
 	// get the folder content
-	folderContent, err := a.FolderService.GetFolder(folderID)
+	folderContent, err := a.FolderService.GetFolder(user_id, folderID)
 	if err != nil {
 		c.AbortWithStatusJSON(500, response.WrapError("failed to get folder content", err))
 		return
@@ -113,11 +111,7 @@ func (a *APIService) RenameFolder(c *gin.Context) {
 // UploadFile implements domain.APIService.
 func (a *APIService) UploadFile(c *gin.Context) {
 	// get the user_id from the context
-	user_id, err := a.getUser(c)
-	if err != nil {
-		c.AbortWithStatusJSON(401, response.WrapError("unauthorized", err))
-		return
-	}
+	user_id := c.GetString("owner_id")
 
 	file, err := c.FormFile("file")
 	if err != nil {
@@ -201,22 +195,6 @@ func (a *APIService) DeleteFile(c *gin.Context) {
 
 /* Helper functions */
 
-func (a *APIService) getUser(c *gin.Context) (string, error) {
-	// get the user_id from the context
-	user_id, ok := c.Get("user_id")
-	if !ok {
-		return "", fmt.Errorf("unauthorized")
-	}
-
-	// convert the user_id to string
-	userID, ok := user_id.(string)
-	if !ok {
-		return "", fmt.Errorf("failed to parse user_id")
-	}
-
-	return userID, nil
-}
-
 func (f *APIService) constructURL(s string) string {
-	return fmt.Sprintf("/api/serve/%s", s)
+	return fmt.Sprintf("/serve/%s", s)
 }

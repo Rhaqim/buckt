@@ -39,7 +39,7 @@ func (f *FileService) CreateFile(user_id, parent_id, file_name, content_type str
 	var err error
 
 	// Get the parent folder
-	parentFolder, err := f.FolderService.GetFolder(parent_id)
+	parentFolder, err := f.FolderService.GetFolder("user1", parent_id)
 	if err != nil {
 		parentFolder, err = f.FolderService.GetRootFolder(user_id)
 		if err != nil {
@@ -155,7 +155,7 @@ func (f *FileService) UpdateFile(file_id string, new_file_name string, new_file_
 	}
 
 	// Get the parent folder
-	parentFolder, err := f.FolderService.GetFolder(file.ParentID.String())
+	parentFolder, err := f.FolderService.GetFolder("user1", file.ParentID.String())
 	if err != nil {
 		return err
 	}

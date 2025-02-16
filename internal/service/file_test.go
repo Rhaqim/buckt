@@ -79,8 +79,8 @@ func (m *MockFolderService) RenameFolder(folder_id string, new_name string) erro
 	return args.Error(0)
 }
 
-func (m *MockFolderService) GetFolder(folderID string) (*model.FolderModel, error) {
-	args := m.Called(folderID)
+func (m *MockFolderService) GetFolder(user_id, folderID string) (*model.FolderModel, error) {
+	args := m.Called(user_id, folderID)
 	return args.Get(0).(*model.FolderModel), args.Error(1)
 }
 

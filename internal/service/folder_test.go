@@ -68,7 +68,7 @@ func TestGetFolder(t *testing.T) {
 
 	mockRepo.On("GetFolder", folderID).Return(mockFolder, nil)
 
-	folder, err := service.GetFolder(folderID.String())
+	folder, err := service.GetFolder("user1", folderID.String())
 	assert.NoError(t, err)
 	assert.Equal(t, mockFolder, folder)
 	mockRepo.AssertExpectations(t)

@@ -63,14 +63,15 @@ func NewBuckt(configFile string) (Buckt, error) {
 	var fileSystemService domain.FileSystemService = service.NewFileSystemService(log, cfg.MediaDir)
 	var fileService domain.FileService = service.NewFileService(log, fileRepository, folderService, fileSystemService)
 
-	// // Initialize the API service
+	// Initialize the app services
 	var apiService domain.APIService = app.NewAPIService(folderService, fileService)
+	var webService domain.WebService = app.NewWebService(folderService, fileService)
 
 	// middleware server
 	var middleware domain.Middleware = middleware.NewBucketMiddleware()
 
 	// Run the router
-	router := router.NewRouter(log, cfg.TemplatesDir, apiService, middleware)
+	router := router.NewRouter(log, cfg.TemplatesDir, apiService, webService, middleware)
 
 	return &buckt{
 		db,

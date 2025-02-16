@@ -14,6 +14,7 @@ type Router struct {
 	*gin.Engine
 
 	domain.APIService
+	domain.WebService
 	domain.Middleware
 }
 
@@ -22,6 +23,7 @@ func NewRouter(
 	log *logger.Logger,
 	templateDir string,
 	apiService domain.APIService,
+	webService domain.WebService,
 	middleware domain.Middleware,
 ) *Router {
 	r := gin.New()
@@ -48,14 +50,11 @@ func NewRouter(
 	// Load templates using the specified pattern
 	r.LoadHTMLGlob(templatePath)
 
-	// Set the client type middleware i.e. portal or api
-	// middleware := middleware.ClientTypeMiddleware()
-	r.Use(middleware.ClientTypeMiddleware())
-
 	router := &Router{
 		Engine: r,
 
 		APIService: apiService,
+		WebService: webService,
 		Middleware: middleware,
 	}
 	router.registerRoutes()
@@ -65,13 +64,19 @@ func NewRouter(
 
 // Run starts the router.
 func (r *Router) registerRoutes() {
+	r.GET("/serve/:file_id", r.APIService.ServeFile)
+
+	/* Web Routes */
+	r.Use(r.WebGuardMiddleware())
+	{
+		r.GET("/", r.WebService.ViewFolder)
+		r.GET("/folder/:folder_id", r.WebService.ViewFolder)
+	}
 
 	/* API Routes */
 	api := r.Group("/api")
 
-	api.GET("/serve/:file_id", r.APIService.ServeFile)
-
-	api.Use(r.AuthMiddleware())
+	api.Use(r.APIGuardMiddleware())
 	{
 		{
 			api.POST("/upload", r.APIService.UploadFile)
@@ -90,11 +95,6 @@ func (r *Router) registerRoutes() {
 			api.DELETE("/delete_folder", r.APIService.DeleteFolder)
 		}
 	}
-
-	/* Web Routes */
-
-	// // Route for the main admin page (view files)
-	// r.GET("/", r.APIService.Dashboard)
 
 	// r.POST("/new_user", r.APIService.NewUser)
 

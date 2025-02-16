@@ -37,7 +37,7 @@ func (f *FolderRepository) GetRootFolder(user_id string) (*model.FolderModel, er
 
 	root_folder := "root_folder"
 
-	err := f.DB.Where("name = ? AND user_id = ?", root_folder, user_id).First(&root).Error
+	err := f.DB.Preload("Folders").Preload("Files").Where("name = ? AND user_id = ?", root_folder, user_id).First(&root).Error
 	if err != nil {
 		if err.Error() != "record not found" {
 			return nil, err

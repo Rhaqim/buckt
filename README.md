@@ -21,7 +21,7 @@ The Buckt package provides a flexible media storage service with optional integr
     - [Direct Services](#direct-services)
     - [Gin Server](#gin-server)
   - [Examples](#examples)
-    - [With Built-in Gin Server](#with-built-in-gin-server)
+    - [With Built-in Gin Web Server](#with-built-in-gin-web-server)
     - [Using with Other Routers](#using-with-other-routers)
   - [License](#license)
   
@@ -104,7 +104,7 @@ The Buckt package includes an HTTP server that exposes its services via HTTP end
 
 ## Examples
 
-### With Built-in Gin Server
+### With Built-in Gin Web Server
 
 ```go
 import (
@@ -157,7 +157,7 @@ func main() {
     handler := bucktInstance.GetHandler()
 
     // Mount the Buckt router under /api using Fiber's adaptor
-    app.Use("/api", adaptor.HTTPHandler(handler))
+    app.Use("/buckt", adaptor.HTTPHandler(handler))
 
     // Add additional routes directly in Fiber
     app.Get("/", func(c *fiber.Ctx) error {

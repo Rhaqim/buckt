@@ -64,7 +64,7 @@ func (f *FolderService) CreateFolder(user_id, parent_id, folder_name, descriptio
 
 // GetFolder implements domain.FolderService.
 // Subtle: this method shadows the method (FolderRepository).GetFolder of FolderService.FolderRepository.
-func (f *FolderService) GetFolder(folder_id string) (*model.FolderModel, error) {
+func (f *FolderService) GetFolder(user_id, folder_id string) (*model.FolderModel, error) {
 	if folder_id == "" {
 		folder_id = constant.DEFAULT_PARENT_FOLDER_ID
 	}
@@ -76,7 +76,14 @@ func (f *FolderService) GetFolder(folder_id string) (*model.FolderModel, error) 
 
 	folder, err := f.FolderRepository.GetFolder(id)
 	if err != nil {
-		return nil, f.WrapError("failed to get folder", err)
+		if err.Error() == "record not found" {
+			folder, err = f.FolderRepository.GetRootFolder(user_id)
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			return nil, f.WrapError("failed to get folder", err)
+		}
 	}
 
 	return folder, nil
