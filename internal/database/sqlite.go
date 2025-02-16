@@ -59,6 +59,6 @@ func (db *DB) Close() error {
 }
 
 func (db *DB) Migrate() error {
-	err := db.AutoMigrate(&model.FileModel{}, &model.BucketModel{}, &model.OwnerModel{}, &model.TagModel{}, &model.FolderModel{})
+	err := db.AutoMigrate(&model.FileModel{}, &model.TagModel{}, &model.FolderModel{})
 	return db.WrapError("Failed to auto migrate database:", err)
 }

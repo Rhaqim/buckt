@@ -2,6 +2,11 @@ package domain
 
 import "github.com/gin-gonic/gin"
 
+type Middleware interface {
+	AuthMiddleware() gin.HandlerFunc
+	ClientTypeMiddleware() gin.HandlerFunc
+}
+
 type APIService interface {
 	UploadFile(c *gin.Context)
 	DownloadFile(c *gin.Context)

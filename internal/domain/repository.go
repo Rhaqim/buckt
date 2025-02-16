@@ -5,12 +5,6 @@ import (
 	"github.com/google/uuid"
 )
 
-type BucketRepository interface {
-	Create(bucket *model.BucketModel) error
-	GetBucket(user_id string, bucket_id uuid.UUID) (*model.BucketModel, error)
-	GetBuckets(user_id string) ([]model.BucketModel, error)
-}
-
 type FolderRepository interface {
 	Create(folder *model.FolderModel) error
 	GetFolder(folder_id uuid.UUID) (*model.FolderModel, error)

@@ -2,6 +2,7 @@ package app
 
 import (
 	"github.com/Rhaqim/buckt/internal/domain"
+	"github.com/Rhaqim/buckt/internal/utils"
 	"github.com/gin-gonic/gin"
 )
 
@@ -122,5 +123,30 @@ func (a *APIService) RenameFolder(c *gin.Context) {
 
 // UploadFile implements domain.APIService.
 func (a *APIService) UploadFile(c *gin.Context) {
-	panic("unimplemented")
+	file, err := c.FormFile("file")
+	if err != nil {
+		c.JSON(400, gin.H{"error": err.Error()})
+		return
+	}
+
+	// get the parent_id from the request
+	parentID := c.PostForm("parent_id")
+	if parentID == "" {
+		parentID = "00000000-0000-0000-0000-000000000000"
+	}
+
+	// Read file from request
+	fileName, fileByte, err := utils.ProcessFile(file)
+	if err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+
+	err = a.FileService.CreateFile(parentID, fileName, file.Header.Get("Content-Type"), fileByte)
+	if err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(200, gin.H{"message": "file uploaded"})
 }

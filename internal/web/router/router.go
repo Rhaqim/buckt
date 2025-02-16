@@ -5,23 +5,25 @@ import (
 	"path/filepath"
 	"runtime"
 
-	"github.com/Rhaqim/buckt/config"
-	"github.com/Rhaqim/buckt/internal/domain_old"
-	"github.com/Rhaqim/buckt/internal/web/middleware"
+	"github.com/Rhaqim/buckt/internal/domain"
 	"github.com/Rhaqim/buckt/pkg/logger"
 	"github.com/gin-gonic/gin"
 )
 
 type Router struct {
 	*gin.Engine
-	*logger.Logger
-	*config.Config
-	httpService domain_old.APIHTTPService
-	middleware.BucketMiddleware
+
+	domain.APIService
+	domain.Middleware
 }
 
 // NewRouter creates a new router with the given logger and config.
-func NewRouter(log *logger.Logger, cfg *config.Config, httpService domain_old.APIHTTPService, middleware middleware.BucketMiddleware) *Router {
+func NewRouter(
+	log *logger.Logger,
+	templateDir string,
+	apiService domain.APIService,
+	middleware domain.Middleware,
+) *Router {
 	r := gin.New()
 
 	// Set logger
@@ -33,7 +35,7 @@ func NewRouter(log *logger.Logger, cfg *config.Config, httpService domain_old.AP
 	// Determine base path for templates
 	_, b, _, _ := runtime.Caller(0)
 	basePath := filepath.Dir(b)
-	templatePath := cfg.TemplatesDir
+	templatePath := templateDir
 
 	// If no specific template path is set, use the default pattern
 	if templatePath == "" {
@@ -50,7 +52,12 @@ func NewRouter(log *logger.Logger, cfg *config.Config, httpService domain_old.AP
 	// middleware := middleware.ClientTypeMiddleware()
 	r.Use(middleware.ClientTypeMiddleware())
 
-	router := &Router{r, log, cfg, httpService, middleware}
+	router := &Router{
+		Engine: r,
+
+		APIService: apiService,
+		Middleware: middleware,
+	}
 	router.registerRoutes()
 
 	return router
@@ -59,40 +66,57 @@ func NewRouter(log *logger.Logger, cfg *config.Config, httpService domain_old.AP
 // Run starts the router.
 func (r *Router) registerRoutes() {
 
-	// Route for the main admin page (view files)
-	r.GET("/", r.httpService.Dashboard)
-
-	r.POST("/new_user", r.httpService.NewUser)
-
-	buckets := r.Group("buckets")
-	buckets.Use(r.AuthMiddleware())
+	/* API Routes */
+	api := r.Group("/api")
+	api.Use(r.AuthMiddleware())
 	{
-		buckets.POST("/new_bucket", r.httpService.NewBucket)
-		buckets.GET("/fetch", r.httpService.AllBuckets)
-		buckets.GET("/fetch/bucket", r.httpService.ViewBucket)
-		buckets.DELETE("/delete", r.httpService.RemoveBucket)
+		api.POST("/upload", r.APIService.UploadFile)
+		api.GET("/download", r.APIService.DownloadFile)
+		api.DELETE("/delete", r.APIService.DeleteFile)
+		api.POST("/new_folder", r.APIService.CreateFolder)
+		api.PUT("/rename_folder", r.APIService.RenameFolder)
+		api.PUT("/move_folder", r.APIService.MoveFolder)
+		api.DELETE("/delete_folder", r.APIService.DeleteFolder)
+		api.GET("/folder_content", r.APIService.GetFolderContent)
+		api.GET("/folder_files", r.APIService.GetFilesInFolder)
+		api.GET("/folder_folders", r.APIService.GetSubFolders)
+		api.GET("/folder_descendants", r.APIService.GetDescendants)
 	}
 
-	folders := r.Group("folders/:bucket")
-	{
-		folders.GET("", r.httpService.FolderContent)
-		folders.GET("/fetch/folders", r.httpService.FolderSubFolders)
-		folders.GET("/fetch/files", r.httpService.FolderFiles)
-		folders.PUT("/rename", r.httpService.FolderRename)
-		folders.PUT("/move", r.httpService.FolderMove)
-		folders.DELETE("/delete", r.httpService.FolderDelete)
+	// // Route for the main admin page (view files)
+	// r.GET("/", r.APIService.Dashboard)
 
-	}
+	// r.POST("/new_user", r.APIService.NewUser)
 
-	files := r.Group("files/:bucket")
-	{
-		files.POST("/upload", r.httpService.FileUpload)
-		files.GET("/download", r.httpService.FileDownload)
-		files.PUT("/rename", r.httpService.FileRename)
-		files.PUT("/move", r.httpService.FileMove)
-		files.GET("/serve", r.httpService.FileServe)
-		files.DELETE("/delete", r.httpService.FileDelete)
-	}
+	// buckets := r.Group("buckets")
+	// buckets.Use(r.AuthMiddleware())
+	// {
+	// 	buckets.POST("/new_bucket", r.APIService.NewBucket)
+	// 	buckets.GET("/fetch", r.APIService.AllBuckets)
+	// 	buckets.GET("/fetch/bucket", r.APIService.ViewBucket)
+	// 	buckets.DELETE("/delete", r.APIService.RemoveBucket)
+	// }
+
+	// folders := r.Group("folders/:bucket")
+	// {
+	// 	folders.GET("", r.APIService.FolderContent)
+	// 	folders.GET("/fetch/folders", r.APIService.FolderSubFolders)
+	// 	folders.GET("/fetch/files", r.APIService.FolderFiles)
+	// 	folders.PUT("/rename", r.APIService.FolderRename)
+	// 	folders.PUT("/move", r.APIService.FolderMove)
+	// 	folders.DELETE("/delete", r.APIService.FolderDelete)
+
+	// }
+
+	// files := r.Group("files/:bucket")
+	// {
+	// 	files.POST("/upload", r.APIService.FileUpload)
+	// 	files.GET("/download", r.APIService.FileDownload)
+	// 	files.PUT("/rename", r.APIService.FileRename)
+	// 	files.PUT("/move", r.APIService.FileMove)
+	// 	files.GET("/serve", r.APIService.FileServe)
+	// 	files.DELETE("/delete", r.APIService.FileDelete)
+	// }
 
 }
 

@@ -1,22 +1,15 @@
 package middleware
 
 import (
-	"github.com/Rhaqim/buckt/internal/domain_old"
-	"github.com/Rhaqim/buckt/internal/model"
+	"github.com/Rhaqim/buckt/internal/domain"
 	"github.com/gin-gonic/gin"
 )
 
-type BucketMiddleware interface {
-	ClientTypeMiddleware() gin.HandlerFunc
-	AuthMiddleware() gin.HandlerFunc
-}
-
 type bucketMiddleware struct {
-	ownerStore domain_old.BucktRepository[model.OwnerModel]
 }
 
-func NewBucketMiddleware(ownerStore domain_old.BucktRepository[model.OwnerModel]) BucketMiddleware {
-	return &bucketMiddleware{ownerStore: ownerStore}
+func NewBucketMiddleware() domain.Middleware {
+	return &bucketMiddleware{}
 }
 
 func (b *bucketMiddleware) ClientTypeMiddleware() gin.HandlerFunc {
@@ -36,16 +29,16 @@ func (b *bucketMiddleware) AuthMiddleware() gin.HandlerFunc {
 		// If not, return a 401 Unauthorized response
 
 		// temp
-		ownerName := ""
+		// ownerName := ""
 
-		owner, err := b.ownerStore.GetBy("name", ownerName)
-		if err != nil {
-			c.JSON(401, gin.H{"error": "Unauthorized"})
-			c.Abort()
-			return
-		}
+		// owner, err := b.ownerStore.GetBy("name", ownerName)
+		// if err != nil {
+		// 	c.JSON(401, gin.H{"error": "Unauthorized"})
+		// 	c.Abort()
+		// 	return
+		// }
 
-		c.Set("owner", owner)
+		// c.Set("owner", owner)
 
 		c.Next()
 	}

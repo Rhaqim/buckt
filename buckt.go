@@ -5,11 +5,12 @@ import (
 	"net/http"
 
 	"github.com/Rhaqim/buckt/config"
+	"github.com/Rhaqim/buckt/internal/app"
 	"github.com/Rhaqim/buckt/internal/database"
 	"github.com/Rhaqim/buckt/internal/domain"
-	"github.com/Rhaqim/buckt/internal/domain_old"
 	"github.com/Rhaqim/buckt/internal/repository"
 	"github.com/Rhaqim/buckt/internal/service"
+	"github.com/Rhaqim/buckt/internal/web/middleware"
 	"github.com/Rhaqim/buckt/internal/web/router"
 	"github.com/Rhaqim/buckt/pkg/logger"
 	"github.com/Rhaqim/buckt/request"
@@ -26,14 +27,11 @@ type Buckt interface {
 	UploadFile(file *multipart.FileHeader, bucketName string, folderPath string) error
 	DownloadFile(req request.FileRequest) ([]byte, error)
 	DeleteFile(req request.FileRequest) error
-	CreateBucket(name, description, ownerID string) error
-	CreateOwner(name, email string) error
 	Serve(filepath string) (string, error)
 }
 
 type buckt struct {
-	db *database.DB
-	domain_old.BucktService
+	db     *database.DB
 	router *router.Router
 }
 
@@ -63,24 +61,22 @@ func NewBuckt(configFile string) (Buckt, error) {
 	// initlize the services
 	var folderService domain.FolderService = service.NewFolderService(log, folderRepository)
 	var fileSystemService domain.FileSystemService = service.NewFileSystemService(log, cfg.MediaDir)
-	var _ domain.FileService = service.NewFileService(log, fileRepository, folderService, fileSystemService)
+	var fileService domain.FileService = service.NewFileService(log, fileRepository, folderService, fileSystemService)
 
 	// // Initialize the API service
-	// var httpService domain_old.APIHTTPService = api.NewAPIService(fileService)
+	var apiService domain.APIService = app.NewAPIService(folderService, fileService)
 
-	// // middleware server
-	// middleware := middleware.NewBucketMiddleware(ownerStore)
+	// middleware server
+	var middleware domain.Middleware = middleware.NewBucketMiddleware()
 
-	// // Run the router
-	// router := router.NewRouter(log, cfg, httpService, middleware)
+	// Run the router
+	router := router.NewRouter(log, cfg.TemplatesDir, apiService, middleware)
 
-	// return &buckt{
-	// 	db,
-	// 	fileService,
-	// 	router,
-	// }, nil
+	return &buckt{
+		db,
+		router,
+	}, nil
 
-	return nil, nil
 }
 
 func (b *buckt) GetHandler() http.Handler {
@@ -95,26 +91,22 @@ func (b *buckt) Close() {
 	b.db.Close()
 }
 
-func (b *buckt) UploadFile(file *multipart.FileHeader, bucketName string, folderPath string) error {
-	return b.BucktService.UploadFile(file, bucketName, folderPath)
-}
-
-func (b *buckt) DownloadFile(req request.FileRequest) ([]byte, error) {
-	return b.BucktService.DownloadFile(req)
-}
-
+// DeleteFile implements Buckt.
 func (b *buckt) DeleteFile(req request.FileRequest) error {
-	return b.BucktService.DeleteFile(req)
+	panic("unimplemented")
 }
 
-func (b *buckt) CreateBucket(name, description, ownerID string) error {
-	return b.BucktService.CreateBucket(name, description, ownerID)
+// DownloadFile implements Buckt.
+func (b *buckt) DownloadFile(req request.FileRequest) ([]byte, error) {
+	panic("unimplemented")
 }
 
-func (b *buckt) CreateOwner(name, email string) error {
-	return b.BucktService.CreateOwner(name, email)
-}
-
+// Serve implements Buckt.
 func (b *buckt) Serve(filepath string) (string, error) {
-	return b.BucktService.ServeFile(filepath)
+	panic("unimplemented")
+}
+
+// UploadFile implements Buckt.
+func (b *buckt) UploadFile(file *multipart.FileHeader, bucketName string, folderPath string) error {
+	panic("unimplemented")
 }

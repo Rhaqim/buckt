@@ -33,12 +33,6 @@ type BucktFileSystemServiceMock struct {
 	FSDeleteFileFunc   func(folderPath string) error
 }
 
-type BucketService interface {
-	CreateBucket(user_id, bukcet_name, description string) error
-	GetBucket(user_id, bucket_id string) (*model.BucketModel, error)
-	GetBuckets(user_id string) ([]model.BucketModel, error)
-}
-
 type FolderService interface {
 	CreateFolder(user_id, parent_id, folder_name, description string) error
 	GetFolder(folder_id string) (*model.FolderModel, error)
