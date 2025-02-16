@@ -10,6 +10,7 @@ type Middleware interface {
 type APIService interface {
 	UploadFile(c *gin.Context)
 	DownloadFile(c *gin.Context)
+	ServeFile(c *gin.Context)
 	DeleteFile(c *gin.Context)
 	CreateFolder(c *gin.Context)
 	RenameFolder(c *gin.Context)

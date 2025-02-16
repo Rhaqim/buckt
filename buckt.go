@@ -13,7 +13,7 @@ import (
 	"github.com/Rhaqim/buckt/internal/web/middleware"
 	"github.com/Rhaqim/buckt/internal/web/router"
 	"github.com/Rhaqim/buckt/pkg/logger"
-	"github.com/Rhaqim/buckt/request"
+	"github.com/Rhaqim/buckt/pkg/request"
 )
 
 // Buckt is the interface for the Buckt service

@@ -53,25 +53,6 @@ func (a *APIService) CreateFolder(c *gin.Context) {
 	c.JSON(200, response.Success("folder created"))
 }
 
-// DeleteFile implements domain.APIService.
-// Subtle: this method shadows the method (FileService).DeleteFile of APIService.FileService.
-func (a *APIService) DeleteFile(c *gin.Context) {
-	// get the file_id from the request
-	fileID := c.Param("file_id")
-	if fileID == "" {
-		c.AbortWithStatusJSON(400, response.Error("file_id is required", ""))
-		return
-	}
-
-	// delete the file
-	if err := a.FileService.DeleteFile(fileID); err != nil {
-		c.AbortWithStatusJSON(500, response.WrapError("failed to delete file", err))
-		return
-	}
-
-	c.JSON(200, response.Success("file deleted"))
-}
-
 // DeleteFolder implements domain.APIService.
 func (a *APIService) DeleteFolder(c *gin.Context) {
 	panic("unimplemented")
@@ -157,6 +138,39 @@ func (a *APIService) DownloadFile(c *gin.Context) {
 	c.Header("Content-Disposition", "attachment; filename="+file.Name)
 	c.Header("Content-Type", file.ContentType)
 	c.Data(200, file.ContentType, file.Data)
+}
+
+// ServeFile implements domain.APIService.
+func (a *APIService) ServeFile(c *gin.Context) {
+	// get the file_id from the request
+	fileID := c.PostForm("file_id")
+
+	file, err := a.FileService.GetFile(fileID)
+	if err != nil {
+		c.AbortWithStatusJSON(500, response.WrapError("failed to get file", err))
+		return
+	}
+
+	c.Data(200, file.ContentType, file.Data)
+}
+
+// DeleteFile implements domain.APIService.
+// Subtle: this method shadows the method (FileService).DeleteFile of APIService.FileService.
+func (a *APIService) DeleteFile(c *gin.Context) {
+	// get the file_id from the request
+	fileID := c.PostForm("file_id")
+	if fileID == "" {
+		c.AbortWithStatusJSON(400, response.Error("file_id is required", ""))
+		return
+	}
+
+	// delete the file
+	if err := a.FileService.DeleteFile(fileID); err != nil {
+		c.AbortWithStatusJSON(500, response.WrapError("failed to delete file", err))
+		return
+	}
+
+	c.JSON(200, response.Success("file deleted"))
 }
 
 /* Helper functions */
