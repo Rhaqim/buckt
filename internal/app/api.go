@@ -53,8 +53,28 @@ func (a *APIService) CreateFolder(c *gin.Context) {
 	c.JSON(200, response.Success("folder created"))
 }
 
-// DeleteFolder implements domain.APIService.
-func (a *APIService) DeleteFolder(c *gin.Context) {
+// GetFolderContent implements domain.APIService.
+func (a *APIService) GetFolderContent(c *gin.Context) {
+	// get the folder_id from the request
+	folderID := c.PostForm("folder_id")
+
+	// get the folder content
+	folderContent, err := a.FolderService.GetFolder(folderID)
+	if err != nil {
+		c.AbortWithStatusJSON(500, response.WrapError("failed to get folder content", err))
+		return
+	}
+
+	c.JSON(200, response.Success(folderContent))
+}
+
+// GetFilesInFolder implements domain.APIService.
+func (a *APIService) GetFilesInFolder(c *gin.Context) {
+	panic("unimplemented")
+}
+
+// GetSubFolders implements domain.APIService.
+func (a *APIService) GetSubFolders(c *gin.Context) {
 	panic("unimplemented")
 }
 
@@ -63,18 +83,8 @@ func (a *APIService) GetDescendants(c *gin.Context) {
 	panic("unimplemented")
 }
 
-// GetFilesInFolder implements domain.APIService.
-func (a *APIService) GetFilesInFolder(c *gin.Context) {
-	panic("unimplemented")
-}
-
-// GetFolderContent implements domain.APIService.
-func (a *APIService) GetFolderContent(c *gin.Context) {
-	panic("unimplemented")
-}
-
-// GetSubFolders implements domain.APIService.
-func (a *APIService) GetSubFolders(c *gin.Context) {
+// DeleteFolder implements domain.APIService.
+func (a *APIService) DeleteFolder(c *gin.Context) {
 	panic("unimplemented")
 }
 

@@ -24,6 +24,12 @@ func (m *MockFileRepository) GetFile(fileID uuid.UUID) (*model.FileModel, error)
 	return args.Get(0).(*model.FileModel), args.Error(1)
 }
 
+// RestoreFileByPath implements domain.FileRepository.
+func (m *MockFileRepository) RestoreFile(path string) error {
+	args := m.Called(path)
+	return args.Error(0)
+}
+
 func (m *MockFileRepository) GetFiles(parentID uuid.UUID) ([]model.FileModel, error) {
 	args := m.Called(parentID)
 	return args.Get(0).([]model.FileModel), args.Error(1)
@@ -147,7 +153,7 @@ func TestGetFile(t *testing.T) {
 
 	file, err := fileService.GetFile(fileID.String())
 	assert.NoError(t, err)
-	assert.Equal(t, fileModel.ID, file.FileModel.ID)
+	assert.Equal(t, fileModel.ID, file.ID)
 	assert.Equal(t, []byte("file data"), file.Data)
 }
 

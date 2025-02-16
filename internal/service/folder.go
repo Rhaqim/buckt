@@ -1,7 +1,6 @@
 package service
 
 import (
-	"fmt"
 	"path/filepath"
 
 	"github.com/Rhaqim/buckt/internal/constant"
@@ -45,9 +44,6 @@ func (f *FolderService) CreateFolder(user_id, parent_id, folder_name, descriptio
 			return err
 		}
 	}
-
-	fmt.Println("parentFolder.ID: ", parentFolder.ID)
-	fmt.Println("parentFolder.Path: ", parentFolder.Path)
 
 	path := filepath.Join(parentFolder.Path, folder_name)
 

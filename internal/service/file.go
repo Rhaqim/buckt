@@ -72,9 +72,19 @@ func (f *FileService) CreateFile(user_id, parent_id, file_name, content_type str
 		return err
 	}
 
-	// Create the file
-	if err := f.FileRepository.Create(file); err != nil {
-		return f.WrapError("failed to create file", err)
+	// check if the file already exists
+	if err := f.FileRepository.RestoreFile(hash); err != nil {
+		if err.Error() != "record not found" {
+			// Create the file
+			if err := f.FileRepository.Create(file); err != nil {
+				return f.WrapError("failed to create file", err)
+			}
+		} else {
+			// Update the file
+			if err := f.FileRepository.Update(file); err != nil {
+				return f.WrapError("failed to update file", err)
+			}
+		}
 	}
 
 	return nil
@@ -82,7 +92,7 @@ func (f *FileService) CreateFile(user_id, parent_id, file_name, content_type str
 
 // GetFile implements domain.FileService.
 // Subtle: this method shadows the method (FileRepository).GetFile of FileService.FileRepository.
-func (f *FileService) GetFile(file_id string) (*model.File, error) {
+func (f *FileService) GetFile(file_id string) (*model.FileModel, error) {
 	fileID, err := uuid.Parse(file_id)
 	if err != nil {
 		return nil, f.WrapError("failed to parse uuid", err)
@@ -100,17 +110,14 @@ func (f *FileService) GetFile(file_id string) (*model.File, error) {
 	}
 
 	// Create the file model
-	fileModel := &model.File{
-		FileModel: *file,
-		Data:      fileData,
-	}
+	file.Data = fileData
 
-	return fileModel, nil
+	return file, nil
 }
 
 // GetFiles implements domain.FileService.
 // Subtle: this method shadows the method (FileRepository).GetFiles of FileService.FileRepository.
-func (f *FileService) GetFiles(parent_id string) ([]model.File, error) {
+func (f *FileService) GetFiles(parent_id string) ([]model.FileModel, error) {
 	parentID, err := uuid.Parse(parent_id)
 	if err != nil {
 		return nil, f.WrapError("failed to parse uuid", err)
@@ -122,21 +129,17 @@ func (f *FileService) GetFiles(parent_id string) ([]model.File, error) {
 	}
 
 	// Create the file models
-	fileModels := make([]model.File, len(files))
-	for i, file := range files {
+	for _, file := range files {
 		// Get the file data
 		fileData, err := f.FileSystemService.FSGetFile(file.Path)
 		if err != nil {
 			return nil, err
 		}
 
-		fileModels[i] = model.File{
-			FileModel: file,
-			Data:      fileData,
-		}
+		file.Data = fileData
 	}
 
-	return fileModels, nil
+	return files, nil
 }
 
 // UpdateFile implements domain.FileService.

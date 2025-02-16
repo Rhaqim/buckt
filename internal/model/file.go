@@ -6,6 +6,7 @@ import (
 )
 
 type FileModel struct {
+	gorm.Model
 	ID          uuid.UUID `gorm:"type:uuid;primaryKey"` // Unique identifier for the file
 	Name        string    `gorm:"not null"`             // File name
 	Path        string    `gorm:"not null;unique"`      // File path
@@ -13,12 +14,7 @@ type FileModel struct {
 	Size        int64     `gorm:"not null"`             // File size in bytes
 	ParentID    uuid.UUID `gorm:"type:uuid;not null"`   // Foreign key to FolderModel
 	Hash        string    `gorm:"not null;unique"`      // Hash of the file for integrity checks and uniqueness
-	gorm.Model
-}
-
-type File struct {
-	FileModel
-	Data []byte
+	Data        []byte    `gorm:"-"`                    // File data
 }
 
 // BeforeCreate hook for FileModel to add a prefixed UUID

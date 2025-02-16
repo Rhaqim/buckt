@@ -23,6 +23,12 @@ func (f *FileRepository) Create(file *model.FileModel) error {
 	return f.DB.Create(file).Error
 }
 
+// RestoreFileByPath implements domain.FileRepository.
+func (f *FileRepository) RestoreFile(hash string) error {
+	// if it already exists, overwrite it and set the deleted_at to nil
+	return f.DB.Unscoped().Model(&model.FileModel{}).Where("hash = ?", hash).Update("deleted_at", nil).Error
+}
+
 // DeleteFile implements domain.FileRepository.
 func (f *FileRepository) DeleteFile(id uuid.UUID) error {
 	return f.DB.Delete(&model.FileModel{}, id).Error

@@ -68,20 +68,30 @@ func (r *Router) registerRoutes() {
 
 	/* API Routes */
 	api := r.Group("/api")
+
+	api.GET("/serve", r.APIService.ServeFile)
+
 	api.Use(r.AuthMiddleware())
 	{
-		api.POST("/upload", r.APIService.UploadFile)
-		api.GET("/download", r.APIService.DownloadFile)
-		api.DELETE("/delete", r.APIService.DeleteFile)
-		api.POST("/new_folder", r.APIService.CreateFolder)
-		api.PUT("/rename_folder", r.APIService.RenameFolder)
-		api.PUT("/move_folder", r.APIService.MoveFolder)
-		api.DELETE("/delete_folder", r.APIService.DeleteFolder)
-		api.GET("/folder_content", r.APIService.GetFolderContent)
-		api.GET("/folder_files", r.APIService.GetFilesInFolder)
-		api.GET("/folder_folders", r.APIService.GetSubFolders)
-		api.GET("/folder_descendants", r.APIService.GetDescendants)
+		{
+			api.POST("/upload", r.APIService.UploadFile)
+			api.GET("/download", r.APIService.DownloadFile)
+			api.DELETE("/delete", r.APIService.DeleteFile)
+		}
+
+		{
+			api.POST("/new_folder", r.APIService.CreateFolder)
+			api.GET("/folder_content", r.APIService.GetFolderContent)
+			api.GET("/folder_folders", r.APIService.GetSubFolders)
+			api.GET("/folder_files", r.APIService.GetFilesInFolder)
+			api.GET("/folder_descendants", r.APIService.GetDescendants)
+			api.PUT("/rename_folder", r.APIService.RenameFolder)
+			api.PUT("/move_folder", r.APIService.MoveFolder)
+			api.DELETE("/delete_folder", r.APIService.DeleteFolder)
+		}
 	}
+
+	/* Web Routes */
 
 	// // Route for the main admin page (view files)
 	// r.GET("/", r.APIService.Dashboard)
