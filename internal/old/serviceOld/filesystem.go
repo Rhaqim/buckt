@@ -1,4 +1,4 @@
-package service
+package service_old
 
 import (
 	"fmt"
@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 
 	"github.com/Rhaqim/buckt/config"
-	"github.com/Rhaqim/buckt/internal/domain"
+	"github.com/Rhaqim/buckt/internal/domain_old"
 	"github.com/Rhaqim/buckt/pkg/logger"
 )
 
@@ -15,7 +15,7 @@ type BucktFSService struct {
 	*config.Config
 }
 
-func NewBucktFSService(log *logger.Logger, cfg *config.Config) domain.BucktFileSystemService {
+func NewBucktFSService(log *logger.Logger, cfg *config.Config) domain_old.BucktFileSystemService {
 
 	return &BucktFSService{log, cfg}
 }

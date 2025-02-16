@@ -1,6 +1,7 @@
 package logger
 
 import (
+	"errors"
 	"io"
 	"log"
 	"os"
@@ -9,12 +10,11 @@ import (
 )
 
 type Logger struct {
-	InfoLogger  *log.Logger
-	ErrorLogger *log.Logger
+	infoLogger  *log.Logger
+	errorLogger *log.Logger
 }
 
 func NewLogger(logFile string, logTerminal bool) *Logger {
-	// Default to logging to terminal if neither option is explicitly set
 	if !logTerminal && logFile == "" {
 		logTerminal = true
 	}
@@ -38,22 +38,44 @@ func NewLogger(logFile string, logTerminal bool) *Logger {
 			log.Fatal("Failed to open error log file:", err)
 		}
 
-		// If logging to both file and terminal
 		if logTerminal {
 			infoWriter = io.MultiWriter(os.Stdout, infoLogFile)
 			errorWriter = io.MultiWriter(os.Stderr, errorLogFile)
 		} else {
-			// Only log to file
 			infoWriter = infoLogFile
 			errorWriter = errorLogFile
 		}
 	}
 
-	infoLogger := log.New(infoWriter, "INFO: ", log.Ldate|log.Ltime|log.Lshortfile)
-	errorLogger := log.New(errorWriter, "ERROR: ", log.Ldate|log.Ltime|log.Lshortfile)
-
 	return &Logger{
-		InfoLogger:  infoLogger,
-		ErrorLogger: errorLogger,
+		infoLogger:  log.New(infoWriter, "INFO: ", log.Ldate|log.Ltime|log.Lshortfile),
+		errorLogger: log.New(errorWriter, "ERROR: ", log.Ldate|log.Ltime|log.Lshortfile),
 	}
+}
+
+// Writer returns the writer for the info logger
+func (l *Logger) Writer() io.Writer {
+	return l.infoLogger.Writer()
+}
+
+// Success logs a success message
+func (l *Logger) Success(message string) {
+	l.infoLogger.Println(message)
+}
+
+// Error logs an error message and returns an error type
+func (l *Logger) Error(userMsg, devMsg string) error {
+	err := errors.New(devMsg)
+	l.errorLogger.Printf("%s | Details: %s", userMsg, devMsg)
+	return err
+}
+
+// WrapError logs an error and returns a wrapped error type
+func (l *Logger) WrapError(userMsg string, err error) error {
+	if err == nil {
+		l.Success("Success: " + userMsg)
+		return nil
+	}
+	l.errorLogger.Printf("%s | Error: %s", userMsg, err.Error())
+	return errors.New(userMsg + ": " + err.Error())
 }

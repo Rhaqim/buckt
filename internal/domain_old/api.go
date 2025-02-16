@@ -1,4 +1,4 @@
-package domain
+package domain_old
 
 import (
 	"github.com/gin-gonic/gin"

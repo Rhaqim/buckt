@@ -1,4 +1,4 @@
-package domain
+package domain_old
 
 type BucktFileSystemService interface {
 	FSValidatePath(path string) (string, error)

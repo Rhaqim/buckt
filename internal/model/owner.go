@@ -1,7 +1,7 @@
 package model
 
 import (
-	"github.com/Rhaqim/buckt/internal/domain"
+	"github.com/Rhaqim/buckt/internal/domain_old"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
@@ -17,7 +17,7 @@ type OwnerRepository struct {
 	db *gorm.DB
 }
 
-func NewOwnerRepository(db *gorm.DB) domain.BucktRepository[OwnerModel] {
+func NewOwnerRepository(db *gorm.DB) domain_old.BucktRepository[OwnerModel] {
 	return &OwnerRepository{db}
 }
 

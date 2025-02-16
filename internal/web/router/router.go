@@ -6,7 +6,7 @@ import (
 	"runtime"
 
 	"github.com/Rhaqim/buckt/config"
-	"github.com/Rhaqim/buckt/internal/domain"
+	"github.com/Rhaqim/buckt/internal/domain_old"
 	"github.com/Rhaqim/buckt/internal/web/middleware"
 	"github.com/Rhaqim/buckt/pkg/logger"
 	"github.com/gin-gonic/gin"
@@ -16,16 +16,16 @@ type Router struct {
 	*gin.Engine
 	*logger.Logger
 	*config.Config
-	httpService domain.APIHTTPService
+	httpService domain_old.APIHTTPService
 	middleware.BucketMiddleware
 }
 
 // NewRouter creates a new router with the given logger and config.
-func NewRouter(log *logger.Logger, cfg *config.Config, httpService domain.APIHTTPService, middleware middleware.BucketMiddleware) *Router {
+func NewRouter(log *logger.Logger, cfg *config.Config, httpService domain_old.APIHTTPService, middleware middleware.BucketMiddleware) *Router {
 	r := gin.New()
 
 	// Set logger
-	r.Use(gin.LoggerWithWriter(log.InfoLogger.Writer()))
+	r.Use(gin.LoggerWithWriter(log.Writer()))
 
 	// Set recovery
 	r.Use(gin.Recovery())

@@ -5,12 +5,11 @@ import (
 	"net/http"
 
 	"github.com/Rhaqim/buckt/config"
-	"github.com/Rhaqim/buckt/internal/api"
 	"github.com/Rhaqim/buckt/internal/database"
 	"github.com/Rhaqim/buckt/internal/domain"
-	"github.com/Rhaqim/buckt/internal/model"
+	"github.com/Rhaqim/buckt/internal/domain_old"
+	"github.com/Rhaqim/buckt/internal/repository"
 	"github.com/Rhaqim/buckt/internal/service"
-	"github.com/Rhaqim/buckt/internal/web/middleware"
 	"github.com/Rhaqim/buckt/internal/web/router"
 	"github.com/Rhaqim/buckt/pkg/logger"
 	"github.com/Rhaqim/buckt/request"
@@ -34,7 +33,7 @@ type Buckt interface {
 
 type buckt struct {
 	db *database.DB
-	domain.BucktService
+	domain_old.BucktService
 	router *router.Router
 }
 
@@ -52,40 +51,36 @@ func NewBuckt(configFile string) (Buckt, error) {
 	}
 
 	// Migrate the database
-	db.Migrate()
-
-	// Initialize the stores
-	var tagStore domain.BucktRepository[model.TagModel] = model.NewTagRepository(db.DB)
-	var fileStore domain.BucktRepository[model.FileModel] = model.NewFileRepository(db.DB)
-	var folderStore domain.BucktRepository[model.FolderModel] = model.NewFolderRepository(db.DB)
-	var bucketStore domain.BucktRepository[model.BucketModel] = model.NewBucketRepository(db.DB)
-	var ownerStore domain.BucktRepository[model.OwnerModel] = model.NewOwnerRepository(db.DB)
-
-	store := &model.BucktStore{
-		OwnerStore:  ownerStore,
-		BucketStore: bucketStore,
-		FolderStore: folderStore,
-		FileStore:   fileStore,
-		TagStore:    tagStore,
+	err = db.Migrate()
+	if err != nil {
+		return nil, err
 	}
 
-	// Initialize the services
-	var fileService domain.BucktService = service.NewBucktService(log, cfg, store)
+	// Initialize the stores
+	var folderRepository domain.FolderRepository = repository.NewFolderRepository(db, log)
+	var fileRepository domain.FileRepository = repository.NewFileRepository(db, log)
 
-	// API service
-	var httpService domain.APIHTTPService = api.NewAPIService(fileService)
+	// initlize the services
+	var folderService domain.FolderService = service.NewFolderService(log, folderRepository)
+	var fileSystemService domain.FileSystemService = service.NewFileSystemService(log, cfg.MediaDir)
+	var _ domain.FileService = service.NewFileService(log, fileRepository, folderService, fileSystemService)
 
-	// middleware server
-	middleware := middleware.NewBucketMiddleware(ownerStore)
+	// // Initialize the API service
+	// var httpService domain_old.APIHTTPService = api.NewAPIService(fileService)
 
-	// Run the router
-	router := router.NewRouter(log, cfg, httpService, middleware)
+	// // middleware server
+	// middleware := middleware.NewBucketMiddleware(ownerStore)
 
-	return &buckt{
-		db,
-		fileService,
-		router,
-	}, nil
+	// // Run the router
+	// router := router.NewRouter(log, cfg, httpService, middleware)
+
+	// return &buckt{
+	// 	db,
+	// 	fileService,
+	// 	router,
+	// }, nil
+
+	return nil, nil
 }
 
 func (b *buckt) GetHandler() http.Handler {

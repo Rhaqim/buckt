@@ -1,7 +1,7 @@
 package middleware
 
 import (
-	"github.com/Rhaqim/buckt/internal/domain"
+	"github.com/Rhaqim/buckt/internal/domain_old"
 	"github.com/Rhaqim/buckt/internal/model"
 	"github.com/gin-gonic/gin"
 )
@@ -12,10 +12,10 @@ type BucketMiddleware interface {
 }
 
 type bucketMiddleware struct {
-	ownerStore domain.BucktRepository[model.OwnerModel]
+	ownerStore domain_old.BucktRepository[model.OwnerModel]
 }
 
-func NewBucketMiddleware(ownerStore domain.BucktRepository[model.OwnerModel]) BucketMiddleware {
+func NewBucketMiddleware(ownerStore domain_old.BucktRepository[model.OwnerModel]) BucketMiddleware {
 	return &bucketMiddleware{ownerStore: ownerStore}
 }
 

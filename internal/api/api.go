@@ -3,17 +3,17 @@ package api
 import (
 	"fmt"
 
-	"github.com/Rhaqim/buckt/internal/domain"
+	"github.com/Rhaqim/buckt/internal/domain_old"
 	"github.com/Rhaqim/buckt/internal/model"
 	"github.com/Rhaqim/buckt/request"
 	"github.com/gin-gonic/gin"
 )
 
 type APIService struct {
-	domain.BucktService
+	domain_old.BucktService
 }
 
-func NewAPIService(s domain.BucktService) domain.APIHTTPService {
+func NewAPIService(s domain_old.BucktService) domain_old.APIHTTPService {
 	return &APIService{s}
 }
 

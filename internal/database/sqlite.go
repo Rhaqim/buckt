@@ -24,13 +24,13 @@ func NewSQLite(cfg *config.Config, log *logger.Logger) (*DB, error) {
 		Logger: gormLogger.Default.LogMode(gormLogger.Info),
 	})
 	if err != nil {
-		return nil, err
+		return nil, log.WrapError("Failed to connect to database:", err)
 	}
 
 	// Access the underlying *sql.DB object
 	sqlDB, err := db.DB()
 	if err != nil {
-		return nil, err
+		return nil, log.WrapError("Failed to get database connection:", err)
 	}
 
 	// Set connection pooling
@@ -40,26 +40,25 @@ func NewSQLite(cfg *config.Config, log *logger.Logger) (*DB, error) {
 
 	// Optionally: Ping the database to ensure it's accessible
 	if err := sqlDB.Ping(); err != nil {
-		return nil, err
+		return nil, log.WrapError("Failed to ping database:", err)
 	}
 
 	return &DB{db, log}, nil
 }
 
 // Close closes the database connection.
-func (db *DB) Close() {
+func (db *DB) Close() error {
 	sqlDB, err := db.DB.DB()
 	if err != nil {
-		db.ErrorLogger.Fatalf("Failed to get database connection: %v", err)
+		return db.WrapError("Failed to get database connection: %v", err)
 	}
 
-	if err := sqlDB.Close(); err != nil {
-		db.ErrorLogger.Fatalf("Failed to close database connection: %v", err)
-	}
+	err = sqlDB.Close()
+
+	return db.WrapError("Failed to close database connection: %v", err)
 }
 
-func (db *DB) Migrate() {
-	if err := db.AutoMigrate(&model.FileModel{}, &model.BucketModel{}, &model.OwnerModel{}, &model.TagModel{}, &model.FolderModel{}); err != nil {
-		db.ErrorLogger.Fatalf("Failed to auto migrate database: %v", err)
-	}
+func (db *DB) Migrate() error {
+	err := db.AutoMigrate(&model.FileModel{}, &model.BucketModel{}, &model.OwnerModel{}, &model.TagModel{}, &model.FolderModel{})
+	return db.WrapError("Failed to auto migrate database:", err)
 }
