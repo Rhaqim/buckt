@@ -3,6 +3,8 @@ package app
 import (
 	"fmt"
 
+	"github.com/Rhaqim/buckt/internal/constant"
+
 	"github.com/Rhaqim/buckt/internal/domain"
 	"github.com/Rhaqim/buckt/internal/utils"
 	"github.com/Rhaqim/buckt/pkg/response"
@@ -130,7 +132,7 @@ func (a *APIService) UploadFile(c *gin.Context) {
 	// get the parent_id from the request
 	parentID := c.PostForm("parent_id")
 	if parentID == "" {
-		parentID = "00000000-0000-0000-0000-000000000000"
+		parentID = constant.DEFAULT_PARENT_FOLDER_ID
 	}
 
 	// Read file from request
