@@ -23,6 +23,7 @@ The Buckt package provides a flexible media storage service with optional integr
   - [Examples](#examples)
     - [With Built-in Gin Web Server](#with-built-in-gin-web-server)
     - [Using with Other Routers](#using-with-other-routers)
+    - [Postman Collection](#postman-collection)
   - [License](#license)
   
 ## Features
@@ -173,6 +174,10 @@ func main() {
 ```
 
 More examples can be found in the [examples](example/) directory.
+
+### Postman Collection
+
+You can find a Postman collection with the API endpoints at [<img src="https://run.pstmn.io/button.svg" alt="Run In Postman" style="width: 128px; height: 32px;">](https://app.getpostman.com/run-collection/17061476-00806d0d-9584-4889-ade7-f8407932dba2?action=collection%2Ffork&source=rip_markdown&collection-url=entityId%3D17061476-00806d0d-9584-4889-ade7-f8407932dba2%26entityType%3Dcollection%26workspaceId%3D28697276-d953-482a-bd39-c4695366a55a)
 
 ## License
 

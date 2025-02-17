@@ -1,10 +1,14 @@
 package buckt
 
 import (
+	"embed"
 	"fmt"
 	"html/template"
 	"io/fs"
 )
+
+//go:embed internal/web/templates/*.html
+var templatesFS embed.FS
 
 func loadTemplates() (*template.Template, error) {
 	tmplFS, err := fs.Sub(templatesFS, "internal/web/templates")

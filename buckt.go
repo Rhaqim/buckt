@@ -1,7 +1,6 @@
 package buckt
 
 import (
-	"embed"
 	"fmt"
 	"mime/multipart"
 	"net/http"
@@ -17,9 +16,6 @@ import (
 	"github.com/Rhaqim/buckt/pkg/logger"
 	"github.com/Rhaqim/buckt/pkg/request"
 )
-
-//go:embed internal/web/templates/*.html
-var templatesFS embed.FS
 
 // Buckt is the interface for the Buckt service
 type Buckt interface {
@@ -59,6 +55,7 @@ func NewBuckt(configFile string) (Buckt, error) {
 		return nil, err
 	}
 
+	// Load templates
 	tmpl, err := loadTemplates()
 	if err != nil {
 		return nil, fmt.Errorf("failed to load templates: %w", err)

@@ -1,8 +1,8 @@
 server:
-	go run gin/main.go
+	go run web/main.go
 
-intergration:
+framework:
 	go run framework/main.go
 
-services:
+direct:
 	go run direct/main.go
