@@ -13,13 +13,13 @@ The Buckt package provides a flexible media storage service with optional integr
   - [Features](#features)
   - [Getting Started](#getting-started)
   - [Usage](#usage)
+    - [Configuration Options](#configuration-options)
     - [Initialization](#initialization)
-    - [Configuration](#configuration)
     - [Logging](#logging)
     - [Database](#database)
   - [Services](#services)
     - [Direct Services](#direct-services)
-    - [Gin Server](#gin-server)
+    - [Gin Web Server](#gin-web-server)
   - [Examples](#examples)
     - [With Built-in Gin Web Server](#with-built-in-gin-web-server)
     - [Using with Other Routers](#using-with-other-routers)
@@ -44,6 +44,21 @@ go get github.com/Rhaqim/buckt
 
 ## Usage
 
+### Configuration Options
+
+The configuration options for the Buckt package are defined using the BucktOptions struct. You can configure the logging, media directory, and standalone mode using the following options:
+
+```go
+buckt.BucktOptions{
+  Log: buckt.Log{
+    Level:       "debug",
+    LogTerminal: true,
+  },
+  MediaDir:       "media",
+  StandaloneMode: true,
+}
+```
+
 ### Initialization
 
 To create a new instance of the Buckt package, use the NewBuckt function. It requires a configuration file and optional parameters for logging.
@@ -52,7 +67,14 @@ To create a new instance of the Buckt package, use the NewBuckt function. It req
 import "github.com/Rhaqim/buckt"
 
 func main() {
-    bucktInstance, err := buckt.NewBuckt("config.yaml")
+    bucktInstance, err := buckt.NewBuckt(buckt.BucktOptions{
+        Log: buckt.Log{
+            Level:       "debug",
+            LogTerminal: true,
+        },
+        MediaDir:       "media",
+        StandaloneMode: true,
+    })
     if err != nil {
         log.Fatal(err)
     }
@@ -63,35 +85,13 @@ func main() {
 }
 ```
 
-### Configuration
-
-The configuration file is a YAML file that defines the settings for the Buckt package. It should contain the following fields:
-
-```yaml
-log:
-  level: "debug"
-  logTerminal: true
-  logFile: "log.txt"
-
-database:
-  dsn: "db.sqlite"
-
-server:
-  host: "localhost"
-  port: 8000
-
-mediaDir: "media"
-
-templatesDir: "templates"
-```
-
 ### Logging
 
-The Buckt package supports logging to files and the terminal. By default the package would log to terminal. You can configure the logging settings in the configuration file. Provide the logTerminal field with a boolean value to enable or disable logging to the terminal. The logFile field should contain the path to the log file.
+The Buckt package supports logging to files and the terminal. By default the package would log to terminal. You can configure the logging settings in the BucktOptions. Provide the logTerminal field with a boolean value to enable or disable logging to the terminal. The logFile field should contain the path to the log file.
 
 ### Database
 
-The Buckt package interacts with an SQLite database. You can configure the database settings in the configuration file. The DSN field should contain the path to the SQLite database file. By default one is created in the root directory of the project called db.sqlite.
+The Buckt package uses an SQLite database to store metadata about the media files. It has 2 tables: `files` and `folders`. The `files` table stores information about the media files, such as the file name, size, and MIME type. The `folders` table stores information about the folders, such as the folder name and the parent folder ID.
 
 ## Services
 
@@ -99,7 +99,7 @@ The Buckt package interacts with an SQLite database. You can configure the datab
 
 The Buckt package exposes the services directly via the Buckt interface. You can use the services to manage and organize data using a robust and customizable interface.
 
-### Gin Server
+### Gin Web Server
 
 The Buckt package includes an HTTP server that exposes its services via HTTP endpoints. You can configure the server settings in the configuration file. The host and port fields should contain the address and port for the HTTP server. Alternatively you can use the **GetHandler** method to get the handler and use it with your own router.
 
@@ -116,7 +116,15 @@ import (
 
 func main() {
     // Create a new instance of the Buckt package
-    bucktInstance, err := buckt.NewBuckt("config.yaml")
+    bucktInstance, err := buckt.NewBuckt(buckt.BucktOptions{
+        Log: buckt.Log{
+            Level:       "debug",
+            LogTerminal: true,
+            LogFile:     "buckt.log",
+        },
+        MediaDir:       "media",
+        StandaloneMode: true,
+    })
     if err != nil {
         log.Fatal(err)
     }
@@ -132,7 +140,7 @@ func main() {
 
 ### Using with Other Routers
 
-The Buckt package can be integrated with other routers, such as Fiber, Echo, or Chi. You can use the GetHandler method to get the handler and mount it under a specific route.
+The Buckt package can be integrated with other routers, such as Fiber, Echo, Chi or Go's HTTP package . You can use the GetHandler method to get the handler and mount it under a specific route.
 
 ```go
 import (
@@ -144,7 +152,14 @@ import (
   )
 
 func main() {
-    bucktInstance, err := buckt.NewBuckt("config.yaml")
+    bucktInstance, err := buckt.NewBuckt(buckt.BucktOptions{
+        Log: buckt.Log{
+            Level:       "debug",
+            LogTerminal: true,
+        },
+        MediaDir:       "media",
+        StandaloneMode: false,
+    })
     if err != nil {
         log.Fatal(err)
     }
