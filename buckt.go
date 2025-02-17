@@ -1,6 +1,8 @@
 package buckt
 
 import (
+	"embed"
+	"fmt"
 	"mime/multipart"
 	"net/http"
 
@@ -15,6 +17,9 @@ import (
 	"github.com/Rhaqim/buckt/pkg/logger"
 	"github.com/Rhaqim/buckt/pkg/request"
 )
+
+//go:embed internal/web/templates/*.html
+var templatesFS embed.FS
 
 // Buckt is the interface for the Buckt service
 type Buckt interface {
@@ -54,6 +59,11 @@ func NewBuckt(configFile string) (Buckt, error) {
 		return nil, err
 	}
 
+	tmpl, err := loadTemplates()
+	if err != nil {
+		return nil, fmt.Errorf("failed to load templates: %w", err)
+	}
+
 	// Initialize the stores
 	var folderRepository domain.FolderRepository = repository.NewFolderRepository(db, log)
 	var fileRepository domain.FileRepository = repository.NewFileRepository(db, log)
@@ -71,7 +81,7 @@ func NewBuckt(configFile string) (Buckt, error) {
 	var middleware domain.Middleware = middleware.NewBucketMiddleware()
 
 	// Run the router
-	router := router.NewRouter(log, cfg.TemplatesDir, apiService, webService, middleware)
+	router := router.NewRouter(log, tmpl, apiService, webService, middleware)
 
 	return &buckt{
 		db,

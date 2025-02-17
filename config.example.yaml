@@ -11,5 +11,3 @@ server:
   port: 8000
 
 mediaDir: "media"
-
-templatesDir: "templates"

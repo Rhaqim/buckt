@@ -1,10 +1,8 @@
 package router
 
 import (
-	"fmt"
+	"html/template"
 	"net/http"
-	"path/filepath"
-	"runtime"
 
 	"github.com/Rhaqim/buckt/internal/domain"
 	"github.com/Rhaqim/buckt/pkg/logger"
@@ -22,7 +20,7 @@ type Router struct {
 // NewRouter creates a new router with the given logger and config.
 func NewRouter(
 	log *logger.Logger,
-	templateDir string,
+	tmpl *template.Template,
 	apiService domain.APIService,
 	webService domain.WebService,
 	middleware domain.Middleware,
@@ -35,23 +33,8 @@ func NewRouter(
 	// Set recovery
 	r.Use(gin.Recovery())
 
-	// Determine base path for templates
-	_, b, _, _ := runtime.Caller(0)
-	basePath := filepath.Dir(b)
-	templatePath := templateDir
-
-	// If no specific template path is set, use the default pattern
-	if templatePath == "" {
-		templatePath = filepath.Join(basePath, "..", "templates", "*.html")
-	} else {
-		// Ensure the provided path has a wildcard pattern
-		templatePath = filepath.Join(templatePath, "*.html")
-	}
-
-	log.Success(fmt.Sprintf("Loading templates from %s", templatePath))
-
-	// Load templates using the specified pattern
-	r.LoadHTMLGlob(templatePath)
+	// Set HTML template
+	r.SetHTMLTemplate(tmpl)
 
 	router := &Router{
 		Engine: r,

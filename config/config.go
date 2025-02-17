@@ -22,11 +22,10 @@ type Log struct {
 }
 
 type Config struct {
-	Log          Log      `yaml:"log"`
-	Database     Database `yaml:"database"`
-	Server       Server   `yaml:"server"`
-	MediaDir     string   `yaml:"mediaDir"`
-	TemplatesDir string   `yaml:"templatesDir"`
+	Log      Log      `yaml:"log"`
+	Database Database `yaml:"database"`
+	Server   Server   `yaml:"server"`
+	MediaDir string   `yaml:"mediaDir"`
 }
 
 // LoadConfig loads the configuration from the given file.
