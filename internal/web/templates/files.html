@@ -1,6 +1,6 @@
 <!-- Example in files.html -->
-{{ define "partials/files.html" }} {{ range . }}
-<div class="bg-white shadow rounded p-4">
+{{ define "files" }} {{ range . }}
+<div class="bg-white shadow rounded p-4" id="file-{{ .ID }}">
 	<div class="p-2 bg-gray-100 rounded-md">
 		{{ if eq .ContentType "image/jpeg" }}
 		<img src="/serve/{{ .ID }}" class="w-full h-48 object-cover" />
@@ -28,10 +28,10 @@
 	<p class="text-sm text-gray-500">Size: {{ .Size }} KB</p>
 	<p class="text-sm text-gray-500">Created: {{ .CreatedAt }}</p>
 	<div class="mt-2 flex justify-between">
-		<a href="/file/download/{{ .ID }}" class="text-blue-500">Download</a>
+		<a href="/file/{{ .ID }}" class="text-blue-500">Download</a>
 		<button
 			class="text-red-500"
-			hx-post="/delete?id={{ .ID }}"
+			hx-delete="/file/{{ .ID }}"
 			hx-target="#file-{{ .ID }}"
 			hx-swap="outerHTML"
 		>

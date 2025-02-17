@@ -1,6 +1,7 @@
 package router
 
 import (
+	"fmt"
 	"net/http"
 	"path/filepath"
 	"runtime"
@@ -47,6 +48,8 @@ func NewRouter(
 		templatePath = filepath.Join(templatePath, "*.html")
 	}
 
+	log.Success(fmt.Sprintf("Loading templates from %s", templatePath))
+
 	// Load templates using the specified pattern
 	r.LoadHTMLGlob(templatePath)
 
@@ -71,6 +74,15 @@ func (r *Router) registerRoutes() {
 	{
 		r.GET("/", r.WebService.ViewFolder)
 		r.GET("/folder/:folder_id", r.WebService.ViewFolder)
+		r.POST("/new-folder", r.WebService.NewFolder)
+		r.PUT("/rename-folder", r.WebService.RenameFolder)
+		r.PUT("/move-folder", r.WebService.MoveFolder)
+		r.DELETE("/folder/:folder_id", r.WebService.DeleteFolder)
+
+		r.POST("/upload", r.WebService.UploadFile)
+		r.GET("/file/:file_id", r.WebService.DownloadFile)
+		r.PUT("/file/:file_id", r.WebService.MoveFile)
+		r.DELETE("/file/:file_id", r.WebService.DeleteFile)
 	}
 
 	/* API Routes */
