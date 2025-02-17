@@ -21,6 +21,9 @@ type Router struct {
 func NewRouter(
 	log *logger.Logger,
 	tmpl *template.Template,
+
+	StandaloneMode bool,
+
 	apiService domain.APIService,
 	webService domain.WebService,
 	middleware domain.Middleware,
@@ -43,31 +46,19 @@ func NewRouter(
 		WebService: webService,
 		Middleware: middleware,
 	}
-	router.registerRoutes()
+
+	router.registerAllRoutes(StandaloneMode)
 
 	return router
 }
 
-// Run starts the router.
-func (r *Router) registerRoutes() {
+// RegisterAllRoutes registers all routes for the router.
+func (r *Router) RegisterBaseRoutes() {
 	r.GET("/serve/:file_id", r.APIService.ServeFile)
+}
 
-	/* Web Routes */
-	r.Use(r.WebGuardMiddleware())
-	{
-		r.GET("/", r.WebService.ViewFolder)
-		r.GET("/folder/:folder_id", r.WebService.ViewFolder)
-		r.POST("/new-folder", r.WebService.NewFolder)
-		r.PUT("/rename-folder", r.WebService.RenameFolder)
-		r.PUT("/move-folder", r.WebService.MoveFolder)
-		r.DELETE("/folder/:folder_id", r.WebService.DeleteFolder)
-
-		r.POST("/upload", r.WebService.UploadFile)
-		r.GET("/file/:file_id", r.WebService.DownloadFile)
-		r.PUT("/file/:file_id", r.WebService.MoveFile)
-		r.DELETE("/file/:file_id", r.WebService.DeleteFile)
-	}
-
+// RegisterAPIRoutes sets up API endpoints
+func (r *Router) RegisterAPIRoutes() {
 	/* API Routes */
 	api := r.Group("/api")
 
@@ -90,39 +81,39 @@ func (r *Router) registerRoutes() {
 			api.DELETE("/delete_folder", r.APIService.DeleteFolder)
 		}
 	}
+}
 
-	// r.POST("/new_user", r.APIService.NewUser)
+// RegisterWebRoutes sets up the web interface routes
+func (r *Router) RegisterWebRoutes() {
+	/* Web Routes */
+	r.Use(r.WebGuardMiddleware())
+	{
+		r.GET("/", r.WebService.ViewFolder)
+		r.GET("/folder/:folder_id", r.WebService.ViewFolder)
+		r.POST("/new-folder", r.WebService.NewFolder)
+		r.PUT("/rename-folder", r.WebService.RenameFolder)
+		r.PUT("/move-folder", r.WebService.MoveFolder)
+		r.DELETE("/folder/:folder_id", r.WebService.DeleteFolder)
 
-	// buckets := r.Group("buckets")
-	// buckets.Use(r.AuthMiddleware())
-	// {
-	// 	buckets.POST("/new_bucket", r.APIService.NewBucket)
-	// 	buckets.GET("/fetch", r.APIService.AllBuckets)
-	// 	buckets.GET("/fetch/bucket", r.APIService.ViewBucket)
-	// 	buckets.DELETE("/delete", r.APIService.RemoveBucket)
-	// }
+		r.POST("/upload", r.WebService.UploadFile)
+		r.GET("/file/:file_id", r.WebService.DownloadFile)
+		r.PUT("/file/:file_id", r.WebService.MoveFile)
+		r.DELETE("/file/:file_id", r.WebService.DeleteFile)
+	}
+}
 
-	// folders := r.Group("folders/:bucket")
-	// {
-	// 	folders.GET("", r.APIService.FolderContent)
-	// 	folders.GET("/fetch/folders", r.APIService.FolderSubFolders)
-	// 	folders.GET("/fetch/files", r.APIService.FolderFiles)
-	// 	folders.PUT("/rename", r.APIService.FolderRename)
-	// 	folders.PUT("/move", r.APIService.FolderMove)
-	// 	folders.DELETE("/delete", r.APIService.FolderDelete)
+// registerAllRoutes registers all required routes
+func (r *Router) registerAllRoutes(StandaloneMode bool) {
+	// Register core routes
+	r.RegisterBaseRoutes()
 
-	// }
+	// Register API routes
+	r.RegisterAPIRoutes()
 
-	// files := r.Group("files/:bucket")
-	// {
-	// 	files.POST("/upload", r.APIService.FileUpload)
-	// 	files.GET("/download", r.APIService.FileDownload)
-	// 	files.PUT("/rename", r.APIService.FileRename)
-	// 	files.PUT("/move", r.APIService.FileMove)
-	// 	files.GET("/serve", r.APIService.FileServe)
-	// 	files.DELETE("/delete", r.APIService.FileDelete)
-	// }
-
+	// Register web routes **only if in standalone mode**
+	if StandaloneMode {
+		r.RegisterWebRoutes()
+	}
 }
 
 // ServeHTTP makes Router compatible with http.Handler

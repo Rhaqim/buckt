@@ -5,7 +5,6 @@ import (
 	"mime/multipart"
 	"net/http"
 
-	"github.com/Rhaqim/buckt/config"
 	"github.com/Rhaqim/buckt/internal/app"
 	"github.com/Rhaqim/buckt/internal/database"
 	"github.com/Rhaqim/buckt/internal/domain"
@@ -36,15 +35,12 @@ type buckt struct {
 	router *router.Router
 }
 
-func NewBuckt(configFile string) (Buckt, error) {
-	// Load config
-	cfg := config.LoadConfig(configFile)
-
+func NewBuckt(opts BucktOptions) (Buckt, error) {
 	// Initialize logger
-	log := logger.NewLogger(cfg.Log.LoGfILE, cfg.Log.LogTerminal)
+	log := logger.NewLogger(opts.Log.LoGfILE, opts.Log.LogTerminal)
 
 	// Initialize database
-	db, err := database.NewSQLite(cfg, log)
+	db, err := database.NewSQLite(log)
 	if err != nil {
 		return nil, err
 	}
@@ -67,7 +63,7 @@ func NewBuckt(configFile string) (Buckt, error) {
 
 	// initlize the services
 	var folderService domain.FolderService = service.NewFolderService(log, folderRepository)
-	var fileSystemService domain.FileSystemService = service.NewFileSystemService(log, cfg.MediaDir)
+	var fileSystemService domain.FileSystemService = service.NewFileSystemService(log, opts.MediaDir)
 	var fileService domain.FileService = service.NewFileService(log, fileRepository, folderService, fileSystemService)
 
 	// Initialize the app services
@@ -78,7 +74,10 @@ func NewBuckt(configFile string) (Buckt, error) {
 	var middleware domain.Middleware = middleware.NewBucketMiddleware()
 
 	// Run the router
-	router := router.NewRouter(log, tmpl, apiService, webService, middleware)
+	router := router.NewRouter(
+		log, tmpl,
+		opts.StandaloneMode,
+		apiService, webService, middleware)
 
 	return &buckt{
 		db,

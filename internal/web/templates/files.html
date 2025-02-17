@@ -1,6 +1,13 @@
 <!-- Example in files.html -->
 {{ define "files" }} {{ range . }}
-<div class="bg-white shadow rounded p-4" id="file-{{ .ID }}">
+<div
+	class="file"
+	id="file-{{ .ID }}"
+	data-id="{{ .ID }}"
+	data-type="file"
+	ondragstart="dragStart(event)"
+	draggable="true"
+>
 	<div class="p-2 bg-gray-100 rounded-md">
 		{{ if eq .ContentType "image/jpeg" }}
 		<img src="/serve/{{ .ID }}" class="w-full h-48 object-cover" />

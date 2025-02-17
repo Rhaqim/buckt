@@ -1,4 +1,6 @@
-server:
+.PHONY: web framework direct
+
+web:
 	go run web/main.go
 
 framework:

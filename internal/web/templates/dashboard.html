@@ -120,5 +120,65 @@
 			// Handle file upload logic here
 			closeModal();
 		});
+
+	/* DRAG AND DROP */
+	let draggedElement = null;
+	let draggedElementType = null;
+	let draggedElementId = null;
+
+	// Allow dropping onto folder elements
+	function allowDrop(event) {
+		event.preventDefault();
+	}
+
+	// Store the dragged element's ID and type (file or folder)
+	function dragStart(event) {
+		draggedElement = event.target;
+		draggedElementId = event.target.dataset.id;
+		draggedElementType = event.target.dataset.type || "folder"; // Default to folder if no type is set
+	}
+
+	// Handle dropping into a folder
+	function drop(event) {
+		event.preventDefault();
+
+		let targetFolder = event.target.closest(".folder"); // Get the nearest folder
+		if (!targetFolder) return;
+
+		let targetFolderId = targetFolder.dataset.id;
+
+		console.log(
+			`Moving ${draggedElementType} ${draggedElementId} into folder ${targetFolderId}`
+		);
+
+		// Send request to backend to update the storage structure
+		moveItem(draggedElementId, draggedElementType, targetFolderId);
+
+		// Append the dragged element to the new folder visually
+		targetFolder.appendChild(draggedElement);
+	}
+
+	// Send a fetch request to update the backend
+	function moveItem(itemId, itemType, targetFolderId) {
+		let endpoint = itemType === "file" ? "/api/move_file" : "/api/move_folder";
+
+		fetch(endpoint, {
+			method: "PUT",
+			headers: {
+				"Content-Type": "application/json",
+			},
+			body: JSON.stringify({
+				item_id: itemId,
+				target_folder_id: targetFolderId,
+			}),
+		})
+			.then(response => response.json())
+			.then(data => {
+				console.log("Move success:", data);
+			})
+			.catch(error => {
+				console.error("Error moving item:", error);
+			});
+	}
 </script>
 {{ end }}

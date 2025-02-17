@@ -3,7 +3,6 @@ package database
 import (
 	"time"
 
-	"github.com/Rhaqim/buckt/config"
 	"github.com/Rhaqim/buckt/internal/model"
 	"github.com/Rhaqim/buckt/pkg/logger"
 
@@ -18,9 +17,9 @@ type DB struct {
 }
 
 // NewSQLite creates a new SQLite database connection.
-func NewSQLite(cfg *config.Config, log *logger.Logger) (*DB, error) {
+func NewSQLite(log *logger.Logger) (*DB, error) {
 
-	db, err := gorm.Open(sqlite.Open(cfg.Database.DSN), &gorm.Config{
+	db, err := gorm.Open(sqlite.Open("db.sqlite"), &gorm.Config{
 		Logger: gormLogger.Default.LogMode(gormLogger.Info),
 	})
 	if err != nil {

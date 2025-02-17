@@ -1,5 +1,13 @@
 {{ define "folders" }} {{ range . }}
-<div class="bg-white shadow rounded p-4">
+<div
+	class="folder drop-zone"
+	id="folder-{{ .ID }}"
+	data-id="{{ .ID }}"
+	ondragstart="dragStart(event)"
+	ondrop="drop(event)"
+	ondragover="allowDrop(event)"
+	draggable="true"
+>
 	<h3 class="font-bold">
 		<!-- <a href="/folders/{{ .Name }}?folder={{ .Path }}" class="text-blue-500">{{ .Name }}</a> -->
 		<a href="/folder/{{ .ID }}" class="text-blue-500">{{ .Name }}</a>

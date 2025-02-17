@@ -9,7 +9,16 @@ import (
 )
 
 func main() {
-	b, err := buckt.NewBuckt("config.yaml")
+	opts := buckt.BucktOptions{
+		Log: buckt.Log{
+			Level:       "debug",
+			LogTerminal: true,
+			LoGfILE:     "buckt.log",
+		},
+		MediaDir: "media",
+	}
+
+	b, err := buckt.NewBuckt(opts)
 	if err != nil {
 		log.Fatalf("Failed to initialize Buckt: %v", err)
 	}
