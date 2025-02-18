@@ -18,12 +18,16 @@ import (
 
 // Buckt is the interface for the Buckt service
 type Buckt interface {
-	// Buckt HTTP service methods
+	// GetHandler returns the http.Handler for the Buckt service.
 	GetHandler() http.Handler
+
+	// StartServer starts the Buckt service on the specified port.
 	StartServer(port ...string) error
+
+	// Close closes the Buckt service.
 	Close()
 
-	// Buckt storage service methods
+	// Buckt service methods
 	UploadFile(file *multipart.FileHeader, bucketName string, folderPath string) error
 	DownloadFile(req request.FileRequest) ([]byte, error)
 	DeleteFile(req request.FileRequest) error
@@ -35,6 +39,15 @@ type buckt struct {
 	router *router.Router
 }
 
+// NewBuckt initializes and returns a new Buckt instance.
+// It sets up the logger, database, templates, repositories, services, and router.
+//
+// Parameters:
+//   - opts: BucktOptions containing configuration options for the Buckt instance.
+//
+// Returns:
+//   - Buckt: The initialized Buckt instance.
+//   - error: An error if any step in the initialization process fails.
 func NewBuckt(opts BucktOptions) (Buckt, error) {
 	// Initialize logger
 	log := logger.NewLogger(opts.Log.LoGfILE, opts.Log.LogTerminal)
@@ -83,7 +96,6 @@ func NewBuckt(opts BucktOptions) (Buckt, error) {
 		db,
 		router,
 	}, nil
-
 }
 
 func (b *buckt) GetHandler() http.Handler {
