@@ -36,6 +36,11 @@ func NewRouter(
 	// Set recovery
 	r.Use(gin.Recovery())
 
+	// Release mode
+	if !StandaloneMode {
+		gin.SetMode(gin.ReleaseMode)
+	}
+
 	// Set HTML template
 	r.SetHTMLTemplate(tmpl)
 
@@ -53,12 +58,12 @@ func NewRouter(
 }
 
 // RegisterAllRoutes registers all routes for the router.
-func (r *Router) RegisterBaseRoutes() {
+func (r *Router) registerBaseRoutes() {
 	r.GET("/serve/:file_id", r.APIService.ServeFile)
 }
 
 // RegisterAPIRoutes sets up API endpoints
-func (r *Router) RegisterAPIRoutes() {
+func (r *Router) registerAPIRoutes() {
 	/* API Routes */
 	api := r.Group("/api")
 
@@ -84,7 +89,7 @@ func (r *Router) RegisterAPIRoutes() {
 }
 
 // RegisterWebRoutes sets up the web interface routes
-func (r *Router) RegisterWebRoutes() {
+func (r *Router) registerWebRoutes() {
 	/* Web Routes */
 	r.Use(r.WebGuardMiddleware())
 	{
@@ -105,14 +110,14 @@ func (r *Router) RegisterWebRoutes() {
 // registerAllRoutes registers all required routes
 func (r *Router) registerAllRoutes(StandaloneMode bool) {
 	// Register core routes
-	r.RegisterBaseRoutes()
+	r.registerBaseRoutes()
 
 	// Register API routes
-	r.RegisterAPIRoutes()
+	r.registerAPIRoutes()
 
 	// Register web routes **only if in standalone mode**
 	if StandaloneMode {
-		r.RegisterWebRoutes()
+		r.registerWebRoutes()
 	}
 }
 

@@ -10,8 +10,8 @@ import (
 )
 
 type Logger struct {
-	infoLogger  *log.Logger
-	errorLogger *log.Logger
+	InfoLogger  *log.Logger
+	ErrorLogger *log.Logger
 }
 
 func NewLogger(logFile string, logTerminal bool) *Logger {
@@ -48,25 +48,25 @@ func NewLogger(logFile string, logTerminal bool) *Logger {
 	}
 
 	return &Logger{
-		infoLogger:  log.New(infoWriter, "INFO: ", log.Ldate|log.Ltime|log.Lshortfile),
-		errorLogger: log.New(errorWriter, "ERROR: ", log.Ldate|log.Ltime|log.Lshortfile),
+		InfoLogger:  log.New(infoWriter, "INFO: ", log.Ldate|log.Ltime|log.Lshortfile),
+		ErrorLogger: log.New(errorWriter, "ERROR: ", log.Ldate|log.Ltime|log.Lshortfile),
 	}
 }
 
 // Writer returns the writer for the info logger
 func (l *Logger) Writer() io.Writer {
-	return l.infoLogger.Writer()
+	return l.InfoLogger.Writer()
 }
 
 // Success logs a success message
 func (l *Logger) Success(message string) {
-	l.infoLogger.Println(message)
+	l.InfoLogger.Println(message)
 }
 
 // Error logs an error message and returns an error type
 func (l *Logger) Error(userMsg, devMsg string) error {
 	err := errors.New(devMsg)
-	l.errorLogger.Printf("%s | Details: %s", userMsg, devMsg)
+	l.ErrorLogger.Printf("%s | Details: %s", userMsg, devMsg)
 	return err
 }
 
@@ -76,6 +76,6 @@ func (l *Logger) WrapError(userMsg string, err error) error {
 		l.Success("Success: " + userMsg)
 		return nil
 	}
-	l.errorLogger.Printf("%s | Error: %s", userMsg, err.Error())
+	l.ErrorLogger.Printf("%s | Error: %s", userMsg, err.Error())
 	return errors.New(userMsg + ": " + err.Error())
 }

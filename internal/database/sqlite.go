@@ -20,8 +20,16 @@ type DB struct {
 func NewSQLite(log *logger.Logger) (*DB, error) {
 
 	db, err := gorm.Open(sqlite.Open("db.sqlite"), &gorm.Config{
-		Logger: gormLogger.Default.LogMode(gormLogger.Info),
+		Logger: gormLogger.New(
+			log.InfoLogger,
+			gormLogger.Config{
+				SlowThreshold: time.Second,
+				LogLevel:      gormLogger.Info,
+				Colorful:      true,
+			},
+		),
 	})
+
 	if err != nil {
 		return nil, log.WrapError("Failed to connect to database:", err)
 	}
@@ -59,5 +67,9 @@ func (db *DB) Close() error {
 
 func (db *DB) Migrate() error {
 	err := db.AutoMigrate(&model.FileModel{}, &model.FolderModel{})
-	return db.WrapError("Failed to auto migrate database:", err)
+	if err != nil {
+		return db.WrapError("Failed to auto migrate database:", err)
+	}
+
+	return nil
 }

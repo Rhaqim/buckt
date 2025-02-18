@@ -9,7 +9,6 @@ import (
 func main() {
 	opts := buckt.BucktOptions{
 		Log: buckt.Log{
-			Level:       "debug",
 			LogTerminal: true,
 			LoGfILE:     "buckt.log",
 		},

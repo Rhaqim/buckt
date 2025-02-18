@@ -51,7 +51,6 @@ The configuration options for the Buckt package are defined using the BucktOptio
 ```go
 buckt.BucktOptions{
   Log: buckt.Log{
-    Level:       "debug",
     LogTerminal: true,
   },
   MediaDir:       "media",
@@ -69,7 +68,6 @@ import "github.com/Rhaqim/buckt"
 func main() {
     bucktInstance, err := buckt.NewBuckt(buckt.BucktOptions{
         Log: buckt.Log{
-            Level:       "debug",
             LogTerminal: true,
         },
         MediaDir:       "media",
@@ -118,7 +116,6 @@ func main() {
     // Create a new instance of the Buckt package
     bucktInstance, err := buckt.NewBuckt(buckt.BucktOptions{
         Log: buckt.Log{
-            Level:       "debug",
             LogTerminal: true,
             LogFile:     "buckt.log",
         },
@@ -154,7 +151,6 @@ import (
 func main() {
     bucktInstance, err := buckt.NewBuckt(buckt.BucktOptions{
         Log: buckt.Log{
-            Level:       "debug",
             LogTerminal: true,
         },
         MediaDir:       "media",
