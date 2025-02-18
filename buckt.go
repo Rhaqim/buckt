@@ -2,7 +2,6 @@ package buckt
 
 import (
 	"fmt"
-	"mime/multipart"
 	"net/http"
 
 	"github.com/Rhaqim/buckt/internal/app"
@@ -13,7 +12,6 @@ import (
 	"github.com/Rhaqim/buckt/internal/web/middleware"
 	"github.com/Rhaqim/buckt/internal/web/router"
 	"github.com/Rhaqim/buckt/pkg/logger"
-	"github.com/Rhaqim/buckt/pkg/request"
 )
 
 // Buckt is the interface for the Buckt service
@@ -28,15 +26,23 @@ type Buckt interface {
 	Close()
 
 	// Buckt service methods
-	UploadFile(file *multipart.FileHeader, bucketName string, folderPath string) error
-	DownloadFile(req request.FileRequest) ([]byte, error)
-	DeleteFile(req request.FileRequest) error
-	Serve(filepath string) (string, error)
+	UploadFile(user_id string, parent_id string, file_name string, content_type string, file_data []byte) (string, error)
+	GetFile(file_id string) (interface{}, error)
+	MoveFile(file_id string, new_file_name string, new_file_data []byte) error
+	DeleteFile(file_id string) error
+	NewFolder(user_id string, parent_id string, folder_name string, description string) error
+	GetFolder(user_id string, folder_id string) (interface{}, error)
+	GetFolderContent(parent_id string) ([]interface{}, error)
+	MoveFolder(folder_id string, new_parent_id string) error
+	RenameFolder(folder_id string, new_name string) error
+	DeleteFolder(folder_id string) error
 }
 
 type buckt struct {
-	db     *database.DB
-	router *router.Router
+	db            *database.DB
+	router        *router.Router
+	fileService   domain.FileService
+	folderService domain.FolderService
 }
 
 // NewBuckt initializes and returns a new Buckt instance.
@@ -93,8 +99,10 @@ func NewBuckt(opts BucktOptions) (Buckt, error) {
 		apiService, webService, middleware)
 
 	return &buckt{
-		db,
-		router,
+		db:            db,
+		router:        router,
+		fileService:   fileService,
+		folderService: folderService,
 	}, nil
 }
 
@@ -110,22 +118,70 @@ func (b *buckt) Close() {
 	b.db.Close()
 }
 
+// CreateFile implements Buckt.
+func (b *buckt) UploadFile(user_id string, parent_id string, file_name string, content_type string, file_data []byte) (string, error) {
+	return b.fileService.CreateFile(user_id, parent_id, file_name, content_type, file_data)
+}
+
+// GetFile implements Buckt.
+func (b *buckt) GetFile(file_id string) (interface{}, error) {
+	return b.fileService.GetFile(file_id)
+}
+
+// UpdateFile implements Buckt.
+func (b *buckt) MoveFile(file_id string, new_file_name string, new_file_data []byte) error {
+	return b.fileService.UpdateFile(file_id, new_file_name, new_file_data)
+}
+
 // DeleteFile implements Buckt.
-func (b *buckt) DeleteFile(req request.FileRequest) error {
+func (b *buckt) DeleteFile(file_id string) error {
+	return b.fileService.DeleteFile(file_id)
+}
+
+// CreateFolder implements Buckt.
+func (b *buckt) NewFolder(user_id string, parent_id string, folder_name string, description string) error {
+	return b.folderService.CreateFolder(user_id, parent_id, folder_name, description)
+}
+
+// GetFolder implements Buckt.
+func (b *buckt) GetFolder(user_id string, folder_id string) (interface{}, error) {
+	return b.folderService.GetFolder(user_id, folder_id)
+}
+
+// GetFolders implements Buckt.
+func (b *buckt) GetFolderContent(parent_id string) ([]interface{}, error) {
+	folders, err := b.folderService.GetFolders(parent_id)
+	if err != nil {
+		return nil, err
+	}
+
+	files, err := b.fileService.GetFiles(parent_id)
+	if err != nil {
+		return nil, err
+	}
+
+	content := make([]interface{}, 0, len(folders)+len(files))
+	for _, folder := range folders {
+		content = append(content, folder)
+	}
+	for _, file := range files {
+		content = append(content, file)
+	}
+
+	return content, nil
+}
+
+// MoveFolder implements Buckt.
+func (b *buckt) MoveFolder(folder_id string, new_parent_id string) error {
 	panic("unimplemented")
 }
 
-// DownloadFile implements Buckt.
-func (b *buckt) DownloadFile(req request.FileRequest) ([]byte, error) {
+// RenameFolder implements Buckt.
+func (b *buckt) RenameFolder(folder_id string, new_name string) error {
 	panic("unimplemented")
 }
 
-// Serve implements Buckt.
-func (b *buckt) Serve(filepath string) (string, error) {
-	panic("unimplemented")
-}
-
-// UploadFile implements Buckt.
-func (b *buckt) UploadFile(file *multipart.FileHeader, bucketName string, folderPath string) error {
+// DeleteFolder implements Buckt.
+func (b *buckt) DeleteFolder(folder_id string) error {
 	panic("unimplemented")
 }
