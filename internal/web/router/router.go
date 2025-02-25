@@ -22,6 +22,7 @@ func NewRouter(
 	log *logger.Logger,
 	tmpl *template.Template,
 
+	Debug bool,
 	StandaloneMode bool,
 
 	apiService domain.APIService,
@@ -37,7 +38,7 @@ func NewRouter(
 	r.Use(gin.Recovery())
 
 	// Release mode
-	if !StandaloneMode {
+	if !Debug {
 		gin.SetMode(gin.ReleaseMode)
 	}
 

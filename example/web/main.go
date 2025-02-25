@@ -10,9 +10,11 @@ func main() {
 	opts := buckt.BucktOptions{
 		Log: buckt.Log{
 			LogTerminal: true,
+			Debug:       true,
 		},
 		MediaDir:       "media",
 		StandaloneMode: true,
+		FlatNameSpaces: true,
 	}
 
 	b, err := buckt.NewBuckt(opts)

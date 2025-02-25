@@ -59,7 +59,7 @@ func NewBuckt(opts BucktOptions) (Buckt, error) {
 	log := logger.NewLogger(opts.Log.LoGfILE, opts.Log.LogTerminal)
 
 	// Initialize database
-	db, err := database.NewSQLite(log)
+	db, err := database.NewSQLite(log, opts.Log.Debug)
 	if err != nil {
 		return nil, err
 	}
@@ -83,7 +83,7 @@ func NewBuckt(opts BucktOptions) (Buckt, error) {
 	// initlize the services
 	var folderService domain.FolderService = service.NewFolderService(log, folderRepository)
 	var fileSystemService domain.FileSystemService = service.NewFileSystemService(log, opts.MediaDir)
-	var fileService domain.FileService = service.NewFileService(log, fileRepository, folderService, fileSystemService)
+	var fileService domain.FileService = service.NewFileService(log, opts.FlatNameSpaces, fileRepository, folderService, fileSystemService)
 
 	// Initialize the app services
 	var apiService domain.APIService = app.NewAPIService(folderService, fileService)
@@ -95,6 +95,7 @@ func NewBuckt(opts BucktOptions) (Buckt, error) {
 	// Run the router
 	router := router.NewRouter(
 		log, tmpl,
+		opts.Log.Debug,
 		opts.StandaloneMode,
 		apiService, webService, middleware)
 

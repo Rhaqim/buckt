@@ -15,6 +15,7 @@ func main() {
 		Log: buckt.Log{
 			LogTerminal: false,
 			LoGfILE:     "buckt.log",
+			Debug:       false,
 		},
 		MediaDir:       "media",
 		StandaloneMode: false,
@@ -24,6 +25,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to initialize Buckt: %v", err)
 	}
+	defer b.Close() // Ensure resources are cleaned up
 
 	// Get the Buckt handler
 	handler := b.GetHandler()

@@ -14,6 +14,8 @@ import (
 type FileService struct {
 	*logger.Logger
 
+	flatNameSpaces bool
+
 	domain.FileRepository
 
 	domain.FolderService
@@ -22,13 +24,21 @@ type FileService struct {
 
 func NewFileService(
 	log *logger.Logger,
+
+	flatNameSpaces bool,
+
 	fileRepository domain.FileRepository,
+
 	folderService domain.FolderService,
 	fileSystemService domain.FileSystemService,
 ) domain.FileService {
 	return &FileService{
-		Logger:            log,
-		FileRepository:    fileRepository,
+		Logger: log,
+
+		flatNameSpaces: flatNameSpaces,
+
+		FileRepository: fileRepository,
+
 		FolderService:     folderService,
 		FileSystemService: fileSystemService,
 	}
@@ -49,6 +59,12 @@ func (f *FileService) CreateFile(user_id, parent_id, file_name, content_type str
 
 	// Get the file path
 	path := filepath.Join(parentFolder.Path, file_name)
+
+	// if flat namespaces is enabled save files in the root folder with uuid as name
+	if f.flatNameSpaces {
+		ext := filepath.Ext(file_name)
+		path = uuid.New().String() + ext
+	}
 
 	// Calculate the file hash, for data verification
 	combinedData := append([]byte(path), file_data...)

@@ -121,7 +121,7 @@ func TestCreateFile(t *testing.T) {
 	mockFolderService := new(MockFolderService)
 	mockFileSystemService := new(MockFileSystemService)
 
-	fileService := NewFileService(mockLogger, mockFileRepo, mockFolderService, mockFileSystemService)
+	fileService := NewFileService(mockLogger, false, mockFileRepo, mockFolderService, mockFileSystemService)
 
 	parentFolder := &model.FolderModel{
 		ID:   uuid.New(),
@@ -141,7 +141,7 @@ func TestGetFile(t *testing.T) {
 	mockFolderService := new(MockFolderService)
 	mockFileSystemService := new(MockFileSystemService)
 
-	fileService := NewFileService(mockLogger, mockFileRepo, mockFolderService, mockFileSystemService)
+	fileService := NewFileService(mockLogger, false, mockFileRepo, mockFolderService, mockFileSystemService)
 
 	fileID := uuid.New()
 	fileModel := &model.FileModel{
@@ -163,7 +163,7 @@ func TestGetFiles(t *testing.T) {
 	mockFolderService := new(MockFolderService)
 	mockFileSystemService := new(MockFileSystemService)
 
-	fileService := NewFileService(mockLogger, mockFileRepo, mockFolderService, mockFileSystemService)
+	fileService := NewFileService(mockLogger, false, mockFileRepo, mockFolderService, mockFileSystemService)
 
 	parentID := uuid.New()
 	fileModels := []model.FileModel{
@@ -187,7 +187,7 @@ func TestUpdateFile(t *testing.T) {
 	mockFolderService := new(MockFolderService)
 	mockFileSystemService := new(MockFileSystemService)
 
-	fileService := NewFileService(mockLogger, mockFileRepo, mockFolderService, mockFileSystemService)
+	fileService := NewFileService(mockLogger, false, mockFileRepo, mockFolderService, mockFileSystemService)
 
 	fileID := uuid.New()
 	fileModel := &model.FileModel{
@@ -214,7 +214,7 @@ func TestDeleteFile(t *testing.T) {
 	mockFolderService := new(MockFolderService)
 	mockFileSystemService := new(MockFileSystemService)
 
-	fileService := NewFileService(mockLogger, mockFileRepo, mockFolderService, mockFileSystemService)
+	fileService := NewFileService(mockLogger, false, mockFileRepo, mockFolderService, mockFileSystemService)
 
 	fileID := uuid.New()
 	fileModel := &model.FileModel{

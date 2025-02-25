@@ -1,11 +1,10 @@
 package main
 
 import (
+	"fmt"
 	"log"
-	"mime/multipart"
 
 	"github.com/Rhaqim/buckt"
-	"github.com/Rhaqim/buckt/pkg/request"
 )
 
 func main() {
@@ -25,28 +24,19 @@ func main() {
 
 	// Use the Buckt services directly
 
-	var file *multipart.FileHeader = nil
+	//sample file
+	var file []byte = []byte("sample file")
+
+	var fileName string = "sample.txt"
+
+	var constentType string = "application/octet-stream"
 
 	// Upload a file
-	b.UploadFile(file, "mybucket", "hello/world")
-
-	// Download a file
-	data, err := b.DownloadFile(request.FileRequest{Filename: "hello.txt"})
+	id, err := b.UploadFile("user123", "", fileName, constentType, file)
 	if err != nil {
-		log.Fatalf("Failed to download file: %v", err)
-	}
-	log.Printf("Downloaded file: %s", string(data))
-
-	// Delete a file
-	err = b.DeleteFile(request.FileRequest{Filename: "hello.txt"})
-	if err != nil {
-		log.Fatalf("Failed to delete file: %v", err)
+		log.Fatalf("Failed to upload file: %v", err)
 	}
 
-	// Serve a file
-	url, err := b.Serve("/hello/world/hello.txt")
-	if err != nil {
-		log.Fatalf("Failed to serve file: %v", err)
-	}
-	log.Printf("Served file at: %s", url)
+	fmt.Println("File uploaded with ID:", id)
+
 }

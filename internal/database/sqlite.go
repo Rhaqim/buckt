@@ -17,14 +17,21 @@ type DB struct {
 }
 
 // NewSQLite creates a new SQLite database connection.
-func NewSQLite(log *logger.Logger) (*DB, error) {
+func NewSQLite(log *logger.Logger, debug bool) (*DB, error) {
+	// if debug is true, set log level to Info otherwise set to Silent
+	var logLevel gormLogger.LogLevel
+	if debug {
+		logLevel = gormLogger.Info
+	} else {
+		logLevel = gormLogger.Silent
+	}
 
 	db, err := gorm.Open(sqlite.Open("db.sqlite"), &gorm.Config{
 		Logger: gormLogger.New(
 			log.InfoLogger,
 			gormLogger.Config{
 				SlowThreshold: time.Second,
-				LogLevel:      gormLogger.Info,
+				LogLevel:      logLevel,
 				Colorful:      true,
 			},
 		),
