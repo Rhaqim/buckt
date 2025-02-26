@@ -202,26 +202,28 @@ func (f *FileService) UpdateFile(file_id string, new_file_name string, new_file_
 
 // DeleteFile implements domain.FileService.
 // Subtle: this method shadows the method (FileRepository).DeleteFile of FileService.FileRepository.
-func (f *FileService) DeleteFile(file_id string) error {
+func (f *FileService) DeleteFile(file_id string) (string, error) {
+	var parentID string
+
 	fileID, err := uuid.Parse(file_id)
 	if err != nil {
-		return f.WrapError("failed to parse uuid", err)
+		return parentID, f.WrapError("failed to parse uuid", err)
 	}
 
 	file, err := f.FileRepository.GetFile(fileID)
 	if err != nil {
-		return f.WrapError("failed to get file", err)
+		return parentID, f.WrapError("failed to get file", err)
 	}
 
 	// Delete the file from the file system
 	if err := f.FileSystemService.FSDeleteFile(file.Path); err != nil {
-		return err
+		return parentID, err
 	}
 
 	// Delete the file
 	if err := f.FileRepository.DeleteFile(fileID); err != nil {
-		return f.WrapError("failed to delete file", err)
+		return parentID, f.WrapError("failed to delete file", err)
 	}
 
-	return nil
+	return file.ParentID.String(), nil
 }

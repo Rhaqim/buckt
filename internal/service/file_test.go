@@ -225,6 +225,6 @@ func TestDeleteFile(t *testing.T) {
 	mockFileSystemService.On("FSDeleteFile", "/parent/folder/file.txt").Return(nil)
 	mockFileRepo.On("DeleteFile", fileID).Return(nil)
 
-	err := fileService.DeleteFile(fileID.String())
+	_, err := fileService.DeleteFile(fileID.String())
 	assert.NoError(t, err)
 }

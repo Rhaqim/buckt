@@ -185,7 +185,8 @@ func (a *APIService) DeleteFile(c *gin.Context) {
 	}
 
 	// delete the file
-	if err := a.FileService.DeleteFile(fileID); err != nil {
+	_, err := a.FileService.DeleteFile(fileID)
+	if err != nil {
 		c.AbortWithStatusJSON(500, response.WrapError("failed to delete file", err))
 		return
 	}

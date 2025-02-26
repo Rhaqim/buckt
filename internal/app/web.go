@@ -1,6 +1,8 @@
 package app
 
 import (
+	"fmt"
+
 	"github.com/Rhaqim/buckt/internal/domain"
 	"github.com/Rhaqim/buckt/internal/utils"
 	"github.com/Rhaqim/buckt/pkg/response"
@@ -67,7 +69,8 @@ func (w *WebService) NewFolder(c *gin.Context) {
 		return
 	}
 
-	c.JSON(200, response.Success("folder created"))
+	// reload the page
+	c.Redirect(302, "/folder/"+parentID)
 }
 
 // RenameFolder implements domain.WebService.
@@ -170,11 +173,13 @@ func (w *WebService) DeleteFile(c *gin.Context) {
 	}
 
 	// delete the file
-	err := w.FileService.DeleteFile(fileID)
+	parent_id, err := w.FileService.DeleteFile(fileID)
 	if err != nil {
 		c.AbortWithStatusJSON(500, response.WrapError("failed to delete file", err))
 		return
 	}
+
+	fmt.Println("parent_id", parent_id)
 
 	c.JSON(200, response.Success("file deleted"))
 }

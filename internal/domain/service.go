@@ -47,5 +47,5 @@ type FileService interface {
 	UpdateFile(file_id, new_file_name string, new_file_data []byte) error
 	GetFile(file_id string) (*model.FileModel, error)
 	GetFiles(parent_id string) ([]model.FileModel, error)
-	DeleteFile(file_id string) error
+	DeleteFile(file_id string) (string, error)
 }

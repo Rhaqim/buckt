@@ -136,7 +136,8 @@ func (b *buckt) MoveFile(file_id string, new_file_name string, new_file_data []b
 
 // DeleteFile implements Buckt.
 func (b *buckt) DeleteFile(file_id string) error {
-	return b.fileService.DeleteFile(file_id)
+	_, err := b.fileService.DeleteFile(file_id)
+	return err
 }
 
 // CreateFolder implements Buckt.
