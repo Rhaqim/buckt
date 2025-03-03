@@ -45,16 +45,25 @@ func main() {
 
 	// Mount the Buckt router under /buckt
 	bucktRouter := r.Group("/buckt")
-	bucktRouter.Any("/*path", func(c *gin.Context) {
-		// Trim `/buckt` from the request path
-		proxyPath := strings.TrimPrefix(c.Request.URL.Path, "/buckt")
+	bucktRouter.Use(func(c *gin.Context) {
 
-		// Update the request path
-		c.Request.URL.Path = proxyPath
+		c.Set("user_id", "1234")
 
-		// Forward the request to the handler
-		handler.ServeHTTP(c.Writer, c.Request)
+		c.Next()
 	})
+	{
+
+		bucktRouter.Any("/*path", func(c *gin.Context) {
+			// Trim `/buckt` from the request path
+			proxyPath := strings.TrimPrefix(c.Request.URL.Path, "/buckt")
+
+			// Update the request path
+			c.Request.URL.Path = proxyPath
+
+			// Forward the request to the handler
+			handler.ServeHTTP(c.Writer, c.Request)
+		})
+	}
 
 	// Start the server
 	r.Run(":8080")
