@@ -116,7 +116,7 @@ func (m *MockFileSystemService) FSDeleteFile(path string) error {
 }
 
 func TestCreateFile(t *testing.T) {
-	mockLogger := &logger.Logger{}
+	mockLogger := &logger.BucktLogger{}
 	mockFileRepo := new(MockFileRepository)
 	mockFolderService := new(MockFolderService)
 	mockFileSystemService := new(MockFileSystemService)
@@ -136,7 +136,7 @@ func TestCreateFile(t *testing.T) {
 }
 
 func TestGetFile(t *testing.T) {
-	mockLogger := &logger.Logger{}
+	mockLogger := &logger.BucktLogger{}
 	mockFileRepo := new(MockFileRepository)
 	mockFolderService := new(MockFolderService)
 	mockFileSystemService := new(MockFileSystemService)
@@ -158,7 +158,7 @@ func TestGetFile(t *testing.T) {
 }
 
 func TestGetFiles(t *testing.T) {
-	mockLogger := &logger.Logger{}
+	mockLogger := &logger.BucktLogger{}
 	mockFileRepo := new(MockFileRepository)
 	mockFolderService := new(MockFolderService)
 	mockFileSystemService := new(MockFileSystemService)
@@ -182,7 +182,7 @@ func TestGetFiles(t *testing.T) {
 }
 
 func TestUpdateFile(t *testing.T) {
-	mockLogger := &logger.Logger{}
+	mockLogger := &logger.BucktLogger{}
 	mockFileRepo := new(MockFileRepository)
 	mockFolderService := new(MockFolderService)
 	mockFileSystemService := new(MockFileSystemService)
@@ -209,7 +209,7 @@ func TestUpdateFile(t *testing.T) {
 }
 
 func TestDeleteFile(t *testing.T) {
-	mockLogger := &logger.Logger{}
+	mockLogger := &logger.BucktLogger{}
 	mockFileRepo := new(MockFileRepository)
 	mockFolderService := new(MockFolderService)
 	mockFileSystemService := new(MockFileSystemService)

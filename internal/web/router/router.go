@@ -19,7 +19,7 @@ type Router struct {
 
 // NewRouter creates a new router with the given logger and config.
 func NewRouter(
-	log *logger.Logger,
+	log *logger.BucktLogger,
 	tmpl *template.Template,
 
 	Debug bool,

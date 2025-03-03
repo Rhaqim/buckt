@@ -9,15 +9,15 @@ import (
 )
 
 type FileSystemService struct {
-	*logger.Logger
+	*logger.BucktLogger
 
 	MediaDir string
 }
 
-func NewFileSystemService(log *logger.Logger, medaiDir string) domain.FileSystemService {
+func NewFileSystemService(bucktLogger *logger.BucktLogger, medaiDir string) domain.FileSystemService {
 	return &FileSystemService{
-		Logger:   log,
-		MediaDir: medaiDir,
+		BucktLogger: bucktLogger,
+		MediaDir:    medaiDir,
 	}
 }
 

@@ -1,9 +1,15 @@
 package buckt
 
+import (
+	"database/sql"
+	"log"
+)
+
 type Log struct {
-	LogTerminal bool   `yaml:"logTerminal"`
-	LoGfILE     string `yaml:"logFile"`
-	Debug       bool   `yaml:"debug"`
+	Logger      *log.Logger
+	LogTerminal bool
+	LoGfILE     string
+	Debug       bool
 }
 
 // BucktOptions represents the configuration options for the Buckt application.
@@ -15,9 +21,10 @@ type Log struct {
 //	MediaDir: Path to the directory where media files are stored.
 //	FlatNameSpaces: Flag indicating whether the application should use flat namespaces when storing files.
 //	StandaloneMode: Flag indicating whether the application is running in standalone mode.
-type BucktOptions struct {
-	Log            Log    `yaml:"log"`
-	MediaDir       string `yaml:"mediaDir"`
-	FlatNameSpaces bool   `yaml:"flatNameSpaces"`
-	StandaloneMode bool   `yaml:"standaloneMode"`
+type BucktConfig struct {
+	DB             *sql.DB
+	Log            Log
+	MediaDir       string
+	FlatNameSpaces bool
+	StandaloneMode bool
 }

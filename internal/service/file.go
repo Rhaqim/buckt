@@ -12,7 +12,7 @@ import (
 )
 
 type FileService struct {
-	*logger.Logger
+	*logger.BucktLogger
 
 	flatNameSpaces bool
 
@@ -23,7 +23,7 @@ type FileService struct {
 }
 
 func NewFileService(
-	log *logger.Logger,
+	bucktLogger *logger.BucktLogger,
 
 	flatNameSpaces bool,
 
@@ -33,7 +33,7 @@ func NewFileService(
 	fileSystemService domain.FileSystemService,
 ) domain.FileService {
 	return &FileService{
-		Logger: log,
+		BucktLogger: bucktLogger,
 
 		flatNameSpaces: flatNameSpaces,
 

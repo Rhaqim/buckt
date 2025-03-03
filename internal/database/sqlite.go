@@ -1,11 +1,13 @@
 package database
 
 import (
+	"database/sql"
 	"time"
 
 	"github.com/Rhaqim/buckt/internal/model"
 	"github.com/Rhaqim/buckt/pkg/logger"
 
+	"gorm.io/driver/postgres"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 	gormLogger "gorm.io/gorm/logger"
@@ -13,11 +15,14 @@ import (
 
 type DB struct {
 	*gorm.DB
-	*logger.Logger
+	*logger.BucktLogger
 }
 
 // NewSQLite creates a new SQLite database connection.
-func NewSQLite(log *logger.Logger, debug bool) (*DB, error) {
+func NewSQLite(instance *sql.DB, log *logger.BucktLogger, debug bool) (*DB, error) {
+	var db *gorm.DB
+	var err error
+
 	// if debug is true, set log level to Info otherwise set to Silent
 	var logLevel gormLogger.LogLevel
 	if debug {
@@ -26,16 +31,24 @@ func NewSQLite(log *logger.Logger, debug bool) (*DB, error) {
 		logLevel = gormLogger.Silent
 	}
 
-	db, err := gorm.Open(sqlite.Open("db.sqlite"), &gorm.Config{
+	// Create a new GORM configuration
+	gormConfig := &gorm.Config{
 		Logger: gormLogger.New(
-			log.InfoLogger,
+			log.Logger,
 			gormLogger.Config{
 				SlowThreshold: time.Second,
 				LogLevel:      logLevel,
 				Colorful:      true,
 			},
 		),
-	})
+	}
+
+	// Create a new GORM database connection
+	if instance != nil {
+		db, err = gorm.Open(postgres.New(postgres.Config{Conn: instance}), gormConfig)
+	} else {
+		db, err = gorm.Open(sqlite.Open("db.sqlite"), gormConfig)
+	}
 
 	if err != nil {
 		return nil, log.WrapError("Failed to connect to database:", err)

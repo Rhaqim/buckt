@@ -11,14 +11,14 @@ import (
 )
 
 type FolderService struct {
-	*logger.Logger
+	*logger.BucktLogger
 
 	domain.FolderRepository
 }
 
-func NewFolderService(log *logger.Logger, folderRepository domain.FolderRepository) domain.FolderService {
+func NewFolderService(bucktLogger *logger.BucktLogger, folderRepository domain.FolderRepository) domain.FolderService {
 	return &FolderService{
-		Logger:           log,
+		BucktLogger:      bucktLogger,
 		FolderRepository: folderRepository,
 	}
 }
