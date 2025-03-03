@@ -47,7 +47,8 @@ func main() {
 	bucktRouter := r.Group("/buckt")
 	bucktRouter.Use(func(c *gin.Context) {
 
-		c.Set("user_id", "1234")
+		// Attach user_id to headers before forwarding
+		c.Request.Header.Set("buckt-User-ID", "1234")
 
 		c.Next()
 	})

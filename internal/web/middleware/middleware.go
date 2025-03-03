@@ -16,19 +16,14 @@ func NewBucketMiddleware() domain.Middleware {
 
 func (b *bucketMiddleware) APIGuardMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		// get the user_id from the context
-		user_id, ok := c.Get("user_id")
-		if !ok {
-			c.AbortWithStatusJSON(401, response.WrapError("unauthorised", fmt.Errorf("user_id not found")))
+		// Read user_id from header
+		userID := c.GetHeader("buckt-User-ID")
+		if userID == "" {
+			c.AbortWithStatusJSON(401, response.WrapError("unauthorised", fmt.Errorf("user_id not found in headers")))
 			return
 		}
 
-		// convert the user_id to string
-		userID, ok := user_id.(string)
-		if !ok {
-			c.AbortWithStatusJSON(401, response.WrapError("unathorised", fmt.Errorf("failed to convert user_id to string")))
-		}
-
+		// Set in Gin context for further use
 		c.Set("owner_id", userID)
 
 		c.Next()
