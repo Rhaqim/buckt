@@ -65,26 +65,23 @@ func (r *Router) registerBaseRoutes() {
 
 // RegisterAPIRoutes sets up API endpoints
 func (r *Router) registerAPIRoutes() {
-	/* API Routes */
-	api := r.Group("/api")
-
-	api.Use(r.APIGuardMiddleware())
+	r.Use(r.APIGuardMiddleware())
 	{
 		{
-			api.POST("/upload", r.APIService.UploadFile)
-			api.GET("/download", r.APIService.DownloadFile)
-			api.DELETE("/delete", r.APIService.DeleteFile)
+			r.POST("/upload", r.APIService.UploadFile)
+			r.GET("/download/:file_id", r.APIService.DownloadFile)
+			r.DELETE("/delete/:file_id", r.APIService.DeleteFile)
 		}
 
 		{
-			api.POST("/new_folder", r.APIService.CreateFolder)
-			api.GET("/folder_content", r.APIService.GetFolderContent)
-			api.GET("/folder_folders", r.APIService.GetSubFolders)
-			api.GET("/folder_files", r.APIService.GetFilesInFolder)
-			api.GET("/folder_descendants", r.APIService.GetDescendants)
-			api.PUT("/rename_folder", r.APIService.RenameFolder)
-			api.PUT("/move_folder", r.APIService.MoveFolder)
-			api.DELETE("/delete_folder", r.APIService.DeleteFolder)
+			r.POST("/new_folder", r.APIService.CreateFolder)
+			r.GET("/folder_content/:folder_id", r.APIService.GetFolderContent)
+			// r.GET("/folder_folders", r.APIService.GetSubFolders)
+			// r.GET("/folder_files", r.APIService.GetFilesInFolder)
+			// r.GET("/folder_descendants", r.APIService.GetDescendants)
+			r.PUT("/rename_folder", r.APIService.RenameFolder)
+			r.PUT("/move_folder", r.APIService.MoveFolder)
+			r.DELETE("/delete_folder", r.APIService.DeleteFolder)
 		}
 	}
 }
@@ -92,19 +89,21 @@ func (r *Router) registerAPIRoutes() {
 // RegisterWebRoutes sets up the web interface routes
 func (r *Router) registerWebRoutes() {
 	/* Web Routes */
-	r.Use(r.WebGuardMiddleware())
+	web := r.Group("/web")
+
+	web.Use(r.WebGuardMiddleware())
 	{
 		r.GET("/", r.WebService.ViewFolder)
-		r.GET("/folder/:folder_id", r.WebService.ViewFolder)
-		r.POST("/new-folder", r.WebService.NewFolder)
-		r.PUT("/rename-folder", r.WebService.RenameFolder)
-		r.PUT("/move-folder", r.WebService.MoveFolder)
-		r.DELETE("/folder/:folder_id", r.WebService.DeleteFolder)
+		web.GET("/folder/:folder_id", r.WebService.ViewFolder)
+		web.POST("/new-folder", r.WebService.NewFolder)
+		web.PUT("/rename-folder", r.WebService.RenameFolder)
+		web.PUT("/move-folder", r.WebService.MoveFolder)
+		web.DELETE("/folder/:folder_id", r.WebService.DeleteFolder)
 
-		r.POST("/upload", r.WebService.UploadFile)
-		r.GET("/file/:file_id", r.WebService.DownloadFile)
-		r.PUT("/file/:file_id", r.WebService.MoveFile)
-		r.DELETE("/file/:file_id", r.WebService.DeleteFile)
+		web.POST("/upload", r.WebService.UploadFile)
+		web.GET("/file/:file_id", r.WebService.DownloadFile)
+		web.PUT("/file/:file_id", r.WebService.MoveFile)
+		web.DELETE("/file/:file_id", r.WebService.DeleteFile)
 	}
 }
 

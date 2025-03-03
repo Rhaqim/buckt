@@ -15,7 +15,7 @@ func main() {
 		Log: buckt.Log{
 			LogTerminal: false,
 			LoGfILE:     "buckt.log",
-			Debug:       false,
+			Debug:       true,
 		},
 		MediaDir:       "media",
 		StandaloneMode: false,

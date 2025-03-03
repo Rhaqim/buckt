@@ -4,7 +4,7 @@ GET http://localhost:8080/serve/00000000-0000-0000-0000-000000000000 HTTP/1.1
 
 ### Upload file
 
-POST http://localhost:8080/buckt/api/upload HTTP/1.1
+POST http://localhost:8080/buckt/upload HTTP/1.1
 Content-Type: multipart/form-data; boundary=----MyBoundary
 
 ------MyBoundary
@@ -20,39 +20,21 @@ Content-Type: image/jpeg
 
 ### Download file
 
-GET http://localhost:8080/buckt/api/download HTTP/1.1
-------MyBoundary--
-
-Content-Disposition: form-data; file_id="00000000-0000-0000-0000-000000000000"
-
-------MyBoundary--
+GET http://localhost:8080/buckt/download/00000000-0000-0000-0000-000000000000 HTTP/1.1
 
 ### Delete file
 
-DELETE http://localhost:8080/buckt/api/delete HTTP/1.1
-------MyBoundary--
-
-Content-Disposition: form-data; file_id="00000000-0000-0000-0000-000000000000"
-
-------MyBoundary--
+DELETE http://localhost:8080/buckt/delete/00000000-0000-0000-0000-000000000000 HTTP/1.1
 
 ### Create a new folder
 
-POST http://localhost:8080/buckt/api/new_folder HTTP/1.1
-------MyBoundary--
-
-Content-Disposition: form-data; parent_id="00000000-0000-0000-0000-000000000000"
-Content-Disposition: form-data; folder_name="New Folder"
-Content-Disposition: form-data; description="This is a new folder"
-
-------MyBoundary--
+POST http://localhost:8080/buckt/new_folder HTTP/1.1
+{
+    "parent_id": "00000000-0000-0000-0000-000000000000",
+    "folder_name": "New Folder",
+    "description": "This is a new folder"
+}
 
 ### Folder Contents
 
-GET http://localhost:8080/buckt/api/folder_content HTTP/1.1
-------MyBoundary--
-
-Content-Disposition: form-data; folder_id="00000000-0000-0000-0000-000000000000"
-
-------MyBoundary--
-
+GET http://localhost:8080/buckt/folder_content/00000000-0000-0000-0000-000000000000 HTTP/1.1

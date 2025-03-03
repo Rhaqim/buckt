@@ -24,24 +24,21 @@ func NewAPIService(fs domain.FolderService, f domain.FileService) domain.APIServ
 // CreateFolder implements domain.APIService.
 // Subtle: this method shadows the method (FolderService).CreateFolder of APIService.FolderService.
 func (a *APIService) CreateFolder(c *gin.Context) {
-	// get the user_id from the context
 	user_id := c.GetString("owner_id")
 
-	// get the parent_id from the request
-	parentID := c.PostForm("parent_id")
+	var req struct {
+		ParentID    string `json:"parent_id"`
+		FolderName  string `json:"folder_name"`
+		Description string `json:"description"`
+	}
 
-	// get the folder name from the request
-	folderName := c.PostForm("folder_name")
-	if folderName == "" {
-		c.AbortWithStatusJSON(400, response.Error("folder_name is required", ""))
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.AbortWithStatusJSON(400, response.Error("invalid request", err.Error()))
 		return
 	}
 
-	// get the description from the request
-	description := c.PostForm("description")
-
 	// create the folder
-	if err := a.FolderService.CreateFolder(user_id, parentID, folderName, description); err != nil {
+	if err := a.FolderService.CreateFolder(user_id, req.ParentID, req.FolderName, req.Description); err != nil {
 		c.AbortWithStatusJSON(500, response.WrapError("failed to create folder", err))
 		return
 	}
@@ -54,7 +51,11 @@ func (a *APIService) GetFolderContent(c *gin.Context) {
 	user_id := c.GetString("owner_id")
 
 	// get the folder_id from the request
-	folderID := c.PostForm("folder_id")
+	folderID := c.Param("folder_id")
+	if folderID == "" {
+		c.AbortWithStatusJSON(400, response.Error("folder_id is required", ""))
+		return
+	}
 
 	// get the folder content
 	folderContent, err := a.FolderService.GetFolder(user_id, folderID)
@@ -69,7 +70,11 @@ func (a *APIService) GetFolderContent(c *gin.Context) {
 // GetFilesInFolder implements domain.APIService.
 func (a *APIService) GetFilesInFolder(c *gin.Context) {
 	// get the parent_id from the request
-	parentID := c.PostForm("parent_id")
+	parentID := c.Param("parent_id")
+	if parentID == "" {
+		c.AbortWithStatusJSON(400, response.Error("parent_id is required", ""))
+		return
+	}
 
 	// get the files in the folder
 	files, err := a.FileService.GetFiles(parentID)
@@ -121,6 +126,10 @@ func (a *APIService) UploadFile(c *gin.Context) {
 
 	// get the parent_id from the request
 	parentID := c.PostForm("parent_id")
+	if parentID == "" {
+		c.AbortWithStatusJSON(400, response.Error("parent_id is required", ""))
+		return
+	}
 
 	// Read file from request
 	fileName, fileByte, err := utils.ProcessFile(file)
@@ -143,7 +152,11 @@ func (a *APIService) UploadFile(c *gin.Context) {
 // DownloadFile implements domain.APIService.
 func (a *APIService) DownloadFile(c *gin.Context) {
 	// get the file_id from the request
-	fileID := c.PostForm("file_id")
+	fileID := c.Param("file_id")
+	if fileID == "" {
+		c.AbortWithStatusJSON(400, response.Error("file_id is required", ""))
+		return
+	}
 
 	file, err := a.FileService.GetFile(fileID)
 	if err != nil {
@@ -178,7 +191,7 @@ func (a *APIService) ServeFile(c *gin.Context) {
 // Subtle: this method shadows the method (FileService).DeleteFile of APIService.FileService.
 func (a *APIService) DeleteFile(c *gin.Context) {
 	// get the file_id from the request
-	fileID := c.PostForm("file_id")
+	fileID := c.Param("file_id")
 	if fileID == "" {
 		c.AbortWithStatusJSON(400, response.Error("file_id is required", ""))
 		return

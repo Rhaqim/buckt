@@ -22,7 +22,7 @@
 			muted
 			playsinline
 		>
-			<source src="/file/preview/{{ .ID }}" type="video/mp4" />
+			<source src="/web/file/preview/{{ .ID }}" type="video/mp4" />
 		</video>
 		{{ else }}
 		<div class="w-full h-48 bg-gray-200 flex items-center justify-center">
@@ -35,10 +35,10 @@
 	<p class="text-sm text-gray-500">Size: {{ .Size }} KB</p>
 	<p class="text-sm text-gray-500">Created: {{ .CreatedAt }}</p>
 	<div class="mt-2 flex justify-between">
-		<a href="/file/{{ .ID }}" class="text-blue-500">Download</a>
+		<a href="/web/file/{{ .ID }}" class="text-blue-500">Download</a>
 		<button
 			class="text-red-500"
-			hx-delete="/file/{{ .ID }}"
+			hx-delete="/web/file/{{ .ID }}"
 			hx-target="#file-{{ .ID }}"
 			hx-swap="outerHTML"
 		>

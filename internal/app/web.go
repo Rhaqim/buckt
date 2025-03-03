@@ -70,7 +70,7 @@ func (w *WebService) NewFolder(c *gin.Context) {
 	}
 
 	// reload the page
-	c.Redirect(302, "/folder/"+parentID)
+	c.Redirect(302, "/web/folder/"+parentID)
 }
 
 // RenameFolder implements domain.WebService.
@@ -127,7 +127,7 @@ func (w *WebService) UploadFile(c *gin.Context) {
 	}
 
 	// reload the page
-	c.Redirect(302, "/folder/"+folderID)
+	c.Redirect(302, "/web/folder/"+folderID)
 
 	// for _, file := range files {
 	// 	// Save each file (this example just prints)
