@@ -1,6 +1,7 @@
 package service
 
 import (
+	"encoding/json"
 	"path/filepath"
 
 	"github.com/Rhaqim/buckt/internal/constant"
@@ -78,10 +79,29 @@ func (f *FolderService) GetFolder(user_id, folder_id string) (*model.FolderModel
 		return nil, f.WrapError("failed to parse uuid", err)
 	}
 
-	folder, err := f.FolderRepository.GetFolder(id)
+	// Cache key format
+	cacheKey := "folder:" + folder_id
+
+	// Try retrieving from cache
+	if f.CacheManager != nil {
+		cached, err := f.CacheManager.Get(cacheKey)
+		// Check if cached data is present and valid
+		if err == nil && cached != nil {
+			cachedStr, ok := cached.(string)
+			if ok {
+				var cachedFolder model.FolderModel
+				if jsonErr := json.Unmarshal([]byte(cachedStr), &cachedFolder); jsonErr == nil {
+					return &cachedFolder, nil
+				}
+			}
+		}
+	}
+
+	// If not found in cache, fetch from database
+	folderPtr, err := f.FolderRepository.GetFolder(id)
 	if err != nil {
 		if err.Error() == "record not found" {
-			folder, err = f.FolderRepository.GetRootFolder(user_id)
+			folderPtr, err = f.FolderRepository.GetRootFolder(user_id)
 			if err != nil {
 				return nil, err
 			}
@@ -90,7 +110,14 @@ func (f *FolderService) GetFolder(user_id, folder_id string) (*model.FolderModel
 		}
 	}
 
-	return folder, nil
+	// Store in cache before returning
+	if f.CacheManager != nil {
+		if jsonBytes, jsonErr := json.Marshal(folderPtr); jsonErr == nil {
+			_ = f.CacheManager.Set(cacheKey, string(jsonBytes)) // Ignore cache error
+		}
+	}
+
+	return folderPtr, nil
 }
 
 // GetRootFolder implements domain.FolderService.

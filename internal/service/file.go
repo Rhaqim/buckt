@@ -174,7 +174,7 @@ func (f *FileService) GetFiles(parent_id string) ([]model.FileModel, error) {
 	// Check cache first
 	if f.CacheManager != nil {
 		cached, err := f.CacheManager.Get(cacheKey)
-		if err == nil {
+		if err == nil || cached != nil {
 			var cachedFiles []*model.FileModel
 			if jsonErr := json.Unmarshal([]byte(cached.(string)), &cachedFiles); jsonErr == nil {
 				files = cachedFiles

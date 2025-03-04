@@ -1,6 +1,7 @@
 package service
 
 import (
+	"encoding/json"
 	"testing"
 
 	"github.com/Rhaqim/buckt/internal/model"
@@ -77,12 +78,24 @@ func TestGetFolder(t *testing.T) {
 	folderID := uuid.MustParse("550e8400-e29b-41d4-a716-446655440000")
 	mockFolder := &model.FolderModel{ID: folderID, Name: "folder"}
 
+	// Marshal mockFolder to JSON string
+	jsonBytes, _ := json.Marshal(mockFolder)
+	jsonStr := string(jsonBytes)
+
+	// Mock cache get (simulate cache miss)
+	mockCache.On("Get", "folder:"+folderID.String()).Return("", nil)
+
+	// Mock repo get
 	mockRepo.On("GetFolder", folderID).Return(mockFolder, nil)
+
+	// Mock cache set with correct JSON string
+	mockCache.On("Set", "folder:"+folderID.String(), jsonStr).Return(nil)
 
 	folder, err := service.GetFolder("user1", folderID.String())
 	assert.NoError(t, err)
 	assert.Equal(t, mockFolder, folder)
 	mockRepo.AssertExpectations(t)
+	mockCache.AssertExpectations(t)
 }
 
 func TestGetFolders(t *testing.T) {
