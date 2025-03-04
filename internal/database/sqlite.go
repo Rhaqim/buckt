@@ -45,6 +45,7 @@ func NewDB(instance *sql.DB, log *logger.BucktLogger, debug bool) (*DB, error) {
 
 	// Create a new GORM database connection
 	if instance != nil {
+		log.Info("🚀 Connecting to provided Postgres database...")
 		db, err = gorm.Open(postgres.New(postgres.Config{
 			DriverName: "postgres",
 			Conn:       instance,

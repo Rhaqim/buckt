@@ -41,9 +41,12 @@ func New(bucktOpts BucktConfig) (*Buckt, error) {
 	}
 
 	// Cache
-	var cacheManager domain.CacheManager = cache.NewNoOpCache()
+	var cacheManager domain.CacheManager
 	if bucktOpts.Cache != nil {
+		bucktLog.Info("🚀 Using provided cache")
 		cacheManager = bucktOpts.Cache
+	} else {
+		cacheManager = cache.NewNoOpCache()
 	}
 
 	// Load templates

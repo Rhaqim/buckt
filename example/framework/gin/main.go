@@ -1,6 +1,8 @@
 package main
 
 import (
+	"sync"
+
 	_ "github.com/lib/pq"
 
 	"database/sql"
@@ -17,6 +19,7 @@ func main() {
 	var err error
 	var db *sql.DB
 
+	// Postgres database
 	conn_string := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=disable",
 		"localhost", 5432, "postgres", "password", "postgres")
 
@@ -25,9 +28,13 @@ func main() {
 		log.Fatalf("Failed to connect to the database: %v", err)
 	}
 
+	// File cache
+	cache := NewCache()
+
 	// Initialize Buckt
 	opts := buckt.BucktConfig{
-		DB: db, // Pass the database connection
+		DB:    db, // Pass the database connection
+		Cache: cache,
 		Log: buckt.Log{
 			LogTerminal: false,
 			LoGfILE:     "logs",
@@ -84,4 +91,50 @@ func main() {
 
 	// Start the server
 	r.Run(":8080")
+}
+
+type Cache struct {
+	// Cache
+	mu    sync.RWMutex
+	store map[string]any
+}
+
+func NewCache() *Cache {
+	return &Cache{
+		store: make(map[string]any),
+	}
+}
+
+func (c *Cache) Get(key string) (any, error) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	fmt.Println("Cache get", key)
+
+	if val, ok := c.store[key]; ok {
+
+		fmt.Println("Cache hit", key)
+
+		return val, nil
+	}
+
+	return nil, nil
+}
+
+func (c *Cache) Set(key string, value any) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	fmt.Println("Cache set", key)
+
+	c.store[key] = value
+	return nil
+}
+
+func (c *Cache) Delete(key string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	delete(c.store, key)
+	return nil
 }
