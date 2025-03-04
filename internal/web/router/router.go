@@ -60,13 +60,17 @@ func NewRouter(
 
 // RegisterAllRoutes registers all routes for the router.
 func (r *Router) registerBaseRoutes() {
+	r.GET("/", func(c *gin.Context) {
+		// redirect to /web
+		c.Redirect(http.StatusMovedPermanently, "/web")
+	})
 	r.GET("/serve/:file_id", r.APIService.ServeFile)
 }
 
 // RegisterAPIRoutes sets up API endpoints
 func (r *Router) registerAPIRoutes() {
-	r.Use(r.APIGuardMiddleware())
 	{
+		r.Use(r.APIGuardMiddleware())
 		{
 			r.POST("/upload", r.APIService.UploadFile)
 			r.GET("/download/:file_id", r.APIService.DownloadFile)
@@ -90,20 +94,21 @@ func (r *Router) registerAPIRoutes() {
 func (r *Router) registerWebRoutes() {
 	/* Web Routes */
 	web := r.Group("/web")
-
-	web.Use(r.WebGuardMiddleware())
 	{
-		r.GET("/", r.WebService.ViewFolder)
-		web.GET("/folder/:folder_id", r.WebService.ViewFolder)
-		web.POST("/new-folder", r.WebService.NewFolder)
-		web.PUT("/rename-folder", r.WebService.RenameFolder)
-		web.PUT("/move-folder", r.WebService.MoveFolder)
-		web.DELETE("/folder/:folder_id", r.WebService.DeleteFolder)
+		web.Use(r.WebGuardMiddleware())
+		{
+			web.GET("/", r.WebService.ViewFolder)
+			web.GET("/folder/:folder_id", r.WebService.ViewFolder)
+			web.POST("/new-folder", r.WebService.NewFolder)
+			web.PUT("/rename-folder", r.WebService.RenameFolder)
+			web.PUT("/move-folder", r.WebService.MoveFolder)
+			web.DELETE("/folder/:folder_id", r.WebService.DeleteFolder)
 
-		web.POST("/upload", r.WebService.UploadFile)
-		web.GET("/file/:file_id", r.WebService.DownloadFile)
-		web.PUT("/file/:file_id", r.WebService.MoveFile)
-		web.DELETE("/file/:file_id", r.WebService.DeleteFile)
+			web.POST("/upload", r.WebService.UploadFile)
+			web.GET("/file/:file_id", r.WebService.DownloadFile)
+			web.PUT("/file/:file_id", r.WebService.MoveFile)
+			web.DELETE("/file/:file_id", r.WebService.DeleteFile)
+		}
 	}
 }
 
@@ -112,13 +117,13 @@ func (r *Router) registerAllRoutes(StandaloneMode bool) {
 	// Register core routes
 	r.registerBaseRoutes()
 
-	// Register API routes
-	r.registerAPIRoutes()
-
 	// Register web routes **only if in standalone mode**
 	if StandaloneMode {
 		r.registerWebRoutes()
 	}
+
+	// Register API routes
+	r.registerAPIRoutes()
 }
 
 // ServeHTTP makes Router compatible with http.Handler
