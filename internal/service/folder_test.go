@@ -48,20 +48,31 @@ func (m *MockFolderRepository) RenameFolder(folderID uuid.UUID, newName string) 
 
 func TestCreateFolder(t *testing.T) {
 	mockRepo := new(MockFolderRepository)
+	mockCache := new(MockCacheManager)
 	log := logger.NewLogger("test", true)
-	service := NewFolderService(log, mockRepo)
+	service := NewFolderService(log, mockCache, mockRepo)
 
+	// Define the expected folder return for GetFolder
+	folderID := uuid.MustParse("550e8400-e29b-41d4-a716-446655440000")
+	mockFolder := &model.FolderModel{ID: folderID, Name: "folder"}
+
+	// Mock GetFolder to return a valid folder
+	mockRepo.On("GetFolder", folderID).Return(mockFolder, nil)
+
+	// Mock Create method
 	mockRepo.On("Create", mock.Anything).Return(nil)
 
-	err := service.CreateFolder("user1", "550e8400-e29b-41d4-a716-446655440000", "folder", "description")
+	err := service.CreateFolder("user1", folderID.String(), "folder", "description")
 	assert.NoError(t, err)
+
 	mockRepo.AssertExpectations(t)
 }
 
 func TestGetFolder(t *testing.T) {
 	mockRepo := new(MockFolderRepository)
+	mockCache := new(MockCacheManager)
 	log := logger.NewLogger("test", true)
-	service := NewFolderService(log, mockRepo)
+	service := NewFolderService(log, mockCache, mockRepo)
 
 	folderID := uuid.MustParse("550e8400-e29b-41d4-a716-446655440000")
 	mockFolder := &model.FolderModel{ID: folderID, Name: "folder"}
@@ -76,8 +87,9 @@ func TestGetFolder(t *testing.T) {
 
 func TestGetFolders(t *testing.T) {
 	mockRepo := new(MockFolderRepository)
+	mockCache := new(MockCacheManager)
 	log := logger.NewLogger("test", true)
-	service := NewFolderService(log, mockRepo)
+	service := NewFolderService(log, mockCache, mockRepo)
 
 	parentID := uuid.MustParse("550e8400-e29b-41d4-a716-446655440000")
 	mockFolders := []model.FolderModel{
@@ -95,8 +107,9 @@ func TestGetFolders(t *testing.T) {
 
 func TestMoveFolder(t *testing.T) {
 	mockRepo := new(MockFolderRepository)
+	mockCache := new(MockCacheManager)
 	log := logger.NewLogger("test", true)
-	service := NewFolderService(log, mockRepo)
+	service := NewFolderService(log, mockCache, mockRepo)
 
 	folderID := uuid.MustParse("550e8400-e29b-41d4-a716-446655440000")
 	newParentID := uuid.MustParse("550e8400-e29b-41d4-a716-446655440001")
@@ -110,8 +123,9 @@ func TestMoveFolder(t *testing.T) {
 
 func TestRenameFolder(t *testing.T) {
 	mockRepo := new(MockFolderRepository)
+	mockCache := new(MockCacheManager)
 	log := logger.NewLogger("test", true)
-	service := NewFolderService(log, mockRepo)
+	service := NewFolderService(log, mockCache, mockRepo)
 
 	folderID := uuid.MustParse("550e8400-e29b-41d4-a716-446655440000")
 	newName := "new_folder_name"

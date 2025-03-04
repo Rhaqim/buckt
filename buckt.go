@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/Rhaqim/buckt/internal/app"
+	"github.com/Rhaqim/buckt/internal/cache"
 	"github.com/Rhaqim/buckt/internal/database"
 	"github.com/Rhaqim/buckt/internal/domain"
 	"github.com/Rhaqim/buckt/internal/repository"
@@ -23,7 +24,6 @@ type Buckt struct {
 }
 
 func New(bucktOpts BucktConfig) (*Buckt, error) {
-
 	buckt := &Buckt{}
 
 	bucktLog := logger.NewLogger(bucktOpts.Log.LoGfILE, bucktOpts.Log.LogTerminal, logger.WithLogger(bucktOpts.Log.Logger))
@@ -40,6 +40,12 @@ func New(bucktOpts BucktConfig) (*Buckt, error) {
 		return nil, err
 	}
 
+	// Cache
+	var cacheManager domain.CacheManager = cache.NewNoOpCache()
+	if bucktOpts.Cache != nil {
+		cacheManager = bucktOpts.Cache
+	}
+
 	// Load templates
 	tmpl, err := loadTemplates()
 	if err != nil {
@@ -51,9 +57,9 @@ func New(bucktOpts BucktConfig) (*Buckt, error) {
 	var fileRepository domain.FileRepository = repository.NewFileRepository(db, bucktLog)
 
 	// initlize the services
-	var folderService domain.FolderService = service.NewFolderService(bucktLog, folderRepository)
+	var folderService domain.FolderService = service.NewFolderService(bucktLog, cacheManager, folderRepository)
 	var fileSystemService domain.FileSystemService = service.NewFileSystemService(bucktLog, bucktOpts.MediaDir)
-	var fileService domain.FileService = service.NewFileService(bucktLog, bucktOpts.FlatNameSpaces, fileRepository, folderService, fileSystemService)
+	var fileService domain.FileService = service.NewFileService(bucktLog, cacheManager, bucktOpts.FlatNameSpaces, fileRepository, folderService, fileSystemService)
 
 	// Initialize the app services
 	var apiService domain.APIService = app.NewAPIService(folderService, fileService)

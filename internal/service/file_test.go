@@ -10,6 +10,25 @@ import (
 	"github.com/stretchr/testify/mock"
 )
 
+type MockCacheManager struct {
+	mock.Mock
+}
+
+func (m *MockCacheManager) Set(key string, value any) error {
+	args := m.Called(key, value)
+	return args.Error(0)
+}
+
+func (m *MockCacheManager) Get(key string) (any, error) {
+	args := m.Called(key)
+	return args.Get(0), args.Error(1)
+}
+
+func (m *MockCacheManager) Delete(key string) error {
+	args := m.Called(key)
+	return args.Error(0)
+}
+
 type MockFileRepository struct {
 	mock.Mock
 }
@@ -117,18 +136,25 @@ func (m *MockFileSystemService) FSDeleteFile(path string) error {
 
 func TestCreateFile(t *testing.T) {
 	mockLogger := &logger.BucktLogger{}
+	mockCache := new(MockCacheManager)
 	mockFileRepo := new(MockFileRepository)
 	mockFolderService := new(MockFolderService)
 	mockFileSystemService := new(MockFileSystemService)
 
-	fileService := NewFileService(mockLogger, false, mockFileRepo, mockFolderService, mockFileSystemService)
+	fileService := NewFileService(mockLogger, mockCache, false, mockFileRepo, mockFolderService, mockFileSystemService)
 
 	parentFolder := &model.FolderModel{
 		ID:   uuid.New(),
 		Path: "/parent/folder",
 	}
-	mockFolderService.On("GetFolder", "parent_id").Return(parentFolder, nil)
+
+	// Mock GetFolder to match the actual method call
+	mockFolderService.On("GetFolder", "user1", "parent_id").Return(parentFolder, nil)
+
+	// Mock FSWriteFile
 	mockFileSystemService.On("FSWriteFile", "/parent/folder/file.txt", []byte("file data")).Return(nil)
+
+	// Mock Create
 	mockFileRepo.On("Create", mock.Anything).Return(nil)
 
 	_, err := fileService.CreateFile("user_123", "parent_id", "file.txt", "text/plain", []byte("file data"))
@@ -137,18 +163,27 @@ func TestCreateFile(t *testing.T) {
 
 func TestGetFile(t *testing.T) {
 	mockLogger := &logger.BucktLogger{}
+	mockCache := new(MockCacheManager)
 	mockFileRepo := new(MockFileRepository)
 	mockFolderService := new(MockFolderService)
 	mockFileSystemService := new(MockFileSystemService)
 
-	fileService := NewFileService(mockLogger, false, mockFileRepo, mockFolderService, mockFileSystemService)
+	fileService := NewFileService(mockLogger, mockCache, false, mockFileRepo, mockFolderService, mockFileSystemService)
 
 	fileID := uuid.New()
 	fileModel := &model.FileModel{
 		ID:   fileID,
 		Path: "/parent/folder/file.txt",
 	}
+
+	var jsonStr string
+
+	mockCache.On("Get", fileID.String()).Return(jsonStr, nil)
+
+	mockCache.On("Set", fileID.String(), mock.Anything).Return(nil)
+
 	mockFileRepo.On("GetFile", fileID).Return(fileModel, nil)
+
 	mockFileSystemService.On("FSGetFile", "/parent/folder/file.txt").Return([]byte("file data"), nil)
 
 	file, err := fileService.GetFile(fileID.String())
@@ -159,19 +194,29 @@ func TestGetFile(t *testing.T) {
 
 func TestGetFiles(t *testing.T) {
 	mockLogger := &logger.BucktLogger{}
+	mockCache := new(MockCacheManager)
 	mockFileRepo := new(MockFileRepository)
 	mockFolderService := new(MockFolderService)
 	mockFileSystemService := new(MockFileSystemService)
 
-	fileService := NewFileService(mockLogger, false, mockFileRepo, mockFolderService, mockFileSystemService)
+	fileService := NewFileService(mockLogger, mockCache, false, mockFileRepo, mockFolderService, mockFileSystemService)
 
 	parentID := uuid.New()
-	fileModels := []model.FileModel{
+	fileModels := []*model.FileModel{
 		{ID: uuid.New(), Path: "/parent/folder/file1.txt"},
 		{ID: uuid.New(), Path: "/parent/folder/file2.txt"},
 	}
+
+	var jsonStr string
+
+	mockCache.On("Get", "files:"+parentID.String()).Return(jsonStr, nil)
+
+	mockCache.On("Set", "files:"+parentID.String(), mock.Anything).Return(nil)
+
 	mockFileRepo.On("GetFiles", parentID).Return(fileModels, nil)
+
 	mockFileSystemService.On("FSGetFile", "/parent/folder/file1.txt").Return([]byte("file1 data"), nil)
+
 	mockFileSystemService.On("FSGetFile", "/parent/folder/file2.txt").Return([]byte("file2 data"), nil)
 
 	files, err := fileService.GetFiles(parentID.String())
@@ -183,11 +228,12 @@ func TestGetFiles(t *testing.T) {
 
 func TestUpdateFile(t *testing.T) {
 	mockLogger := &logger.BucktLogger{}
+	mockCache := new(MockCacheManager)
 	mockFileRepo := new(MockFileRepository)
 	mockFolderService := new(MockFolderService)
 	mockFileSystemService := new(MockFileSystemService)
 
-	fileService := NewFileService(mockLogger, false, mockFileRepo, mockFolderService, mockFileSystemService)
+	fileService := NewFileService(mockLogger, mockCache, false, mockFileRepo, mockFolderService, mockFileSystemService)
 
 	fileID := uuid.New()
 	parentID := uuid.New()
@@ -200,9 +246,13 @@ func TestUpdateFile(t *testing.T) {
 		ID:   fileModel.ParentID,
 		Path: "/parent/folder",
 	}
+
 	mockFileRepo.On("GetFile", fileID).Return(fileModel, nil)
-	mockFolderService.On("GetFolder", fileModel.ParentID.String()).Return(parentFolder, nil)
+
+	mockFolderService.On("GetFolder", "user1", parentID.String()).Return(parentFolder, nil)
+
 	mockFileSystemService.On("FSWriteFile", "/parent/folder/new_file.txt", []byte("new file data")).Return(nil)
+
 	mockFileRepo.On("Update", mock.Anything).Return(nil)
 
 	err := fileService.UpdateFile(fileID.String(), "new_file.txt", []byte("new file data"))
@@ -211,11 +261,12 @@ func TestUpdateFile(t *testing.T) {
 
 func TestDeleteFile(t *testing.T) {
 	mockLogger := &logger.BucktLogger{}
+	mockCache := new(MockCacheManager)
 	mockFileRepo := new(MockFileRepository)
 	mockFolderService := new(MockFolderService)
 	mockFileSystemService := new(MockFileSystemService)
 
-	fileService := NewFileService(mockLogger, false, mockFileRepo, mockFolderService, mockFileSystemService)
+	fileService := NewFileService(mockLogger, mockCache, false, mockFileRepo, mockFolderService, mockFileSystemService)
 
 	fileID := uuid.New()
 	fileModel := &model.FileModel{
@@ -223,7 +274,9 @@ func TestDeleteFile(t *testing.T) {
 		Path: "/parent/folder/file.txt",
 	}
 	mockFileRepo.On("GetFile", fileID).Return(fileModel, nil)
+
 	mockFileSystemService.On("FSDeleteFile", "/parent/folder/file.txt").Return(nil)
+
 	mockFileRepo.On("DeleteFile", fileID).Return(nil)
 
 	_, err := fileService.DeleteFile(fileID.String())

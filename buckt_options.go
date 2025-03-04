@@ -3,6 +3,8 @@ package buckt
 import (
 	"database/sql"
 	"log"
+
+	"github.com/Rhaqim/buckt/internal/domain"
 )
 
 type Log struct {
@@ -23,6 +25,7 @@ type Log struct {
 //	StandaloneMode: Flag indicating whether the application is running in standalone mode.
 type BucktConfig struct {
 	DB             *sql.DB
+	Cache          domain.CacheManager
 	Log            Log
 	MediaDir       string
 	FlatNameSpaces bool

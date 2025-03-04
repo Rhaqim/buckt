@@ -2,6 +2,7 @@ package service
 
 import (
 	"crypto/sha256"
+	"encoding/json"
 	"fmt"
 	"path/filepath"
 
@@ -14,6 +15,8 @@ import (
 type FileService struct {
 	*logger.BucktLogger
 
+	domain.CacheManager
+
 	flatNameSpaces bool
 
 	domain.FileRepository
@@ -25,6 +28,8 @@ type FileService struct {
 func NewFileService(
 	bucktLogger *logger.BucktLogger,
 
+	cacheManager domain.CacheManager,
+
 	flatNameSpaces bool,
 
 	fileRepository domain.FileRepository,
@@ -34,6 +39,8 @@ func NewFileService(
 ) domain.FileService {
 	return &FileService{
 		BucktLogger: bucktLogger,
+
+		CacheManager: cacheManager,
 
 		flatNameSpaces: flatNameSpaces,
 
@@ -112,18 +119,40 @@ func (f *FileService) GetFile(file_id string) (*model.FileModel, error) {
 		return nil, f.WrapError("failed to parse uuid", err)
 	}
 
-	file, err := f.FileRepository.GetFile(fileID)
-	if err != nil {
-		return nil, f.WrapError("failed to get file", err)
+	var file *model.FileModel
+
+	// Check cache first
+	if f.CacheManager != nil {
+		cached, err := f.CacheManager.Get(file_id)
+		if err == nil {
+			var cachedFile model.FileModel
+			if jsonErr := json.Unmarshal([]byte(cached.(string)), &cachedFile); jsonErr == nil {
+				file = &cachedFile
+			}
+		}
 	}
 
-	// Get the file data
+	// If not found in cache, fetch from repository
+	if file == nil {
+		file, err = f.FileRepository.GetFile(fileID)
+		if err != nil {
+			return nil, f.WrapError("failed to get file metadata", err)
+		}
+
+		// Store metadata in cache (without file data)
+		if f.CacheManager != nil {
+			jsonData, _ := json.Marshal(file) // Ignore errors for now
+			_ = f.CacheManager.Set(file_id, string(jsonData))
+		}
+	}
+
+	// Fetch actual file data separately
 	fileData, err := f.FileSystemService.FSGetFile(file.Path)
 	if err != nil {
-		return nil, err
+		return nil, f.WrapError("failed to get file data", err)
 	}
 
-	// Create the file model
+	// Attach file data
 	file.Data = fileData
 
 	return file, nil
@@ -137,20 +166,43 @@ func (f *FileService) GetFiles(parent_id string) ([]model.FileModel, error) {
 		return nil, f.WrapError("failed to parse uuid", err)
 	}
 
-	files, err := f.FileRepository.GetFiles(parentID)
-	if err != nil {
-		return nil, f.WrapError("failed to get files", err)
+	var files []*model.FileModel
+
+	// Generate cache key
+	cacheKey := fmt.Sprintf("files:%s", parent_id)
+
+	// Check cache first
+	if f.CacheManager != nil {
+		cached, err := f.CacheManager.Get(cacheKey)
+		if err == nil {
+			var cachedFiles []*model.FileModel
+			if jsonErr := json.Unmarshal([]byte(cached.(string)), &cachedFiles); jsonErr == nil {
+				files = cachedFiles
+			}
+		}
 	}
 
-	// Create the file models
-	var fileModels []model.FileModel
-	for _, file := range files {
-		// Get the file data
-		fileData, err := f.FileSystemService.FSGetFile(file.Path)
+	// If not found in cache, fetch from repository
+	if len(files) == 0 {
+		files, err = f.FileRepository.GetFiles(parentID)
 		if err != nil {
-			return nil, err
+			return nil, f.WrapError("failed to get files", err)
 		}
 
+		// Store metadata in cache (without file data)
+		if f.CacheManager != nil {
+			jsonData, _ := json.Marshal(files) // Ignore errors for now
+			_ = f.CacheManager.Set(cacheKey, string(jsonData))
+		}
+	}
+
+	// Fetch actual file data separately
+	var fileModels []model.FileModel
+	for _, file := range files {
+		fileData, err := f.FileSystemService.FSGetFile(file.Path)
+		if err != nil {
+			return nil, f.WrapError("failed to get file data", err)
+		}
 		file.Data = fileData
 		fileModels = append(fileModels, *file)
 	}

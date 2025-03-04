@@ -12,13 +12,17 @@ import (
 
 type FolderService struct {
 	*logger.BucktLogger
-
+	domain.CacheManager
 	domain.FolderRepository
 }
 
-func NewFolderService(bucktLogger *logger.BucktLogger, folderRepository domain.FolderRepository) domain.FolderService {
+func NewFolderService(
+	bucktLogger *logger.BucktLogger,
+	cacheManager domain.CacheManager,
+	folderRepository domain.FolderRepository) domain.FolderService {
 	return &FolderService{
 		BucktLogger:      bucktLogger,
+		CacheManager:     cacheManager,
 		FolderRepository: folderRepository,
 	}
 }
