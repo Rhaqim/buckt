@@ -10,8 +10,8 @@ import (
 type FolderModel struct {
 	ID          uuid.UUID      `gorm:"type:uuid;primaryKey" json:"id"`                                 // Unique identifier for the file
 	UserID      string         `gorm:"not null" json:"user_id"`                                        // ID of the user who owns the bucket
-	ParentID    *uuid.UUID     `gorm:"type:uuid" json:"parent_id"`                                     // Foreign key to FolderModel
-	Name        string         `gorm:"not null;unique" json:"name"`                                    // Folder name
+	ParentID    *uuid.UUID     `gorm:"type:uuid;uniqueIndex:idx_parent_name" json:"parent_id"`         // Foreign key to FolderModel
+	Name        string         `gorm:"not null;uniqueIndex:idx_parent_name" json:"name"`               // Folder name
 	Description string         `gorm:"type:text" json:"description"`                                   // Optional description of the bucket
 	Path        string         `gorm:"not null;unique" json:"path"`                                    // File path
 	Folders     []FolderModel  `gorm:"foreignKey:ParentID;constraint:OnDelete:CASCADE" json:"folders"` // Establish one-to-many relationship with FolderModel
