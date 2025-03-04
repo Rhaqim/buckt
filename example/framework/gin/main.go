@@ -1,6 +1,10 @@
 package main
 
 import (
+	_ "github.com/lib/pq"
+
+	"database/sql"
+	"fmt"
 	"log"
 	"strings"
 
@@ -10,11 +14,23 @@ import (
 
 func main() {
 
+	var err error
+	var db *sql.DB
+
+	conn_string := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=disable",
+		"localhost", 5432, "postgres", "password", "postgres")
+
+	db, err = sql.Open("postgres", conn_string)
+	if err != nil {
+		log.Fatalf("Failed to connect to the database: %v", err)
+	}
+
 	// Initialize Buckt
 	opts := buckt.BucktConfig{
+		DB: db,
 		Log: buckt.Log{
 			LogTerminal: false,
-			LoGfILE:     "buckt.log",
+			LoGfILE:     "logs",
 			Debug:       true,
 		},
 		MediaDir:       "media",
