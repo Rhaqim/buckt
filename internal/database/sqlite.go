@@ -19,7 +19,7 @@ type DB struct {
 }
 
 // NewSQLite creates a new SQLite database connection.
-func NewSQLite(instance *sql.DB, log *logger.BucktLogger, debug bool) (*DB, error) {
+func NewDB(instance *sql.DB, log *logger.BucktLogger, debug bool) (*DB, error) {
 	var db *gorm.DB
 	var err error
 
@@ -46,9 +46,8 @@ func NewSQLite(instance *sql.DB, log *logger.BucktLogger, debug bool) (*DB, erro
 	// Create a new GORM database connection
 	if instance != nil {
 		db, err = gorm.Open(postgres.New(postgres.Config{
-			DriverName:           "postgres",
-			Conn:                 instance,
-			PreferSimpleProtocol: true,
+			DriverName: "postgres",
+			Conn:       instance,
 		}), gormConfig)
 	} else {
 		db, err = gorm.Open(sqlite.Open("db.sqlite"), gormConfig)

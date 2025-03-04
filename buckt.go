@@ -24,12 +24,12 @@ type Buckt struct {
 
 func New(bucktOpts BucktConfig) (*Buckt, error) {
 
-	engine := &Buckt{}
+	buckt := &Buckt{}
 
 	bucktLog := logger.NewLogger(bucktOpts.Log.LoGfILE, bucktOpts.Log.LogTerminal, logger.WithLogger(bucktOpts.Log.Logger))
 
 	// Initialize database
-	db, err := database.NewSQLite(bucktOpts.DB, bucktLog, bucktOpts.Log.Debug)
+	db, err := database.NewDB(bucktOpts.DB, bucktLog, bucktOpts.Log.Debug)
 	if err != nil {
 		return nil, err
 	}
@@ -69,12 +69,12 @@ func New(bucktOpts BucktConfig) (*Buckt, error) {
 		bucktOpts.StandaloneMode,
 		apiService, webService, middleware)
 
-	engine.DB = db
-	engine.router = router
-	engine.fileService = fileService
-	engine.folderService = folderService
+	buckt.DB = db
+	buckt.router = router
+	buckt.fileService = fileService
+	buckt.folderService = folderService
 
-	return engine, nil
+	return buckt, nil
 }
 
 // Default initializes Buckt with default settings
