@@ -69,7 +69,7 @@ func (l *BucktLogger) Info(message string) {
 }
 
 // Error logs an error message and returns an error type
-func (l *BucktLogger) Errorf(format string, args ...interface{}) {
+func (l *BucktLogger) Errorf(format string, args ...any) {
 
 	message := format
 	if len(args) > 0 {
@@ -83,7 +83,7 @@ func (l *BucktLogger) WrapError(message string, err error) error {
 	return err
 }
 
-func (l *BucktLogger) WrapErrorf(message string, err error, args ...interface{}) error {
+func (l *BucktLogger) WrapErrorf(message string, err error, args ...any) error {
 	l.Logger.Printf("ERROR: %s %v\n", message+" "+err.Error(), args)
 	return err
 }

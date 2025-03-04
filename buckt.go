@@ -116,7 +116,7 @@ func (b *Buckt) UploadFile(user_id string, parent_id string, file_name string, c
 }
 
 // GetFile implements Buckt.
-func (b *Buckt) GetFile(file_id string) (interface{}, error) {
+func (b *Buckt) GetFile(file_id string) (any, error) {
 	return b.fileService.GetFile(file_id)
 }
 
@@ -137,12 +137,12 @@ func (b *Buckt) NewFolder(user_id string, parent_id string, folder_name string, 
 }
 
 // GetFolder implements Buckt.
-func (b *Buckt) GetFolder(user_id string, folder_id string) (interface{}, error) {
+func (b *Buckt) GetFolder(user_id string, folder_id string) (any, error) {
 	return b.folderService.GetFolder(user_id, folder_id)
 }
 
 // GetFolders implements Buckt.
-func (b *Buckt) GetFolderContent(parent_id string) ([]interface{}, error) {
+func (b *Buckt) GetFolderContent(parent_id string) ([]any, error) {
 	folders, err := b.folderService.GetFolders(parent_id)
 	if err != nil {
 		return nil, err
@@ -153,7 +153,7 @@ func (b *Buckt) GetFolderContent(parent_id string) ([]interface{}, error) {
 		return nil, err
 	}
 
-	content := make([]interface{}, 0, len(folders)+len(files))
+	content := make([]any, 0, len(folders)+len(files))
 	for _, folder := range folders {
 		content = append(content, folder)
 	}
