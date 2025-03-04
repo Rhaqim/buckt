@@ -1,20 +1,24 @@
 package model
 
 import (
+	"time"
+
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
 
 type FileModel struct {
-	gorm.Model
-	ID          uuid.UUID `gorm:"type:uuid;primaryKey"` // Unique identifier for the file
-	Name        string    `gorm:"not null"`             // File name
-	Path        string    `gorm:"not null;unique"`      // File path
-	ContentType string    `gorm:"not null"`             // MIME type (e.g., image/png, application/pdf)
-	Size        int64     `gorm:"not null"`             // File size in bytes
-	ParentID    uuid.UUID `gorm:"type:uuid;not null"`   // Foreign key to FolderModel
-	Hash        string    `gorm:"not null;unique"`      // Hash of the file for integrity checks and uniqueness
-	Data        []byte    `gorm:"-"`                    // File data
+	ID          uuid.UUID      `gorm:"type:uuid;primaryKey" json:"id"`      // File ID
+	Name        string         `gorm:"not null" json:"name"`                // File name
+	Path        string         `gorm:"not null;unique" json:"path"`         // File path
+	ContentType string         `gorm:"not null" json:"content_type"`        // MIME type (e.g., image/png, application/pdf)
+	Size        int64          `gorm:"not null" json:"size"`                // File size in bytes
+	ParentID    uuid.UUID      `gorm:"type:uuid;not null" json:"parent_id"` // Foreign key to FolderModel
+	Hash        string         `gorm:"not null;unique" json:"hash"`         // Hash of the file for integrity checks and uniqueness
+	Data        []byte         `gorm:"-" json:"data"`                       // File data
+	CreatedAt   time.Time      `json:"created_at"`
+	UpdatedAt   time.Time      `json:"updated_at"`
+	DeletedAt   gorm.DeletedAt `gorm:"index" json:"deleted_at"`
 }
 
 // BeforeCreate hook for FileModel to add a prefixed UUID
