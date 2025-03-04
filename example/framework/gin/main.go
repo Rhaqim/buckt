@@ -27,7 +27,7 @@ func main() {
 
 	// Initialize Buckt
 	opts := buckt.BucktConfig{
-		DB: db,
+		DB: db, // Pass the database connection
 		Log: buckt.Log{
 			LogTerminal: false,
 			LoGfILE:     "logs",
