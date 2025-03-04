@@ -8,7 +8,7 @@ import (
 )
 
 func main() {
-	opts := buckt.BucktOptions{
+	opts := buckt.BucktConfig{
 		Log: buckt.Log{
 			LogTerminal: true,
 			LoGfILE:     "buckt.log",
@@ -16,7 +16,7 @@ func main() {
 		MediaDir: "media",
 	}
 
-	b, err := buckt.NewBuckt(opts)
+	b, err := buckt.New(opts)
 	if err != nil {
 		log.Fatalf("Failed to initialize Buckt: %v", err)
 	}

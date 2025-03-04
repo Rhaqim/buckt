@@ -14,52 +14,22 @@ import (
 	"github.com/Rhaqim/buckt/pkg/logger"
 )
 
-// Buckt is the interface for the Buckt service
-type Buckt interface {
-	// GetHandler returns the http.Handler for the Buckt service.
-	GetHandler() http.Handler
+type Buckt struct {
+	DB     *database.DB
+	router *router.Router
 
-	// StartServer starts the Buckt service on the specified port.
-	StartServer(port ...string) error
-
-	// Close closes the Buckt service.
-	Close()
-
-	// Buckt service methods
-	UploadFile(user_id string, parent_id string, file_name string, content_type string, file_data []byte) (string, error)
-	GetFile(file_id string) (interface{}, error)
-	MoveFile(file_id string, new_file_name string, new_file_data []byte) error
-	DeleteFile(file_id string) error
-	NewFolder(user_id string, parent_id string, folder_name string, description string) error
-	GetFolder(user_id string, folder_id string) (interface{}, error)
-	GetFolderContent(parent_id string) ([]interface{}, error)
-	MoveFolder(folder_id string, new_parent_id string) error
-	RenameFolder(folder_id string, new_name string) error
-	DeleteFolder(folder_id string) error
-}
-
-type buckt struct {
-	db            *database.DB
-	router        *router.Router
 	fileService   domain.FileService
 	folderService domain.FolderService
 }
 
-// NewBuckt initializes and returns a new Buckt instance.
-// It sets up the logger, database, templates, repositories, services, and router.
-//
-// Parameters:
-//   - opts: BucktOptions containing configuration options for the Buckt instance.
-//
-// Returns:
-//   - Buckt: The initialized Buckt instance.
-//   - error: An error if any step in the initialization process fails.
-func NewBuckt(opts BucktOptions) (Buckt, error) {
-	// Initialize logger
-	log := logger.NewLogger(opts.Log.LoGfILE, opts.Log.LogTerminal)
+func New(bucktOpts BucktConfig) (*Buckt, error) {
+
+	buckt := &Buckt{}
+
+	bucktLog := logger.NewLogger(bucktOpts.Log.LoGfILE, bucktOpts.Log.LogTerminal, logger.WithLogger(bucktOpts.Log.Logger))
 
 	// Initialize database
-	db, err := database.NewSQLite(log, opts.Log.Debug)
+	db, err := database.NewDB(bucktOpts.DB, bucktLog, bucktOpts.Log.Debug)
 	if err != nil {
 		return nil, err
 	}
@@ -77,13 +47,13 @@ func NewBuckt(opts BucktOptions) (Buckt, error) {
 	}
 
 	// Initialize the stores
-	var folderRepository domain.FolderRepository = repository.NewFolderRepository(db, log)
-	var fileRepository domain.FileRepository = repository.NewFileRepository(db, log)
+	var folderRepository domain.FolderRepository = repository.NewFolderRepository(db, bucktLog)
+	var fileRepository domain.FileRepository = repository.NewFileRepository(db, bucktLog)
 
 	// initlize the services
-	var folderService domain.FolderService = service.NewFolderService(log, folderRepository)
-	var fileSystemService domain.FileSystemService = service.NewFileSystemService(log, opts.MediaDir)
-	var fileService domain.FileService = service.NewFileService(log, opts.FlatNameSpaces, fileRepository, folderService, fileSystemService)
+	var folderService domain.FolderService = service.NewFolderService(bucktLog, folderRepository)
+	var fileSystemService domain.FileSystemService = service.NewFileSystemService(bucktLog, bucktOpts.MediaDir)
+	var fileService domain.FileService = service.NewFileService(bucktLog, bucktOpts.FlatNameSpaces, fileRepository, folderService, fileSystemService)
 
 	// Initialize the app services
 	var apiService domain.APIService = app.NewAPIService(folderService, fileService)
@@ -94,64 +64,76 @@ func NewBuckt(opts BucktOptions) (Buckt, error) {
 
 	// Run the router
 	router := router.NewRouter(
-		log, tmpl,
-		opts.Log.Debug,
-		opts.StandaloneMode,
+		bucktLog, tmpl,
+		bucktOpts.Log.Debug,
+		bucktOpts.StandaloneMode,
 		apiService, webService, middleware)
 
-	return &buckt{
-		db:            db,
-		router:        router,
-		fileService:   fileService,
-		folderService: folderService,
-	}, nil
+	buckt.DB = db
+	buckt.router = router
+	buckt.fileService = fileService
+	buckt.folderService = folderService
+
+	return buckt, nil
 }
 
-func (b *buckt) GetHandler() http.Handler {
+// Default initializes Buckt with default settings
+func Default() (*Buckt, error) {
+	opts := BucktConfig{
+		Log:            Log{LogTerminal: true, LoGfILE: "logs", Debug: true},
+		MediaDir:       "media",
+		StandaloneMode: true,
+		FlatNameSpaces: false,
+	}
+
+	return New(opts)
+}
+
+func (b *Buckt) GetHandler() http.Handler {
 	return b.router.Engine
 }
 
-func (b *buckt) StartServer(port ...string) error {
-	return b.router.Engine.Run(port...)
+func (b *Buckt) StartServer(port string) error {
+	return b.router.Run(port)
 }
 
-func (b *buckt) Close() {
-	b.db.Close()
+func (b *Buckt) Close() {
+	b.DB.Close()
 }
 
 // CreateFile implements Buckt.
-func (b *buckt) UploadFile(user_id string, parent_id string, file_name string, content_type string, file_data []byte) (string, error) {
+func (b *Buckt) UploadFile(user_id string, parent_id string, file_name string, content_type string, file_data []byte) (string, error) {
 	return b.fileService.CreateFile(user_id, parent_id, file_name, content_type, file_data)
 }
 
 // GetFile implements Buckt.
-func (b *buckt) GetFile(file_id string) (interface{}, error) {
+func (b *Buckt) GetFile(file_id string) (interface{}, error) {
 	return b.fileService.GetFile(file_id)
 }
 
 // UpdateFile implements Buckt.
-func (b *buckt) MoveFile(file_id string, new_file_name string, new_file_data []byte) error {
+func (b *Buckt) MoveFile(file_id string, new_file_name string, new_file_data []byte) error {
 	return b.fileService.UpdateFile(file_id, new_file_name, new_file_data)
 }
 
 // DeleteFile implements Buckt.
-func (b *buckt) DeleteFile(file_id string) error {
+func (b *Buckt) DeleteFile(file_id string) error {
 	_, err := b.fileService.DeleteFile(file_id)
 	return err
 }
 
 // CreateFolder implements Buckt.
-func (b *buckt) NewFolder(user_id string, parent_id string, folder_name string, description string) error {
+func (b *Buckt) NewFolder(user_id string, parent_id string, folder_name string, description string) error {
 	return b.folderService.CreateFolder(user_id, parent_id, folder_name, description)
 }
 
 // GetFolder implements Buckt.
-func (b *buckt) GetFolder(user_id string, folder_id string) (interface{}, error) {
+func (b *Buckt) GetFolder(user_id string, folder_id string) (interface{}, error) {
 	return b.folderService.GetFolder(user_id, folder_id)
 }
 
 // GetFolders implements Buckt.
-func (b *buckt) GetFolderContent(parent_id string) ([]interface{}, error) {
+func (b *Buckt) GetFolderContent(parent_id string) ([]interface{}, error) {
 	folders, err := b.folderService.GetFolders(parent_id)
 	if err != nil {
 		return nil, err
@@ -174,16 +156,16 @@ func (b *buckt) GetFolderContent(parent_id string) ([]interface{}, error) {
 }
 
 // MoveFolder implements Buckt.
-func (b *buckt) MoveFolder(folder_id string, new_parent_id string) error {
+func (b *Buckt) MoveFolder(folder_id string, new_parent_id string) error {
 	panic("unimplemented")
 }
 
 // RenameFolder implements Buckt.
-func (b *buckt) RenameFolder(folder_id string, new_name string) error {
+func (b *Buckt) RenameFolder(folder_id string, new_name string) error {
 	panic("unimplemented")
 }
 
 // DeleteFolder implements Buckt.
-func (b *buckt) DeleteFolder(folder_id string) error {
+func (b *Buckt) DeleteFolder(folder_id string) error {
 	panic("unimplemented")
 }

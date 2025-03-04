@@ -10,10 +10,10 @@ import (
 
 type FileRepository struct {
 	*database.DB
-	*logger.Logger
+	*logger.BucktLogger
 }
 
-func NewFileRepository(db *database.DB, logger *logger.Logger) domain.FileRepository {
+func NewFileRepository(db *database.DB, logger *logger.BucktLogger) domain.FileRepository {
 	return &FileRepository{db, logger}
 }
 

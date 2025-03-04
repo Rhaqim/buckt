@@ -11,14 +11,14 @@ import (
 )
 
 type FolderService struct {
-	*logger.Logger
+	*logger.BucktLogger
 
 	domain.FolderRepository
 }
 
-func NewFolderService(log *logger.Logger, folderRepository domain.FolderRepository) domain.FolderService {
+func NewFolderService(bucktLogger *logger.BucktLogger, folderRepository domain.FolderRepository) domain.FolderService {
 	return &FolderService{
-		Logger:           log,
+		BucktLogger:      bucktLogger,
 		FolderRepository: folderRepository,
 	}
 }
@@ -49,7 +49,7 @@ func (f *FolderService) CreateFolder(user_id, parent_id, folder_name, descriptio
 
 	folder := &model.FolderModel{
 		UserID:      user_id,
-		ParentID:    parentFolder.ID,
+		ParentID:    &parentFolder.ID,
 		Name:        folder_name,
 		Description: description,
 		Path:        path,
