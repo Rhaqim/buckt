@@ -45,7 +45,11 @@ func NewSQLite(instance *sql.DB, log *logger.BucktLogger, debug bool) (*DB, erro
 
 	// Create a new GORM database connection
 	if instance != nil {
-		db, err = gorm.Open(postgres.New(postgres.Config{Conn: instance}), gormConfig)
+		db, err = gorm.Open(postgres.New(postgres.Config{
+			DriverName:           "postgres",
+			Conn:                 instance,
+			PreferSimpleProtocol: true,
+		}), gormConfig)
 	} else {
 		db, err = gorm.Open(sqlite.Open("db.sqlite"), gormConfig)
 	}
@@ -86,10 +90,17 @@ func (db *DB) Close() error {
 }
 
 func (db *DB) Migrate() error {
-	err := db.AutoMigrate(&model.FileModel{}, &model.FolderModel{})
-	if err != nil {
-		return db.WrapError("Failed to auto migrate database:", err)
+	db.Info("🚀 Running migrations...")
+
+	if err := db.AutoMigrate(&model.FolderModel{}); err != nil {
+		return db.WrapErrorf("❌ failed to migrate FolderModel: %w", err)
 	}
+	db.Logger.Println("✅ FolderModel migrated")
+
+	if err := db.AutoMigrate(&model.FileModel{}); err != nil {
+		return db.WrapErrorf("❌ failed to migrate FileModel: %w", err)
+	}
+	db.Logger.Println("✅ FileModel migrated")
 
 	return nil
 }

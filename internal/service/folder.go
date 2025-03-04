@@ -49,7 +49,7 @@ func (f *FolderService) CreateFolder(user_id, parent_id, folder_name, descriptio
 
 	folder := &model.FolderModel{
 		UserID:      user_id,
-		ParentID:    parentFolder.ID,
+		ParentID:    &parentFolder.ID,
 		Name:        folder_name,
 		Description: description,
 		Path:        path,

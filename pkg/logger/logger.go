@@ -69,11 +69,21 @@ func (l *BucktLogger) Info(message string) {
 }
 
 // Error logs an error message and returns an error type
-func (l *BucktLogger) Error(err error) {
-	l.Logger.Println("ERROR:", err)
+func (l *BucktLogger) Errorf(format string, args ...interface{}) {
+
+	message := format
+	if len(args) > 0 {
+		message = format
+	}
+	l.Logger.Println("ERROR:", message)
 }
 
 func (l *BucktLogger) WrapError(message string, err error) error {
 	l.Logger.Println("ERROR:", message, err)
+	return err
+}
+
+func (l *BucktLogger) WrapErrorf(message string, err error, args ...interface{}) error {
+	l.Logger.Printf("ERROR: %s %v\n", message+" "+err.Error(), args)
 	return err
 }

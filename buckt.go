@@ -22,8 +22,6 @@ type Buckt struct {
 	folderService domain.FolderService
 }
 
-type BucktFunc func(*Buckt)
-
 func New(bucktOpts BucktConfig) (*Buckt, error) {
 
 	engine := &Buckt{}
@@ -92,7 +90,7 @@ func Default() (*Buckt, error) {
 }
 
 func (b *Buckt) GetHandler() http.Handler {
-	return b.router
+	return b.router.Engine
 }
 
 func (b *Buckt) StartServer(port string) error {
@@ -102,30 +100,6 @@ func (b *Buckt) StartServer(port string) error {
 func (b *Buckt) Close() {
 	b.DB.Close()
 }
-
-// Buckt is the interface for the Buckt service
-// type Buckt interface {
-// 	// GetHandler returns the http.Handler for the Buckt service.
-// 	GetHandler() http.Handler
-
-// 	// StartServer starts the Buckt service on the specified port.
-// 	StartServer(port ...string) error
-
-// 	// Close closes the Buckt service.
-// 	Close()
-
-// 	// Buckt service methods
-// 	UploadFile(user_id string, parent_id string, file_name string, content_type string, file_data []byte) (string, error)
-// 	GetFile(file_id string) (interface{}, error)
-// 	MoveFile(file_id string, new_file_name string, new_file_data []byte) error
-// 	DeleteFile(file_id string) error
-// 	NewFolder(user_id string, parent_id string, folder_name string, description string) error
-// 	GetFolder(user_id string, folder_id string) (interface{}, error)
-// 	GetFolderContent(parent_id string) ([]interface{}, error)
-// 	MoveFolder(folder_id string, new_parent_id string) error
-// 	RenameFolder(folder_id string, new_name string) error
-// 	DeleteFolder(folder_id string) error
-// }
 
 // CreateFile implements Buckt.
 func (b *Buckt) UploadFile(user_id string, parent_id string, file_name string, content_type string, file_data []byte) (string, error) {

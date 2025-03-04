@@ -190,9 +190,10 @@ func TestUpdateFile(t *testing.T) {
 	fileService := NewFileService(mockLogger, false, mockFileRepo, mockFolderService, mockFileSystemService)
 
 	fileID := uuid.New()
+	parentID := uuid.New()
 	fileModel := &model.FileModel{
 		ID:       fileID,
-		ParentID: uuid.New(),
+		ParentID: parentID,
 		Path:     "/parent/folder/file.txt",
 	}
 	parentFolder := &model.FolderModel{
