@@ -16,9 +16,11 @@ type FolderRepository interface {
 
 type FileRepository interface {
 	Create(file *model.FileModel) error
-	Update(file *model.FileModel) error
 	GetFile(id uuid.UUID) (*model.FileModel, error)
-	RestoreFile(hash string) (*model.FileModel, error)
 	GetFiles(parent_id uuid.UUID) ([]*model.FileModel, error)
+	MoveFile(file_id, new_parent_id uuid.UUID) (string, string, error)
+	RenameFile(file_id uuid.UUID, new_name string) error
+	RestoreFile(hash string) (*model.FileModel, error)
+	Update(file *model.FileModel) error
 	DeleteFile(id uuid.UUID) error
 }

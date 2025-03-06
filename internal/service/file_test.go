@@ -33,6 +33,18 @@ type MockFileRepository struct {
 	mock.Mock
 }
 
+// MoveFile implements domain.FileRepository.
+func (m *MockFileRepository) MoveFile(file_id uuid.UUID, new_parent_id uuid.UUID) (string, string, error) {
+	args := m.Called(file_id, new_parent_id)
+	return args.Get(0).(string), args.Get(1).(string), args.Error(2)
+}
+
+// RenameFile implements domain.FileRepository.
+func (m *MockFileRepository) RenameFile(file_id uuid.UUID, new_name string) error {
+	args := m.Called(file_id, new_name)
+	return args.Error(0)
+}
+
 func (m *MockFileRepository) Create(file *model.FileModel) error {
 	args := m.Called(file)
 	return args.Error(0)

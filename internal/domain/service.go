@@ -44,8 +44,10 @@ type FolderService interface {
 
 type FileService interface {
 	CreateFile(user_id, parent_id, file_name, content_type string, file_data []byte) (string, error)
-	UpdateFile(user_id, file_id, new_file_name string, new_file_data []byte) error
 	GetFile(file_id string) (*model.FileModel, error)
 	GetFiles(parent_id string) ([]model.FileModel, error)
+	MoveFile(file_id, new_parent_id string) error
+	RenameFile(file_id, new_name string) error
+	UpdateFile(user_id, file_id, new_file_name string, new_file_data []byte) error
 	DeleteFile(file_id string) (string, error)
 }

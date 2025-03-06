@@ -210,6 +210,49 @@ func (f *FileService) GetFiles(parent_id string) ([]model.FileModel, error) {
 	return fileModels, nil
 }
 
+// MoveFile implements domain.FileService.
+func (f *FileService) MoveFile(file_id string, new_parent_id string) error {
+	fileID, err := uuid.Parse(file_id)
+	if err != nil {
+		return f.WrapError("failed to parse uuid", err)
+	}
+
+	newParentID, err := uuid.Parse(new_parent_id)
+	if err != nil {
+		return f.WrapError("failed to parse uuid", err)
+	}
+
+	// Move the file
+	oldPath, newPath, err := f.FileRepository.MoveFile(fileID, newParentID)
+	if err != nil {
+		return f.WrapError("failed to move file", err)
+	}
+
+	if !f.flatNameSpaces {
+		// Move the file in the file system
+		if err := f.FileSystemService.FSUpdateFile(oldPath, newPath); err != nil {
+			return f.WrapError("failed to move file", err)
+		}
+	}
+
+	return nil
+}
+
+// RenameFile implements domain.FileService.
+func (f *FileService) RenameFile(file_id string, new_name string) error {
+	fileID, err := uuid.Parse(file_id)
+	if err != nil {
+		return f.WrapError("failed to parse uuid", err)
+	}
+
+	// Rename the file
+	if err := f.FileRepository.RenameFile(fileID, new_name); err != nil {
+		return f.WrapError("failed to rename file", err)
+	}
+
+	return nil
+}
+
 // UpdateFile implements domain.FileService.
 func (f *FileService) UpdateFile(user_id, file_id string, new_file_name string, new_file_data []byte) error {
 	fileID, err := uuid.Parse(file_id)

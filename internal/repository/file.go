@@ -1,11 +1,14 @@
 package repository
 
 import (
+	"fmt"
+
 	"github.com/Rhaqim/buckt/internal/database"
 	"github.com/Rhaqim/buckt/internal/domain"
 	"github.com/Rhaqim/buckt/internal/model"
 	"github.com/Rhaqim/buckt/pkg/logger"
 	"github.com/google/uuid"
+	"gorm.io/gorm"
 )
 
 type FileRepository struct {
@@ -32,11 +35,6 @@ func (f *FileRepository) RestoreFile(hash string) (*model.FileModel, error) {
 	return &file, err
 }
 
-// DeleteFile implements domain.FileRepository.
-func (f *FileRepository) DeleteFile(id uuid.UUID) error {
-	return f.DB.Delete(&model.FileModel{}, id).Error
-}
-
 // GetFile implements domain.FileRepository.
 func (f *FileRepository) GetFile(id uuid.UUID) (*model.FileModel, error) {
 	var file model.FileModel
@@ -51,8 +49,59 @@ func (f *FileRepository) GetFiles(parent_id uuid.UUID) ([]*model.FileModel, erro
 	return files, err
 }
 
+// MoveFile implements domain.FileRepository.
+func (f *FileRepository) MoveFile(file_id uuid.UUID, new_parent_id uuid.UUID) (string, string, error) {
+	var newParentFolder model.FolderModel
+
+	if err := f.DB.Where("id = ?", new_parent_id).First(&newParentFolder).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return "", "", fmt.Errorf("parent folder not found")
+		}
+		return "", "", err
+	}
+
+	var file model.FileModel
+	if err := f.DB.First(&file, file_id).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return "", "", fmt.Errorf("file not found")
+		}
+		return "", "", err
+	}
+
+	oldPath := file.Path
+
+	file.ParentID = new_parent_id
+	file.Path = newParentFolder.Path + "/" + file.Name
+
+	if err := f.DB.Save(&file).Error; err != nil {
+		return "", "", err
+	}
+
+	return oldPath, file.Path, nil
+}
+
+// RenameFile implements domain.FileRepository.
+func (f *FileRepository) RenameFile(file_id uuid.UUID, new_name string) error {
+	var file model.FileModel
+	if err := f.DB.First(&file, file_id).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return fmt.Errorf("file not found")
+		}
+		return err
+	}
+
+	file.Name = new_name
+
+	return f.DB.Save(&file).Error
+}
+
 // Update implements domain.FileRepository.
 // Subtle: this method shadows the method (*DB).Update of FileRepository.DB.
 func (f *FileRepository) Update(file *model.FileModel) error {
 	return f.DB.Save(file).Error
+}
+
+// DeleteFile implements domain.FileRepository.
+func (f *FileRepository) DeleteFile(id uuid.UUID) error {
+	return f.DB.Delete(&model.FileModel{}, id).Error
 }

@@ -113,8 +113,6 @@ func (f *FolderRepository) MoveFolder(folder_id uuid.UUID, new_parent_id uuid.UU
 
 // RenameFolder implements domain.FolderRepository.
 func (f *FolderRepository) RenameFolder(folder_id uuid.UUID, new_name string) error {
-	// return f.DB.Model(&model.FolderModel{}).Where("id = ?", folder_id).Update("name", new_name).Error
-
 	// get the folder to rename
 	var folder model.FolderModel
 	if err := f.DB.Where("id = ?", folder_id).First(&folder).Error; err != nil {
