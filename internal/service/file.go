@@ -56,7 +56,7 @@ func (f *FileService) CreateFile(user_id, parent_id, file_name, content_type str
 	var err error
 
 	// Get the parent folder
-	parentFolder, err := f.FolderService.GetFolder("user1", parent_id)
+	parentFolder, err := f.FolderService.GetFolder(user_id, parent_id)
 	if err != nil {
 		parentFolder, err = f.FolderService.GetRootFolder(user_id)
 		if err != nil {
@@ -211,7 +211,7 @@ func (f *FileService) GetFiles(parent_id string) ([]model.FileModel, error) {
 }
 
 // UpdateFile implements domain.FileService.
-func (f *FileService) UpdateFile(file_id string, new_file_name string, new_file_data []byte) error {
+func (f *FileService) UpdateFile(user_id, file_id string, new_file_name string, new_file_data []byte) error {
 	fileID, err := uuid.Parse(file_id)
 	if err != nil {
 		return f.WrapError("failed to parse uuid", err)
@@ -223,7 +223,7 @@ func (f *FileService) UpdateFile(file_id string, new_file_name string, new_file_
 	}
 
 	// Get the parent folder
-	parentFolder, err := f.FolderService.GetFolder("user1", file.ParentID.String())
+	parentFolder, err := f.FolderService.GetFolder(user_id, file.ParentID.String())
 	if err != nil {
 		return err
 	}

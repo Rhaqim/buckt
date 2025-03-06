@@ -73,16 +73,57 @@ func (w *WebService) NewFolder(c *gin.Context) {
 	c.Redirect(302, "/web/folder/"+parentID)
 }
 
-// RenameFolder implements domain.WebService.
-// Subtle: this method shadows the method (FolderService).RenameFolder of WebService.FolderService.
-func (w *WebService) RenameFolder(c *gin.Context) {
-	panic("unimplemented")
-}
-
 // MoveFolder implements domain.WebService.
 // Subtle: this method shadows the method (FolderService).MoveFolder of WebService.FolderService.
 func (w *WebService) MoveFolder(c *gin.Context) {
-	panic("unimplemented")
+	folder_id := c.PostForm("folder_id")
+	new_parent_id := c.PostForm("new_parent_id")
+
+	if folder_id == "" {
+		c.AbortWithStatusJSON(400, gin.H{"error": "folder_id is required"})
+		return
+	}
+
+	if new_parent_id == "" {
+		c.AbortWithStatusJSON(400, gin.H{"error": "new_parent_id is required"})
+		return
+	}
+
+	err := w.FolderService.MoveFolder(folder_id, new_parent_id)
+	if err != nil {
+		c.AbortWithStatusJSON(500, response.WrapError("failed to move folder", err))
+		return
+	}
+
+	// reload the page
+	c.Redirect(302, "/web/folder/"+new_parent_id)
+}
+
+// RenameFolder implements domain.WebService.
+// Subtle: this method shadows the method (FolderService).RenameFolder of WebService.FolderService.
+func (w *WebService) RenameFolder(c *gin.Context) {
+	folder_id := c.PostForm("folder_id")
+	new_name := c.PostForm("new_name")
+
+	if folder_id == "" {
+		c.AbortWithStatusJSON(400, gin.H{"error": "folder_id is required"})
+		return
+	}
+
+	if new_name == "" {
+		c.AbortWithStatusJSON(400, gin.H{"error": "new_name is required"})
+		return
+	}
+
+	// rename the folder
+	err := w.FolderService.RenameFolder(folder_id, new_name)
+	if err != nil {
+		c.AbortWithStatusJSON(500, response.WrapError("failed to rename folder", err))
+		return
+	}
+
+	// reload the page
+	c.Redirect(302, "/web/folder/"+folder_id)
 }
 
 // DeleteFolder implements domain.WebService.

@@ -121,8 +121,8 @@ func (b *Buckt) GetFile(file_id string) (any, error) {
 }
 
 // UpdateFile implements Buckt.
-func (b *Buckt) MoveFile(file_id string, new_file_name string, new_file_data []byte) error {
-	return b.fileService.UpdateFile(file_id, new_file_name, new_file_data)
+func (b *Buckt) MoveFile(user_id, file_id string, new_file_name string, new_file_data []byte) error {
+	return b.fileService.UpdateFile(user_id, file_id, new_file_name, new_file_data)
 }
 
 // DeleteFile implements Buckt.
@@ -142,31 +142,13 @@ func (b *Buckt) GetFolder(user_id string, folder_id string) (any, error) {
 }
 
 // GetFolders implements Buckt.
-func (b *Buckt) GetFolderContent(parent_id string) ([]any, error) {
-	folders, err := b.folderService.GetFolders(parent_id)
-	if err != nil {
-		return nil, err
-	}
-
-	files, err := b.fileService.GetFiles(parent_id)
-	if err != nil {
-		return nil, err
-	}
-
-	content := make([]any, 0, len(folders)+len(files))
-	for _, folder := range folders {
-		content = append(content, folder)
-	}
-	for _, file := range files {
-		content = append(content, file)
-	}
-
-	return content, nil
+func (b *Buckt) GetFolderContent(user_id, folder_id string) (any, error) {
+	return b.folderService.GetFolder(user_id, folder_id)
 }
 
 // MoveFolder implements Buckt.
 func (b *Buckt) MoveFolder(folder_id string, new_parent_id string) error {
-	panic("unimplemented")
+	return b.folderService.MoveFolder(folder_id, new_parent_id)
 }
 
 // RenameFolder implements Buckt.

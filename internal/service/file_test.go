@@ -148,8 +148,10 @@ func TestCreateFile(t *testing.T) {
 		Path: "/parent/folder",
 	}
 
+	user_id := "user1"
+
 	// Mock GetFolder to match the actual method call
-	mockFolderService.On("GetFolder", "user1", "parent_id").Return(parentFolder, nil)
+	mockFolderService.On("GetFolder", user_id, "parent_id").Return(parentFolder, nil)
 
 	// Mock FSWriteFile
 	mockFileSystemService.On("FSWriteFile", "/parent/folder/file.txt", []byte("file data")).Return(nil)
@@ -157,7 +159,7 @@ func TestCreateFile(t *testing.T) {
 	// Mock Create
 	mockFileRepo.On("Create", mock.Anything).Return(nil)
 
-	_, err := fileService.CreateFile("user_123", "parent_id", "file.txt", "text/plain", []byte("file data"))
+	_, err := fileService.CreateFile(user_id, "parent_id", "file.txt", "text/plain", []byte("file data"))
 	assert.NoError(t, err)
 }
 
@@ -247,15 +249,17 @@ func TestUpdateFile(t *testing.T) {
 		Path: "/parent/folder",
 	}
 
+	user_id := "user1"
+
 	mockFileRepo.On("GetFile", fileID).Return(fileModel, nil)
 
-	mockFolderService.On("GetFolder", "user1", parentID.String()).Return(parentFolder, nil)
+	mockFolderService.On("GetFolder", user_id, parentID.String()).Return(parentFolder, nil)
 
 	mockFileSystemService.On("FSWriteFile", "/parent/folder/new_file.txt", []byte("new file data")).Return(nil)
 
 	mockFileRepo.On("Update", mock.Anything).Return(nil)
 
-	err := fileService.UpdateFile(fileID.String(), "new_file.txt", []byte("new file data"))
+	err := fileService.UpdateFile(user_id, fileID.String(), "new_file.txt", []byte("new file data"))
 	assert.NoError(t, err)
 }
 

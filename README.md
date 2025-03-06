@@ -49,18 +49,30 @@ go get github.com/Rhaqim/buckt
 The configuration options for the Buckt package are defined using the BucktOptions struct. You can configure the logging, media directory, flat namespaces and standalone mode using the following options:
 
 ```go
-buckt.BucktOptions{
-  Log: buckt.Log{
-    LogTerminal: true,
-    LoGfILE:     "buckt.log",
-    Debug:       true,
-  },
-  MediaDir:       "media",
-  FlatNameSpaces: true,
-  StandaloneMode: true,
-}
+  type BucktConfig struct {
+    DB             *sql.DB
+    Cache          domain.CacheManager
+    Log            Log
+    MediaDir       string
+    FlatNameSpaces bool
+    StandaloneMode bool
+  }
 ```
 
+The Log struct contains the following fields:
+
+```go
+  type Log struct {
+    LogTerminal bool
+    LogFile     string
+    Debug       bool
+  }
+```
+
+The configuration options are as follows:
+
+- **DB** – The database connection.
+- **Cache** – The cache manager.
 - **LogTerminal** – Enable or disable logging to the terminal.
 - **LogFile** – The path to the log file.
 - **Debug** – Enable or disable debug mode.

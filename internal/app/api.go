@@ -104,13 +104,45 @@ func (a *APIService) DeleteFolder(c *gin.Context) {
 // MoveFolder implements domain.APIService.
 // Subtle: this method shadows the method (FolderService).MoveFolder of APIService.FolderService.
 func (a *APIService) MoveFolder(c *gin.Context) {
-	panic("unimplemented")
+	var req struct {
+		FolderID    string `json:"folder_id"`
+		NewParentID string `json:"new_parent_id"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.AbortWithStatusJSON(400, response.Error("invalid request", err.Error()))
+		return
+	}
+
+	// move the folder
+	if err := a.FolderService.MoveFolder(req.FolderID, req.NewParentID); err != nil {
+		c.AbortWithStatusJSON(500, response.WrapError("failed to move folder", err))
+		return
+	}
+
+	c.JSON(200, response.Success("folder moved"))
 }
 
 // RenameFolder implements domain.APIService.
 // Subtle: this method shadows the method (FolderService).RenameFolder of APIService.FolderService.
 func (a *APIService) RenameFolder(c *gin.Context) {
-	panic("unimplemented")
+	var req struct {
+		FolderID string `json:"folder_id"`
+		Name     string `json:"name"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.AbortWithStatusJSON(400, response.Error("invalid request", err.Error()))
+		return
+	}
+
+	// rename the folder
+	if err := a.FolderService.RenameFolder(req.FolderID, req.Name); err != nil {
+		c.AbortWithStatusJSON(500, response.WrapError("failed to rename folder", err))
+		return
+	}
+
+	c.JSON(200, response.Success("folder renamed"))
 }
 
 // UploadFile implements domain.APIService.

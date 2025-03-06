@@ -1,11 +1,15 @@
 package repository
 
 import (
+	"fmt"
+	"strings"
+
 	"github.com/Rhaqim/buckt/internal/database"
 	"github.com/Rhaqim/buckt/internal/domain"
 	"github.com/Rhaqim/buckt/internal/model"
 	"github.com/Rhaqim/buckt/pkg/logger"
 	"github.com/google/uuid"
+	"gorm.io/gorm"
 )
 
 type FolderRepository struct {
@@ -69,10 +73,61 @@ func (f *FolderRepository) GetFolders(bucket_id uuid.UUID) ([]model.FolderModel,
 
 // MoveFolder implements domain.FolderRepository.
 func (f *FolderRepository) MoveFolder(folder_id uuid.UUID, new_parent_id uuid.UUID) error {
-	return f.DB.Model(&model.FolderModel{}).Where("id = ?", folder_id).Update("parent_id", new_parent_id).Error
+	var newParentFolder model.FolderModel
+
+	if err := f.DB.Where("id = ?", new_parent_id).First(&newParentFolder).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return fmt.Errorf("parent folder not found")
+		}
+		return err
+	}
+
+	var folder model.FolderModel
+	if err := f.DB.Where("id = ?", folder_id).First(&folder).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return fmt.Errorf("folder not found")
+		}
+		return err
+	}
+
+	// Prevent moving into its own subfolder
+	if strings.HasPrefix(newParentFolder.Path, folder.Path) {
+		return fmt.Errorf("invalid move: cannot move a folder into its own subfolder")
+	}
+
+	// Construct new path safely
+	newPath := strings.TrimSuffix(newParentFolder.Path, "/") + "/" + folder.Name
+
+	// Avoid unnecessary updates
+	if folder.Path == newPath && folder.ParentID == &newParentFolder.ID {
+		return nil
+	}
+
+	// Update both `path` and `parent_id`
+	return f.DB.Model(&folder).Updates(map[string]interface{}{
+		"path":      newPath,
+		"parent_id": newParentFolder.ID,
+	}).Error
+
 }
 
 // RenameFolder implements domain.FolderRepository.
 func (f *FolderRepository) RenameFolder(folder_id uuid.UUID, new_name string) error {
-	return f.DB.Model(&model.FolderModel{}).Where("id = ?", folder_id).Update("name", new_name).Error
+	// return f.DB.Model(&model.FolderModel{}).Where("id = ?", folder_id).Update("name", new_name).Error
+
+	// get the folder to rename
+	var folder model.FolderModel
+	if err := f.DB.Where("id = ?", folder_id).First(&folder).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return fmt.Errorf("folder not found")
+		}
+		return err
+	}
+
+	// update the folder name and path
+	newPath := strings.TrimSuffix(folder.Path, "/"+folder.Name) + "/" + new_name
+	return f.DB.Model(&folder).Updates(map[string]interface{}{
+		"name": new_name,
+		"path": newPath,
+	}).Error
 }
