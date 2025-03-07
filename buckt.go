@@ -16,7 +16,7 @@ import (
 )
 
 type Buckt struct {
-	DB     *database.DB
+	db     *database.DB
 	router *router.Router
 
 	fileService   domain.FileService
@@ -81,7 +81,7 @@ func New(bucktOpts BucktConfig) (*Buckt, error) {
 		bucktOpts.StandaloneMode,
 		apiService, webService, middleware)
 
-	buckt.DB = db
+	buckt.db = db
 	buckt.router = router
 	buckt.fileService = fileService
 	buckt.folderService = folderService
@@ -113,7 +113,7 @@ func (b *Buckt) StartServer(port string) error {
 }
 
 func (b *Buckt) Close() {
-	b.DB.Close()
+	b.db.Close()
 }
 
 // CreateFile implements Buckt.
