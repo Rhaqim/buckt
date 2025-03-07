@@ -132,7 +132,7 @@ func (b *Buckt) MoveFile(user_id, file_id string, new_file_name string, new_file
 }
 
 // DeleteFile implements Buckt.
-func (b *Buckt) DeleteFile(file_id string) error {
+func (b *Buckt) DeleteFile(user_id, file_id string) error {
 	_, err := b.fileService.DeleteFile(file_id)
 	return err
 }
@@ -153,16 +153,16 @@ func (b *Buckt) GetFolderContent(user_id, folder_id string) (any, error) {
 }
 
 // MoveFolder implements Buckt.
-func (b *Buckt) MoveFolder(folder_id string, new_parent_id string) error {
+func (b *Buckt) MoveFolder(user_id, folder_id string, new_parent_id string) error {
 	return b.folderService.MoveFolder(folder_id, new_parent_id)
 }
 
 // RenameFolder implements Buckt.
-func (b *Buckt) RenameFolder(folder_id string, new_name string) error {
+func (b *Buckt) RenameFolder(user_id, folder_id string, new_name string) error {
 	panic("unimplemented")
 }
 
 // DeleteFolder implements Buckt.
-func (b *Buckt) DeleteFolder(folder_id string) error {
+func (b *Buckt) DeleteFolder(user_id, folder_id string) error {
 	panic("unimplemented")
 }
