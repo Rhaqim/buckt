@@ -21,7 +21,6 @@ func NewFolderService(
 	bucktLogger *logger.BucktLogger,
 	cacheManager domain.CacheManager,
 	folderRepository domain.FolderRepository) domain.FolderService {
-	bucktLogger.Info("🚀 Creating new folder service")
 	return &FolderService{
 		BucktLogger:      bucktLogger,
 		CacheManager:     cacheManager,
@@ -30,7 +29,7 @@ func NewFolderService(
 }
 
 // CreateFolder implements domain.FolderService.
-func (f *FolderService) CreateFolder(user_id, parent_id, folder_name, description string) error {
+func (f *FolderService) CreateFolder(user_id, parent_id, folder_name, description string) (string, error) {
 	var err error
 	var parentFolder *model.FolderModel
 
@@ -40,14 +39,14 @@ func (f *FolderService) CreateFolder(user_id, parent_id, folder_name, descriptio
 
 	parentID, err := uuid.Parse(parent_id)
 	if err != nil {
-		return f.WrapError("failed to parse uuid", err)
+		return "", f.WrapError("failed to parse uuid", err)
 	}
 	// Get the parent folder
 	parentFolder, err = f.FolderRepository.GetFolder(parentID)
 	if err != nil {
 		parentFolder, err = f.GetRootFolder(user_id)
 		if err != nil {
-			return err
+			return "", err
 		}
 	}
 
@@ -61,11 +60,12 @@ func (f *FolderService) CreateFolder(user_id, parent_id, folder_name, descriptio
 		Path:        path,
 	}
 
-	if err := f.FolderRepository.Create(folder); err != nil {
-		return f.WrapError("failed to create folder", err)
+	new_folder_id, err := f.FolderRepository.Create(folder)
+	if err != nil {
+		return "", f.WrapError("failed to create folder", err)
 	}
 
-	return nil
+	return new_folder_id, nil
 }
 
 // GetFolder implements domain.FolderService.

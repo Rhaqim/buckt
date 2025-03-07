@@ -138,7 +138,7 @@ func (b *Buckt) DeleteFile(user_id, file_id string) error {
 }
 
 // CreateFolder implements Buckt.
-func (b *Buckt) NewFolder(user_id string, parent_id string, folder_name string, description string) error {
+func (b *Buckt) NewFolder(user_id string, parent_id string, folder_name string, description string) (new_folder_id string, err error) {
 	return b.folderService.CreateFolder(user_id, parent_id, folder_name, description)
 }
 

@@ -63,7 +63,7 @@ func (w *WebService) NewFolder(c *gin.Context) {
 
 	description := c.PostForm("description")
 
-	err := w.FolderService.CreateFolder(user_id, parentID, name, description)
+	_, err := w.FolderService.CreateFolder(user_id, parentID, name, description)
 	if err != nil {
 		c.AbortWithStatusJSON(500, response.WrapError("failed to create folder", err))
 		return

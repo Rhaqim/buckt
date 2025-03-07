@@ -22,9 +22,9 @@ func (m *MockFolderRepository) GetRootFolder(user_id string) (*model.FolderModel
 	return args.Get(0).(*model.FolderModel), args.Error(1)
 }
 
-func (m *MockFolderRepository) Create(folder *model.FolderModel) error {
+func (m *MockFolderRepository) Create(folder *model.FolderModel) (string, error) {
 	args := m.Called(folder)
-	return args.Error(0)
+	return args.Get(0).(string), args.Error(1)
 }
 
 func (m *MockFolderRepository) GetFolder(id uuid.UUID) (*model.FolderModel, error) {
@@ -61,9 +61,12 @@ func TestCreateFolder(t *testing.T) {
 	mockRepo.On("GetFolder", folderID).Return(mockFolder, nil)
 
 	// Mock Create method
-	mockRepo.On("Create", mock.Anything).Return(nil)
+	mockRepo.On("Create", mock.Anything).Return(folderID.String(), nil)
 
-	err := service.CreateFolder("user1", folderID.String(), "folder", "description")
+	_, err := service.CreateFolder("user1", folderID.String(), "folder", "description")
+
+	// assert.Len(t, new_folder_id, 36)
+
 	assert.NoError(t, err)
 
 	mockRepo.AssertExpectations(t)

@@ -18,14 +18,17 @@ type FolderRepository struct {
 }
 
 func NewFolderRepository(db *database.DB, logger *logger.BucktLogger) domain.FolderRepository {
-	logger.Info("🚀 Creating new folder repository")
 	return &FolderRepository{db, logger}
 }
 
 // Create implements domain.FolderRepository.
 // Subtle: this method shadows the method (*DB).Create of FolderRepository.DB.
-func (f *FolderRepository) Create(folder *model.FolderModel) error {
-	return f.DB.Create(folder).Error
+func (f *FolderRepository) Create(folder *model.FolderModel) (string, error) {
+	// return f.DB.Create(folder).Error
+	if err := f.DB.Create(folder).Error; err != nil {
+		return "", err
+	}
+	return folder.ID.String(), nil
 }
 
 // GetFolder implements domain.FolderRepository.

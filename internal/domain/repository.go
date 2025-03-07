@@ -6,7 +6,7 @@ import (
 )
 
 type FolderRepository interface {
-	Create(folder *model.FolderModel) error
+	Create(folder *model.FolderModel) (string, error)
 	GetFolder(folder_id uuid.UUID) (*model.FolderModel, error)
 	GetRootFolder(user_id string) (*model.FolderModel, error)
 	GetFolders(bucket_id uuid.UUID) ([]model.FolderModel, error)

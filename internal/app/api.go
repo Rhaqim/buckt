@@ -38,12 +38,13 @@ func (a *APIService) CreateFolder(c *gin.Context) {
 	}
 
 	// create the folder
-	if err := a.FolderService.CreateFolder(user_id, req.ParentID, req.FolderName, req.Description); err != nil {
+	new_folder_id, err := a.FolderService.CreateFolder(user_id, req.ParentID, req.FolderName, req.Description)
+	if err != nil {
 		c.AbortWithStatusJSON(500, response.WrapError("failed to create folder", err))
 		return
 	}
 
-	c.JSON(200, response.Success("folder created"))
+	c.JSON(200, response.Success("folder created, ID: "+new_folder_id))
 }
 
 // GetFolderContent implements domain.APIService.

@@ -17,7 +17,6 @@ type FileRepository struct {
 }
 
 func NewFileRepository(db *database.DB, logger *logger.BucktLogger) domain.FileRepository {
-	logger.Info("🚀 Creating new file repository")
 	return &FileRepository{db, logger}
 }
 

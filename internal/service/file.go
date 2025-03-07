@@ -37,7 +37,6 @@ func NewFileService(
 	folderService domain.FolderService,
 	fileSystemService domain.FileSystemService,
 ) domain.FileService {
-	bucktLogger.Info("🚀 Creating new file service")
 	return &FileService{
 		BucktLogger: bucktLogger,
 
