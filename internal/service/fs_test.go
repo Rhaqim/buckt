@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func setup() (*FileSystemService, string) {
+func setupFSTest() (*FileSystemService, string) {
 	log := logger.NewLogger("test", true)
 	mediaDir := os.TempDir()
 	bfs := NewFileSystemService(log, mediaDir).(*FileSystemService)
@@ -17,7 +17,7 @@ func setup() (*FileSystemService, string) {
 }
 
 func TestFSValidatePath(t *testing.T) {
-	bfs, mediaDir := setup()
+	bfs, mediaDir := setupFSTest()
 	testPath := "testfile.txt"
 	expectedPath := filepath.Join(mediaDir, testPath)
 
@@ -33,7 +33,7 @@ func TestFSValidatePath(t *testing.T) {
 }
 
 func TestFSWriteFile(t *testing.T) {
-	bfs, mediaDir := setup()
+	bfs, mediaDir := setupFSTest()
 	testPath := "testfile.txt"
 	testContent := []byte("Hello, World!")
 	expectedPath := filepath.Join(mediaDir, testPath)
@@ -54,7 +54,7 @@ func TestFSWriteFile(t *testing.T) {
 }
 
 func TestFSGetFile(t *testing.T) {
-	bfs, mediaDir := setup()
+	bfs, mediaDir := setupFSTest()
 	testPath := "testfile.txt"
 	testContent := []byte("Hello, World!")
 	expectedPath := filepath.Join(mediaDir, testPath)
@@ -75,7 +75,7 @@ func TestFSGetFile(t *testing.T) {
 }
 
 func TestFSUpdateFile(t *testing.T) {
-	bfs, mediaDir := setup()
+	bfs, mediaDir := setupFSTest()
 	oldPath := "oldfile.txt"
 	newPath := "newfile.txt"
 	testContent := []byte("Hello, World!")
@@ -111,7 +111,7 @@ func TestFSUpdateFile(t *testing.T) {
 }
 
 func TestFSDeleteFile(t *testing.T) {
-	bfs, mediaDir := setup()
+	bfs, mediaDir := setupFSTest()
 	testPath := "testfile.txt"
 	expectedPath := filepath.Join(mediaDir, testPath)
 
