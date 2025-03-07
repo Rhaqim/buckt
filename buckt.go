@@ -116,43 +116,117 @@ func (b *Buckt) Close() {
 	b.db.Close()
 }
 
-// CreateFile implements Buckt.
+// UploadFile uploads a file to the specified user's bucket.
+//
+// Parameters:
+//   - user_id: The ID of the user who owns the bucket.
+//   - parent_id: The ID of the parent directory where the file will be uploaded.
+//   - file_name: The name of the file to be uploaded.
+//   - content_type: The MIME type of the file.
+//   - file_data: The byte slice containing the file data.
+//
+// Returns:
+//   - string: The ID of the newly created file.
+//   - error: An error if the file upload fails, otherwise nil.
 func (b *Buckt) UploadFile(user_id string, parent_id string, file_name string, content_type string, file_data []byte) (string, error) {
 	return b.fileService.CreateFile(user_id, parent_id, file_name, content_type, file_data)
 }
 
-// GetFile implements Buckt.
+// GetFile retrieves a file based on the provided file ID.
+// It returns the file data and an error, if any occurred during the retrieval process.
+//
+// Parameters:
+//   - file_id: A string representing the unique identifier of the file to be retrieved.
+//
+// Returns:
+//   - any: The data of the retrieved file.
+//   - error: An error object if an error occurred, otherwise nil.
 func (b *Buckt) GetFile(file_id string) (any, error) {
 	return b.fileService.GetFile(file_id)
 }
 
-// UpdateFile implements Buckt.
+// MoveFile updates the file with the given file_id for the specified user_id.
+// It changes the file's name to new_file_name and updates its data to new_file_data.
+// Returns an error if the update operation fails.
+//
+// Parameters:
+//   - user_id: The ID of the user who owns the file.
+//   - file_id: The ID of the file to be updated.
+//   - new_file_name: The new name for the file.
+//   - new_file_data: The new data for the file.
+//
+// Returns:
+//   - error: An error if the update operation fails, otherwise nil.
 func (b *Buckt) MoveFile(user_id, file_id string, new_file_name string, new_file_data []byte) error {
 	return b.fileService.UpdateFile(user_id, file_id, new_file_name, new_file_data)
 }
 
-// DeleteFile implements Buckt.
+// DeleteFile deletes a file associated with the given user ID and file ID.
+// It returns an error if the deletion fails.
+//
+// Parameters:
+//   - user_id: The ID of the user who owns the file.
+//   - file_id: The ID of the file to be deleted.
+//
+// Returns:
+//   - error: An error if the file deletion fails, otherwise nil.
 func (b *Buckt) DeleteFile(user_id, file_id string) error {
 	_, err := b.fileService.DeleteFile(file_id)
 	return err
 }
 
-// CreateFolder implements Buckt.
+// NewFolder creates a new folder for a user within a specified parent folder.
+// It takes the following parameters:
+// - user_id: The ID of the user creating the folder.
+// - parent_id: The ID of the parent folder where the new folder will be created.
+// - folder_name: The name of the new folder.
+// - description: A description of the new folder.
+// It returns the ID of the newly created folder and an error if the operation fails.
 func (b *Buckt) NewFolder(user_id string, parent_id string, folder_name string, description string) (new_folder_id string, err error) {
 	return b.folderService.CreateFolder(user_id, parent_id, folder_name, description)
 }
 
-// GetFolder implements Buckt.
+// GetFolder retrieves a folder for a given user by folder ID.
+//
+// Parameters:
+//
+//	user_id - The ID of the user who owns the folder.
+//	folder_id - The ID of the folder to retrieve.
+//
+// Returns:
+//
+//	any - The folder data.
+//	error - An error if the folder could not be retrieved.
 func (b *Buckt) GetFolder(user_id string, folder_id string) (any, error) {
 	return b.folderService.GetFolder(user_id, folder_id)
 }
 
-// GetFolders implements Buckt.
+// GetFolderContent retrieves the content of a specified folder for a given user.
+//
+// Parameters:
+//
+//	user_id - The ID of the user who owns the folder.
+//	folder_id - The ID of the folder to retrieve the content for.
+//
+// Returns:
+//
+//	any - The content of the folder.
+//	error - An error if the folder content could not be retrieved.
 func (b *Buckt) GetFolderContent(user_id, folder_id string) (any, error) {
 	return b.folderService.GetFolder(user_id, folder_id)
 }
 
-// MoveFolder implements Buckt.
+// MoveFolder moves a folder to a new parent folder.
+//
+// Parameters:
+//
+//	user_id: The ID of the user performing the operation.
+//	folder_id: The ID of the folder to be moved.
+//	new_parent_id: The ID of the new parent folder.
+//
+// Returns:
+//
+//	error: An error if the operation fails, otherwise nil.
 func (b *Buckt) MoveFolder(user_id, folder_id string, new_parent_id string) error {
 	return b.folderService.MoveFolder(folder_id, new_parent_id)
 }
