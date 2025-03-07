@@ -7,7 +7,7 @@ import (
 )
 
 func main() {
-	b, err := buckt.Default()
+	b, err := buckt.Default(buckt.StandaloneMode(true))
 	if err != nil {
 		log.Fatalf("Failed to initialize Buckt: %v", err)
 	}

@@ -28,6 +28,8 @@ func New(bucktOpts BucktConfig) (*Buckt, error) {
 
 	bucktLog := logger.NewLogger(bucktOpts.Log.LoGfILE, bucktOpts.Log.LogTerminal, logger.WithLogger(bucktOpts.Log.Logger))
 
+	bucktLog.Info("🚀 Starting Buckt")
+
 	// Initialize database
 	db, err := database.NewDB(bucktOpts.DB, bucktLog, bucktOpts.Log.Debug)
 	if err != nil {
@@ -50,6 +52,7 @@ func New(bucktOpts BucktConfig) (*Buckt, error) {
 	}
 
 	// Load templates
+	bucktLog.Info("🚀 Loading templates")
 	tmpl, err := loadTemplates()
 	if err != nil {
 		return nil, fmt.Errorf("failed to load templates: %w", err)
@@ -69,7 +72,7 @@ func New(bucktOpts BucktConfig) (*Buckt, error) {
 	var webService domain.WebService = app.NewWebService(folderService, fileService)
 
 	// middleware server
-	var middleware domain.Middleware = middleware.NewBucketMiddleware()
+	var middleware domain.Middleware = middleware.NewBucketMiddleware(bucktLog, bucktOpts.StandaloneMode)
 
 	// Run the router
 	router := router.NewRouter(
@@ -86,16 +89,19 @@ func New(bucktOpts BucktConfig) (*Buckt, error) {
 	return buckt, nil
 }
 
-// Default initializes Buckt with default settings
-func Default() (*Buckt, error) {
-	opts := BucktConfig{
+func Default(opts ...ConfigFunc) (*Buckt, error) {
+	bucktOpts := BucktConfig{
 		Log:            Log{LogTerminal: true, LoGfILE: "logs", Debug: true},
 		MediaDir:       "media",
 		StandaloneMode: true,
 		FlatNameSpaces: false,
 	}
 
-	return New(opts)
+	for _, opt := range opts {
+		opt(&bucktOpts)
+	}
+
+	return New(bucktOpts)
 }
 
 func (b *Buckt) GetHandler() http.Handler {

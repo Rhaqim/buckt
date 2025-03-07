@@ -21,6 +21,7 @@ func NewFolderService(
 	bucktLogger *logger.BucktLogger,
 	cacheManager domain.CacheManager,
 	folderRepository domain.FolderRepository) domain.FolderService {
+	bucktLogger.Info("🚀 Creating new folder service")
 	return &FolderService{
 		BucktLogger:      bucktLogger,
 		CacheManager:     cacheManager,

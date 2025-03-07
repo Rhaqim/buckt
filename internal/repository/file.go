@@ -17,6 +17,7 @@ type FileRepository struct {
 }
 
 func NewFileRepository(db *database.DB, logger *logger.BucktLogger) domain.FileRepository {
+	logger.Info("🚀 Creating new file repository")
 	return &FileRepository{db, logger}
 }
 
@@ -50,7 +51,7 @@ func (f *FileRepository) GetFiles(parent_id uuid.UUID) ([]*model.FileModel, erro
 }
 
 // MoveFile implements domain.FileRepository.
-func (f *FileRepository) MoveFile(file_id uuid.UUID, new_parent_id uuid.UUID) (string, string, error) {
+func (f *FileRepository) MoveFile(file_id uuid.UUID, new_parent_id uuid.UUID) (string, string, error) { // TODO: MOdify function to accept file_id, new_parent_id, and new_name
 	var newParentFolder model.FolderModel
 
 	if err := f.DB.Where("id = ?", new_parent_id).First(&newParentFolder).Error; err != nil {

@@ -18,6 +18,7 @@ type FolderRepository struct {
 }
 
 func NewFolderRepository(db *database.DB, logger *logger.BucktLogger) domain.FolderRepository {
+	logger.Info("🚀 Creating new folder repository")
 	return &FolderRepository{db, logger}
 }
 
