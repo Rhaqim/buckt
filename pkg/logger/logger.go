@@ -68,6 +68,11 @@ func (l *BucktLogger) Info(message string) {
 	l.Logger.Println(message)
 }
 
+// Warn logs a warning message
+func (l *BucktLogger) Warn(message string) {
+	l.Logger.Println("WARN:", message)
+}
+
 // Error logs an error message and returns an error type
 func (l *BucktLogger) Errorf(format string, args ...any) {
 

@@ -71,7 +71,8 @@ The Log struct contains the following fields:
 
 The configuration options are as follows:
 
-- **DB** – The database connection.
+- **Driver** – The Database driver name.
+- **Database** – The database connection.
 - **Cache** – The cache manager.
 - **LogTerminal** – Enable or disable logging to the terminal.
 - **LogFile** – The path to the log file.
@@ -88,8 +89,19 @@ To create a new instance of the Buckt package, use the NewBuckt function. It req
 import "github.com/Rhaqim/buckt"
 
 func main() {
+    // create a new instance of a postgre database
+    db, err := sql.Open("postgres", "host=localhost port=5432 user=postgres password=postgres dbname=buckt sslmode=disable")
+    if err != nil {
+        log.Fatal(err)
+    }
+
+    // Create a new instance of the Buckt package
     bucktInstance, err := buckt.NewBuckt(buckt.BucktOptions{
-        Log: buckt.Log{
+        DB: buckt.DBConfig{
+            Driver:   "postgres",
+            Database: db,
+        },
+        Log: buckt.LogConfig{
             LogTerminal: true,
         },
         MediaDir:       "media",

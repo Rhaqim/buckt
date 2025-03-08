@@ -19,22 +19,16 @@ type DB struct {
 }
 
 // NewSQLite creates a new SQLite database connection.
-func NewDB(instance *sql.DB, driver string, log *logger.BucktLogger, debug bool) (*DB, error) {
-	var db *gorm.DB
-	var err error
-
-	driverName := "postgres"
-
-	if driver != "" {
+func NewDB(sqlDBInstance *sql.DB, driver string, log *logger.BucktLogger, debug bool) (*DB, error) {
+	driverName := "sqlite"
+	if driver == "postgres" || driver == "sqlite" {
 		driverName = driver
 	}
 
 	// if debug is true, set log level to Info otherwise set to Silent
-	var logLevel gormLogger.LogLevel
+	var logLevel gormLogger.LogLevel = gormLogger.Silent
 	if debug {
 		logLevel = gormLogger.Info
-	} else {
-		logLevel = gormLogger.Silent
 	}
 
 	// Create a new GORM configuration
@@ -49,19 +43,40 @@ func NewDB(instance *sql.DB, driver string, log *logger.BucktLogger, debug bool)
 		),
 	}
 
-	// Create a new GORM database connection
-	if instance != nil {
-		log.Info("🚀 Connecting to provided Postgres database...")
-		db, err = gorm.Open(postgres.New(postgres.Config{
-			DriverName: driverName,
-			Conn:       instance,
-		}), gormConfig)
-	} else {
-		db, err = gorm.Open(sqlite.Open("db.sqlite"), gormConfig)
+	var dialector gorm.Dialector
+
+	// Handle different database drivers
+	switch driverName {
+	case "postgres":
+		if sqlDBInstance == nil {
+			log.Warn("⚠️ No Postgres instance provided. Falling back to SQLite.")
+			driverName = "sqlite"
+		} else {
+			dialector = postgres.New(postgres.Config{
+				DriverName: driverName,
+				Conn:       sqlDBInstance,
+			})
+		}
 	}
 
+	// Default to SQLite if necessary
+	if driverName == "sqlite" {
+		if sqlDBInstance != nil {
+			dialector = sqlite.New(sqlite.Config{
+				DriverName: driverName,
+				Conn:       sqlDBInstance,
+			})
+		} else {
+			log.Info("🛠️ Initializing new SQLite database (db.sqlite)...")
+			dialector = sqlite.Open("db.sqlite")
+		}
+	}
+
+	// Establish database connection
+	log.Info("🚀 Connecting to " + driverName + " database...")
+	db, err := gorm.Open(dialector, gormConfig)
 	if err != nil {
-		return nil, log.WrapError("Failed to connect to database:", err)
+		return nil, log.WrapError("Failed to connect to database", err)
 	}
 
 	// Access the underlying *sql.DB object

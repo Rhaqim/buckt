@@ -108,7 +108,7 @@ func NewCache() *Cache {
 	}
 }
 
-func (c *Cache) Get(key string) (any, error) {
+func (c *Cache) GetBucktValue(key string) (any, error) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
@@ -124,7 +124,7 @@ func (c *Cache) Get(key string) (any, error) {
 	return nil, nil
 }
 
-func (c *Cache) Set(key string, value any) error {
+func (c *Cache) SetBucktValue(key string, value any) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -134,7 +134,7 @@ func (c *Cache) Set(key string, value any) error {
 	return nil
 }
 
-func (c *Cache) Delete(key string) error {
+func (c *Cache) DeleteBucktValue(key string) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
