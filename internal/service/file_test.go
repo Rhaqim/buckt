@@ -70,9 +70,9 @@ func TestGetFile(t *testing.T) {
 
 	var jsonStr string
 
-	mockSetUp.MockCacheManager.On("Get", fileID.String()).Return(jsonStr, nil)
+	mockSetUp.MockCacheManager.On("GetBucktValue", fileID.String()).Return(jsonStr, nil)
 
-	mockSetUp.MockCacheManager.On("Set", fileID.String(), mock.Anything).Return(nil)
+	mockSetUp.MockCacheManager.On("SetBucktValue", fileID.String(), mock.Anything).Return(nil)
 
 	mockSetUp.MockFileRepository.On("GetFile", fileID).Return(fileModel, nil)
 
@@ -95,9 +95,9 @@ func TestGetFiles(t *testing.T) {
 
 	var jsonStr string
 
-	mockSetUp.MockCacheManager.On("Get", "files:"+parentID.String()).Return(jsonStr, nil)
+	mockSetUp.MockCacheManager.On("GetBucktValue", "files:"+parentID.String()).Return(jsonStr, nil)
 
-	mockSetUp.MockCacheManager.On("Set", "files:"+parentID.String(), mock.Anything).Return(nil)
+	mockSetUp.MockCacheManager.On("SetBucktValue", "files:"+parentID.String(), mock.Anything).Return(nil)
 
 	mockSetUp.MockFileRepository.On("GetFiles", parentID).Return(fileModels, nil)
 

@@ -10,17 +10,17 @@ type MockCacheManager struct {
 	mock.Mock
 }
 
-func (m *MockCacheManager) Set(key string, value any) error {
+func (m *MockCacheManager) SetBucktValue(key string, value any) error {
 	args := m.Called(key, value)
 	return args.Error(0)
 }
 
-func (m *MockCacheManager) Get(key string) (any, error) {
+func (m *MockCacheManager) GetBucktValue(key string) (any, error) {
 	args := m.Called(key)
 	return args.Get(0), args.Error(1)
 }
 
-func (m *MockCacheManager) Delete(key string) error {
+func (m *MockCacheManager) DeleteBucktValue(key string) error {
 	args := m.Called(key)
 	return args.Error(0)
 }

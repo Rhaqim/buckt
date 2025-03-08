@@ -123,7 +123,7 @@ func (f *FileService) GetFile(file_id string) (*model.FileModel, error) {
 
 	// Check cache first
 	if f.CacheManager != nil {
-		cached, err := f.CacheManager.Get(file_id)
+		cached, err := f.CacheManager.GetBucktValue(file_id)
 		if err == nil {
 			var cachedFile model.FileModel
 			if jsonErr := json.Unmarshal([]byte(cached.(string)), &cachedFile); jsonErr == nil {
@@ -142,7 +142,7 @@ func (f *FileService) GetFile(file_id string) (*model.FileModel, error) {
 		// Store metadata in cache (without file data)
 		if f.CacheManager != nil {
 			jsonData, _ := json.Marshal(file) // Ignore errors for now
-			_ = f.CacheManager.Set(file_id, string(jsonData))
+			_ = f.CacheManager.SetBucktValue(file_id, string(jsonData))
 		}
 	}
 
@@ -173,7 +173,7 @@ func (f *FileService) GetFiles(parent_id string) ([]model.FileModel, error) {
 
 	// Check cache first
 	if f.CacheManager != nil {
-		cached, err := f.CacheManager.Get(cacheKey)
+		cached, err := f.CacheManager.GetBucktValue(cacheKey)
 		if err == nil || cached != nil {
 			var cachedFiles []*model.FileModel
 			if jsonErr := json.Unmarshal([]byte(cached.(string)), &cachedFiles); jsonErr == nil {
@@ -192,7 +192,7 @@ func (f *FileService) GetFiles(parent_id string) ([]model.FileModel, error) {
 		// Store metadata in cache (without file data)
 		if f.CacheManager != nil {
 			jsonData, _ := json.Marshal(files) // Ignore errors for now
-			_ = f.CacheManager.Set(cacheKey, string(jsonData))
+			_ = f.CacheManager.SetBucktValue(cacheKey, string(jsonData))
 		}
 	}
 

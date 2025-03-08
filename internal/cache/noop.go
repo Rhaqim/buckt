@@ -12,6 +12,6 @@ func NewNoOpCache() domain.CacheManager {
 	return &NoOpCache{}
 }
 
-func (n *NoOpCache) Set(key string, value any) error { return nil }
-func (n *NoOpCache) Get(key string) (any, error)     { return nil, errors.New("cache miss") }
-func (n *NoOpCache) Delete(key string) error         { return nil }
+func (n *NoOpCache) SetBucktValue(key string, value any) error { return nil }
+func (n *NoOpCache) GetBucktValue(key string) (any, error)     { return nil, errors.New("cache miss") }
+func (n *NoOpCache) DeleteBucktValue(key string) error         { return nil }

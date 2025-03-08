@@ -64,13 +64,13 @@ func TestGetFolder(t *testing.T) {
 	jsonStr := string(jsonBytes)
 
 	// Mock cache get (simulate cache miss)
-	mockSetUp.MockCacheManager.On("Get", "folder:"+folderID.String()).Return("", nil)
+	mockSetUp.MockCacheManager.On("GetBucktValue", "folder:"+folderID.String()).Return("", nil)
 
 	// Mock repo get
 	mockSetUp.MockFolderRepository.On("GetFolder", folderID).Return(mockFolder, nil)
 
 	// Mock cache set with correct JSON string
-	mockSetUp.MockCacheManager.On("Set", "folder:"+folderID.String(), jsonStr).Return(nil)
+	mockSetUp.MockCacheManager.On("SetBucktValue", "folder:"+folderID.String(), jsonStr).Return(nil)
 
 	folder, err := mockSetUp.FolderService.GetFolder("user1", folderID.String())
 	assert.NoError(t, err)

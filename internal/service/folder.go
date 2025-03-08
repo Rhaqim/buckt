@@ -85,7 +85,7 @@ func (f *FolderService) GetFolder(user_id, folder_id string) (*model.FolderModel
 
 	// Try retrieving from cache
 	if f.CacheManager != nil {
-		cached, err := f.CacheManager.Get(cacheKey)
+		cached, err := f.CacheManager.GetBucktValue(cacheKey)
 		// Check if cached data is present and valid
 		if err == nil && cached != nil {
 			cachedStr, ok := cached.(string)
@@ -114,7 +114,7 @@ func (f *FolderService) GetFolder(user_id, folder_id string) (*model.FolderModel
 	// Store in cache before returning
 	if f.CacheManager != nil {
 		if jsonBytes, jsonErr := json.Marshal(folderPtr); jsonErr == nil {
-			_ = f.CacheManager.Set(cacheKey, string(jsonBytes)) // Ignore cache error
+			_ = f.CacheManager.SetBucktValue(cacheKey, string(jsonBytes)) // Ignore cache error
 		}
 	}
 
