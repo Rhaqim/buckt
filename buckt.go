@@ -8,6 +8,7 @@ import (
 	"github.com/Rhaqim/buckt/internal/cache"
 	"github.com/Rhaqim/buckt/internal/database"
 	"github.com/Rhaqim/buckt/internal/domain"
+	"github.com/Rhaqim/buckt/internal/model"
 	"github.com/Rhaqim/buckt/internal/repository"
 	"github.com/Rhaqim/buckt/internal/service"
 	"github.com/Rhaqim/buckt/internal/web/middleware"
@@ -139,9 +140,9 @@ func (b *Buckt) UploadFile(user_id string, parent_id string, file_name string, c
 //   - file_id: A string representing the unique identifier of the file to be retrieved.
 //
 // Returns:
-//   - any: The data of the retrieved file.
+//   - *model.FileModel: The file data.
 //   - error: An error object if an error occurred, otherwise nil.
-func (b *Buckt) GetFile(file_id string) (any, error) {
+func (b *Buckt) GetFile(file_id string) (*model.FileModel, error) {
 	return b.fileService.GetFile(file_id)
 }
 
@@ -186,22 +187,35 @@ func (b *Buckt) NewFolder(user_id string, parent_id string, folder_name string, 
 	return b.folderService.CreateFolder(user_id, parent_id, folder_name, description)
 }
 
-// GetFolder retrieves a folder for a given user by folder ID.
+// ListFolders retrieves a list of folders for a given folder.
 //
 // Parameters:
 //
-//	user_id - The ID of the user who owns the folder.
 //	folder_id - The ID of the folder to retrieve.
 //
 // Returns:
 //
-//	any - The folder data.
+//	[]model.FolderModel - A list of folders.
 //	error - An error if the folder could not be retrieved.
-func (b *Buckt) GetFolder(user_id string, folder_id string) (any, error) {
-	return b.folderService.GetFolder(user_id, folder_id)
+func (b *Buckt) ListFolders(folder_id string) ([]model.FolderModel, error) {
+	return b.folderService.GetFolders(folder_id)
 }
 
-// GetFolderContent retrieves the content of a specified folder for a given user.
+// ListFiles retrieves a list of files for a given folder.
+//
+// Parameters:
+//
+//	folder_id - The ID of the folder to retrieve.
+//
+// Returns:
+//
+//	[]model.FileModel - A list of files.
+//	error - An error if the folder could not be retrieved.
+func (b *Buckt) ListFiles(folder_id string) ([]model.FileModel, error) {
+	return b.fileService.GetFiles(folder_id)
+}
+
+// GetFolderWithContent retrieves a folder and its content.
 //
 // Parameters:
 //
@@ -210,9 +224,9 @@ func (b *Buckt) GetFolder(user_id string, folder_id string) (any, error) {
 //
 // Returns:
 //
-//	any - The content of the folder.
+//	*model.FolderModel - The folder model containing the folder content.
 //	error - An error if the folder content could not be retrieved.
-func (b *Buckt) GetFolderContent(user_id, folder_id string) (any, error) {
+func (b *Buckt) GetFolderWithContent(user_id, folder_id string) (*model.FolderModel, error) {
 	return b.folderService.GetFolder(user_id, folder_id)
 }
 
