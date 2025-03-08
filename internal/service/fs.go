@@ -15,7 +15,7 @@ type FileSystemService struct {
 }
 
 func NewFileSystemService(bucktLogger *logger.BucktLogger, medaiDir string) domain.FileSystemService {
-	bucktLogger.Info("🚀 Creating new file system service")
+	bucktLogger.Info("🚀 Initialising file system services")
 	return &FileSystemService{
 		BucktLogger: bucktLogger,
 		MediaDir:    medaiDir,

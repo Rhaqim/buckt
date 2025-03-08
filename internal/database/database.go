@@ -2,6 +2,7 @@ package database
 
 import (
 	"database/sql"
+	"fmt"
 	"time"
 
 	"github.com/Rhaqim/buckt/internal/model"
@@ -20,9 +21,27 @@ type DB struct {
 
 // NewSQLite creates a new SQLite database connection.
 func NewDB(sqlDBInstance *sql.DB, driver string, log *logger.BucktLogger, debug bool) (*DB, error) {
-	driverName := "sqlite"
-	if driver == "postgres" || driver == "sqlite" {
-		driverName = driver
+	// Define supported database drivers
+	supportedDrivers := map[string]func(*sql.DB) gorm.Dialector{
+		"postgres": func(db *sql.DB) gorm.Dialector {
+			return postgres.New(postgres.Config{DriverName: "postgres", Conn: db})
+		},
+		"sqlite": func(db *sql.DB) gorm.Dialector {
+			return sqlite.New(sqlite.Config{DriverName: "sqlite", Conn: db})
+		},
+		// Add more drivers as needed:
+		// "mysql": func(db *sql.DB) gorm.Dialector {
+		//     return mysql.New(mysql.Config{DriverName: "mysql", Conn: db})
+		// },
+		// "mssql": func(db *sql.DB) gorm.Dialector {
+		//     return sqlserver.New(sqlserver.Config{DriverName: "mssql", Conn: db})
+		// },
+	}
+
+	// If driver is empty or unsupported, fallback to SQLite
+	if _, exists := supportedDrivers[driver]; !exists {
+		log.Warn("⚠️ Unsupported or missing driver '" + driver + "'. Falling back to SQLite.")
+		driver = "sqlite"
 	}
 
 	// if debug is true, set log level to Info otherwise set to Silent
@@ -43,37 +62,21 @@ func NewDB(sqlDBInstance *sql.DB, driver string, log *logger.BucktLogger, debug 
 		),
 	}
 
+	// Determine the correct dialector
 	var dialector gorm.Dialector
-
-	// Handle different database drivers
-	switch driverName {
-	case "postgres":
-		if sqlDBInstance == nil {
-			log.Warn("⚠️ No Postgres instance provided. Falling back to SQLite.")
-			driverName = "sqlite"
-		} else {
-			dialector = postgres.New(postgres.Config{
-				DriverName: driverName,
-				Conn:       sqlDBInstance,
-			})
-		}
-	}
-
-	// Default to SQLite if necessary
-	if driverName == "sqlite" {
-		if sqlDBInstance != nil {
-			dialector = sqlite.New(sqlite.Config{
-				DriverName: driverName,
-				Conn:       sqlDBInstance,
-			})
-		} else {
+	if sqlDBInstance != nil {
+		dialector = supportedDrivers[driver](sqlDBInstance)
+	} else {
+		if driver == "sqlite" {
 			log.Info("🛠️ Initializing new SQLite database (db.sqlite)...")
 			dialector = sqlite.Open("db.sqlite")
+		} else {
+			return nil, log.WrapError("❌ No instance provided for '"+driver+"' and cannot fall back to SQLite.", fmt.Errorf("unsupported driver"))
 		}
 	}
 
 	// Establish database connection
-	log.Info("🚀 Connecting to " + driverName + " database...")
+	log.Info("🚀 Connecting to " + driver + " database...")
 	db, err := gorm.Open(dialector, gormConfig)
 	if err != nil {
 		return nil, log.WrapError("Failed to connect to database", err)
