@@ -69,9 +69,9 @@ func (f *FolderRepository) GetRootFolder(user_id string) (*model.FolderModel, er
 }
 
 // GetFolders implements domain.FolderRepository.
-func (f *FolderRepository) GetFolders(bucket_id uuid.UUID) ([]model.FolderModel, error) {
+func (f *FolderRepository) GetFolders(parent_id uuid.UUID) ([]model.FolderModel, error) {
 	var folders []model.FolderModel
-	err := f.DB.Preload("Folders").Preload("Files").Where("bucket_id = ?", bucket_id).Find(&folders).Error
+	err := f.DB.Where("parent_id = ?", parent_id).Find(&folders).Error
 	return folders, err
 }
 

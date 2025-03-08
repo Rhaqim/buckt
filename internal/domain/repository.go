@@ -9,7 +9,7 @@ type FolderRepository interface {
 	Create(folder *model.FolderModel) (string, error)
 	GetFolder(folder_id uuid.UUID) (*model.FolderModel, error)
 	GetRootFolder(user_id string) (*model.FolderModel, error)
-	GetFolders(bucket_id uuid.UUID) ([]model.FolderModel, error)
+	GetFolders(parent_id uuid.UUID) ([]model.FolderModel, error)
 	MoveFolder(folder_id, new_parent_id uuid.UUID) error
 	RenameFolder(folder_id uuid.UUID, new_name string) error
 }
