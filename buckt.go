@@ -27,7 +27,7 @@ type Buckt struct {
 func New(bucktOpts BucktConfig) (*Buckt, error) {
 	buckt := &Buckt{}
 
-	bucktLog := logger.NewLogger(bucktOpts.Log.LoGfILE, bucktOpts.Log.LogTerminal, logger.WithLogger(bucktOpts.Log.Logger))
+	bucktLog := logger.NewLogger(bucktOpts.Log.LogFile, bucktOpts.Log.LogTerminal, logger.WithLogger(bucktOpts.Log.Logger))
 
 	bucktLog.Info("🚀 Starting Buckt")
 
@@ -92,7 +92,7 @@ func New(bucktOpts BucktConfig) (*Buckt, error) {
 
 func Default(opts ...ConfigFunc) (*Buckt, error) {
 	bucktOpts := BucktConfig{
-		Log:            LogConfig{LogTerminal: true, LoGfILE: "logs", Debug: true},
+		Log:            LogConfig{LogTerminal: true, LogFile: "logs", Debug: true},
 		MediaDir:       "media",
 		StandaloneMode: true,
 		FlatNameSpaces: false,

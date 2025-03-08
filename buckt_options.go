@@ -18,7 +18,7 @@ import (
 type LogConfig struct {
 	Logger      *log.Logger
 	LogTerminal bool
-	LoGfILE     string
+	LogFile     string
 	Debug       bool
 }
 

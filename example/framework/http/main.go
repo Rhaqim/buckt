@@ -11,7 +11,6 @@ func main() {
 	opts := buckt.BucktConfig{
 		Log: buckt.LogConfig{
 			LogTerminal: true,
-			LoGfILE:     "buckt.log",
 		},
 		MediaDir:       "media",
 		StandaloneMode: false,

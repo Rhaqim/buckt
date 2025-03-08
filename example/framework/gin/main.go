@@ -40,7 +40,7 @@ func main() {
 		Cache: cache,
 		Log: buckt.LogConfig{
 			LogTerminal: false,
-			LoGfILE:     "logs",
+			LogFile:     "logs",
 			Debug:       true,
 		},
 		MediaDir:       "media",
