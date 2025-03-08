@@ -71,7 +71,7 @@ func NewDB(sqlDBInstance *sql.DB, driver string, log *logger.BucktLogger, debug 
 			log.Info("🛠️ Initializing new SQLite database (db.sqlite)...")
 			dialector = sqlite.Open("db.sqlite")
 		} else {
-			return nil, log.WrapError("❌ No instance provided for '"+driver+"' and cannot fall back to SQLite.", fmt.Errorf("unsupported driver"))
+			return nil, log.WrapError("❌ No instance provided for '"+driver+"' and cannot fall back to SQLite.", fmt.Errorf("no instance provided for '%s' ensure the database is running", driver))
 		}
 	}
 
