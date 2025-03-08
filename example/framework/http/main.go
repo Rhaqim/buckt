@@ -9,7 +9,7 @@ import (
 
 func main() {
 	opts := buckt.BucktConfig{
-		Log: buckt.Log{
+		Log: buckt.LogConfig{
 			LogTerminal: true,
 			LoGfILE:     "buckt.log",
 		},

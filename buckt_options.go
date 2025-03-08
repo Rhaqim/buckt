@@ -7,11 +7,37 @@ import (
 	"github.com/Rhaqim/buckt/internal/domain"
 )
 
-type Log struct {
+// LogConfig holds the configuration for logging in the application.
+//
+// Fields:
+//
+//	Logger: A pointer to a log.Logger instance. If nil, a new logger will be created.
+//	LogTerminal: A boolean flag indicating whether to log to the terminal.
+//	LogFile: A string representing the log file path.
+//	Debug: A boolean flag indicating whether to enable debug mode.
+type LogConfig struct {
 	Logger      *log.Logger
 	LogTerminal bool
 	LoGfILE     string
 	Debug       bool
+}
+
+type DBDrivers string
+
+const (
+	Postgres DBDrivers = "postgres"
+	SQLite   DBDrivers = "sqlite"
+)
+
+// DBConfig holds the configuration for the database connection.
+//
+// Fields:
+//
+//	Driver: A string representing the database driver name.
+//	Database: A pointer to an sql.DB instance representing the database connection.
+type DBConfig struct {
+	Driver   DBDrivers
+	Database *sql.DB
 }
 
 // BucktOptions represents the configuration options for the Buckt application.
@@ -19,14 +45,16 @@ type Log struct {
 //
 // Fields:
 //
+//	DB: Database configuration.
+//	Cache: CacheManager instance.
 //	Log: Configuration for logging.
 //	MediaDir: Path to the directory where media files are stored.
 //	FlatNameSpaces: Flag indicating whether the application should use flat namespaces when storing files.
 //	StandaloneMode: Flag indicating whether the application is running in standalone mode.
 type BucktConfig struct {
-	DB             *sql.DB
+	DB             DBConfig
 	Cache          domain.CacheManager
-	Log            Log
+	Log            LogConfig
 	MediaDir       string
 	FlatNameSpaces bool
 	StandaloneMode bool
@@ -98,12 +126,14 @@ func WithCache(cache domain.CacheManager) ConfigFunc {
 // BucktConfig.
 //
 // Parameters:
+//   - driver: A string representing the database driver name.
 //   - db: A pointer to an sql.DB instance representing the database connection.
 //
 // Returns:
 //   - ConfigFunc: A function that takes a pointer to BucktConfig and sets its DB field.
-func WithDB(db *sql.DB) ConfigFunc {
+func WithDB(driver string, db *sql.DB) ConfigFunc {
 	return func(c *BucktConfig) {
-		c.DB = db
+		c.DB.Driver = DBDrivers(driver)
+		c.DB.Database = db
 	}
 }

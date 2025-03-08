@@ -33,9 +33,12 @@ func main() {
 
 	// Initialize Buckt
 	opts := buckt.BucktConfig{
-		DB:    db, // Pass the database connection
+		DB: buckt.DBConfig{
+			Driver:   buckt.Postgres,
+			Database: db,
+		}, // Pass the database connection
 		Cache: cache,
-		Log: buckt.Log{
+		Log: buckt.LogConfig{
 			LogTerminal: false,
 			LoGfILE:     "logs",
 			Debug:       true,

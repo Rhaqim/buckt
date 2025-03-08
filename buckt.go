@@ -31,7 +31,7 @@ func New(bucktOpts BucktConfig) (*Buckt, error) {
 	bucktLog.Info("🚀 Starting Buckt")
 
 	// Initialize database
-	db, err := database.NewDB(bucktOpts.DB, bucktLog, bucktOpts.Log.Debug)
+	db, err := database.NewDB(bucktOpts.DB.Database, string(bucktOpts.DB.Driver), bucktLog, bucktOpts.Log.Debug)
 	if err != nil {
 		return nil, err
 	}
@@ -91,7 +91,7 @@ func New(bucktOpts BucktConfig) (*Buckt, error) {
 
 func Default(opts ...ConfigFunc) (*Buckt, error) {
 	bucktOpts := BucktConfig{
-		Log:            Log{LogTerminal: true, LoGfILE: "logs", Debug: true},
+		Log:            LogConfig{LogTerminal: true, LoGfILE: "logs", Debug: true},
 		MediaDir:       "media",
 		StandaloneMode: true,
 		FlatNameSpaces: false,

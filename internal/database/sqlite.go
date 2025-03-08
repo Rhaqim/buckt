@@ -19,9 +19,15 @@ type DB struct {
 }
 
 // NewSQLite creates a new SQLite database connection.
-func NewDB(instance *sql.DB, log *logger.BucktLogger, debug bool) (*DB, error) {
+func NewDB(instance *sql.DB, driver string, log *logger.BucktLogger, debug bool) (*DB, error) {
 	var db *gorm.DB
 	var err error
+
+	driverName := "postgres"
+
+	if driver != "" {
+		driverName = driver
+	}
 
 	// if debug is true, set log level to Info otherwise set to Silent
 	var logLevel gormLogger.LogLevel
@@ -47,7 +53,7 @@ func NewDB(instance *sql.DB, log *logger.BucktLogger, debug bool) (*DB, error) {
 	if instance != nil {
 		log.Info("🚀 Connecting to provided Postgres database...")
 		db, err = gorm.Open(postgres.New(postgres.Config{
-			DriverName: "postgres",
+			DriverName: driverName,
 			Conn:       instance,
 		}), gormConfig)
 	} else {
