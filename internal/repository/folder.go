@@ -116,10 +116,10 @@ func (f *FolderRepository) MoveFolder(folder_id uuid.UUID, new_parent_id uuid.UU
 }
 
 // RenameFolder implements domain.FolderRepository.
-func (f *FolderRepository) RenameFolder(folder_id uuid.UUID, new_name string) error {
+func (f *FolderRepository) RenameFolder(user_id string, folder_id uuid.UUID, new_name string) error {
 	// get the folder to rename
 	var folder model.FolderModel
-	if err := f.DB.Where("id = ?", folder_id).First(&folder).Error; err != nil {
+	if err := f.DB.Where("id = ? AND user_id = ?", folder_id, user_id).First(&folder).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return fmt.Errorf("folder not found")
 		}

@@ -18,7 +18,7 @@ type MockFolderServices struct {
 }
 
 func setupFolderTest() MockFolderServices {
-	mockLogger := logger.NewLogger("test", true)
+	mockLogger := logger.NewLogger("", true)
 	mockCache := new(MockCacheManager)
 	mockFolderRepo := new(MockFolderRepository)
 
@@ -116,9 +116,11 @@ func TestRenameFolder(t *testing.T) {
 	folderID := uuid.MustParse("550e8400-e29b-41d4-a716-446655440000")
 	newName := "new_folder_name"
 
-	mockSetUp.MockFolderRepository.On("RenameFolder", folderID, newName).Return(nil)
+	user_id := "user1"
 
-	err := mockSetUp.FolderService.RenameFolder(folderID.String(), newName)
+	mockSetUp.MockFolderRepository.On("RenameFolder", user_id, folderID, newName).Return(nil)
+
+	err := mockSetUp.FolderService.RenameFolder(user_id, folderID.String(), newName)
 	assert.NoError(t, err)
 	mockSetUp.MockFolderRepository.AssertExpectations(t)
 }

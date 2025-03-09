@@ -102,6 +102,8 @@ func (w *WebService) MoveFolder(c *gin.Context) {
 // RenameFolder implements domain.WebService.
 // Subtle: this method shadows the method (FolderService).RenameFolder of WebService.FolderService.
 func (w *WebService) RenameFolder(c *gin.Context) {
+	user_id := c.GetString("owner_id")
+
 	folder_id := c.PostForm("folder_id")
 	new_name := c.PostForm("new_name")
 
@@ -116,7 +118,7 @@ func (w *WebService) RenameFolder(c *gin.Context) {
 	}
 
 	// rename the folder
-	err := w.FolderService.RenameFolder(folder_id, new_name)
+	err := w.FolderService.RenameFolder(user_id, folder_id, new_name)
 	if err != nil {
 		c.AbortWithStatusJSON(500, response.WrapError("failed to rename folder", err))
 		return

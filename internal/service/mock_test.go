@@ -103,8 +103,8 @@ func (m *MockFolderRepository) MoveFolder(folderID, newParentID uuid.UUID) error
 	return args.Error(0)
 }
 
-func (m *MockFolderRepository) RenameFolder(folderID uuid.UUID, newName string) error {
-	args := m.Called(folderID, newName)
+func (m *MockFolderRepository) RenameFolder(user_id string, folderID uuid.UUID, newName string) error {
+	args := m.Called(user_id, folderID, newName)
 	return args.Error(0)
 }
 
@@ -137,8 +137,8 @@ func (m *MockFolderService) MoveFolder(folder_id string, new_parent_id string) e
 }
 
 // RenameFolder implements domain.FolderService.
-func (m *MockFolderService) RenameFolder(folder_id string, new_name string) error {
-	args := m.Called(folder_id, new_name)
+func (m *MockFolderService) RenameFolder(user_id, folder_id string, new_name string) error {
+	args := m.Called(user_id, folder_id, new_name)
 	return args.Error(0)
 }
 

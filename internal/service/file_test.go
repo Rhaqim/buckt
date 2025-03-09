@@ -19,7 +19,7 @@ type MockFileServices struct {
 }
 
 func setupFileTest() MockFileServices {
-	mockLogger := logger.NewLogger("test", true)
+	mockLogger := logger.NewLogger("", true)
 	mockCache := new(MockCacheManager)
 	mockFileRepo := new(MockFileRepository)
 	mockFolderService := new(MockFolderService)

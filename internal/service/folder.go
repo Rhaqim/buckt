@@ -171,13 +171,13 @@ func (f *FolderService) MoveFolder(folder_id string, new_parent_id string) error
 
 // RenameFolder implements domain.FolderService.
 // Subtle: this method shadows the method (FolderRepository).RenameFolder of FolderService.FolderRepository.
-func (f *FolderService) RenameFolder(folder_id string, new_name string) error {
+func (f *FolderService) RenameFolder(user_id string, folder_id string, new_name string) error {
 	folderID, err := uuid.Parse(folder_id)
 	if err != nil {
 		return f.WrapError("failed to parse uuid", err)
 	}
 
-	if err := f.FolderRepository.RenameFolder(folderID, new_name); err != nil {
+	if err := f.FolderRepository.RenameFolder(user_id, folderID, new_name); err != nil {
 		return f.WrapError("failed to rename folder", err)
 	}
 

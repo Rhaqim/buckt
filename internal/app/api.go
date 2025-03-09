@@ -127,6 +127,8 @@ func (a *APIService) MoveFolder(c *gin.Context) {
 // RenameFolder implements domain.APIService.
 // Subtle: this method shadows the method (FolderService).RenameFolder of APIService.FolderService.
 func (a *APIService) RenameFolder(c *gin.Context) {
+	user_id := c.GetString("owner_id")
+
 	var req struct {
 		FolderID string `json:"folder_id"`
 		Name     string `json:"name"`
@@ -138,7 +140,7 @@ func (a *APIService) RenameFolder(c *gin.Context) {
 	}
 
 	// rename the folder
-	if err := a.FolderService.RenameFolder(req.FolderID, req.Name); err != nil {
+	if err := a.FolderService.RenameFolder(user_id, req.FolderID, req.Name); err != nil {
 		c.AbortWithStatusJSON(500, response.WrapError("failed to rename folder", err))
 		return
 	}

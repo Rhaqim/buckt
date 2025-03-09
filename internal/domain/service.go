@@ -39,7 +39,7 @@ type FolderService interface {
 	GetFolder(user_id, folder_id string) (*model.FolderModel, error)
 	GetFolders(parent_id string) ([]model.FolderModel, error)
 	MoveFolder(folder_id, new_parent_id string) error
-	RenameFolder(folder_id, new_name string) error
+	RenameFolder(user_id, folder_id, new_name string) error
 }
 
 type FileService interface {

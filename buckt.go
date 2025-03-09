@@ -146,32 +146,27 @@ func (b *Buckt) GetFile(file_id string) (*model.FileModel, error) {
 	return b.fileService.GetFile(file_id)
 }
 
-// MoveFile updates the file with the given file_id for the specified user_id.
-// It changes the file's name to new_file_name and updates its data to new_file_data.
-// Returns an error if the update operation fails.
+// MoveFile moves a file to a new parent directory.
 //
 // Parameters:
-//   - user_id: The ID of the user who owns the file.
 //   - file_id: The ID of the file to be updated.
-//   - new_file_name: The new name for the file.
-//   - new_file_data: The new data for the file.
+//   - new_parent_id: The new parent directory for the file.
 //
 // Returns:
 //   - error: An error if the update operation fails, otherwise nil.
-func (b *Buckt) MoveFile(user_id, file_id string, new_file_name string, new_file_data []byte) error {
-	return b.fileService.UpdateFile(user_id, file_id, new_file_name, new_file_data)
+func (b *Buckt) MoveFile(file_id string, new_parent_id string) error {
+	return b.fileService.MoveFile(file_id, new_parent_id)
 }
 
 // DeleteFile deletes a file associated with the given user ID and file ID.
 // It returns an error if the deletion fails.
 //
 // Parameters:
-//   - user_id: The ID of the user who owns the file.
 //   - file_id: The ID of the file to be deleted.
 //
 // Returns:
 //   - error: An error if the file deletion fails, otherwise nil.
-func (b *Buckt) DeleteFile(user_id, file_id string) error {
+func (b *Buckt) DeleteFile(file_id string) error {
 	_, err := b.fileService.DeleteFile(file_id)
 	return err
 }
@@ -247,7 +242,7 @@ func (b *Buckt) MoveFolder(user_id, folder_id string, new_parent_id string) erro
 
 // RenameFolder implements Buckt.
 func (b *Buckt) RenameFolder(user_id, folder_id string, new_name string) error {
-	panic("unimplemented")
+	return b.folderService.RenameFolder(user_id, folder_id, new_name)
 }
 
 // DeleteFolder implements Buckt.
