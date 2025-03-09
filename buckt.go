@@ -24,6 +24,15 @@ type Buckt struct {
 	folderService domain.FolderService
 }
 
+// New initializes a new Buckt instance with the provided configuration options.
+// It accepts a BucktConfig struct as an argument and returns a pointer to the initialized Buckt instance.
+//
+// Parameters:
+// - bucktOpts: A BucktConfig struct containing the configuration options for the Buckt instance.
+//
+// Returns:
+// - A pointer to the initialized Buckt instance.
+// - An error if the Buckt instance could not be created.
 func New(bucktOpts BucktConfig) (*Buckt, error) {
 	buckt := &Buckt{}
 
@@ -90,12 +99,27 @@ func New(bucktOpts BucktConfig) (*Buckt, error) {
 	return buckt, nil
 }
 
+// Default initializes a new Buckt instance with default configuration options.
+// It accepts a variadic number of ConfigFunc options to customize the BucktConfig.
+//
+// The default configuration includes:
+// - LogConfig with LogTerminal set to true, LogFile set to "logs", and Debug set to true.
+// - MediaDir set to "media".
+// - StandaloneMode set to true.
+// - FlatNameSpaces set to true.
+//
+// Parameters:
+// - opts: A variadic number of ConfigFunc options to customize the BucktConfig.
+//
+// Returns:
+// - A pointer to the initialized Buckt instance.
+// - An error if the Buckt instance could not be created.
 func Default(opts ...ConfigFunc) (*Buckt, error) {
 	bucktOpts := BucktConfig{
 		Log:            LogConfig{LogTerminal: true, LogFile: "logs", Debug: true},
 		MediaDir:       "media",
 		StandaloneMode: true,
-		FlatNameSpaces: false,
+		FlatNameSpaces: true,
 	}
 
 	for _, opt := range opts {
@@ -105,14 +129,28 @@ func Default(opts ...ConfigFunc) (*Buckt, error) {
 	return New(bucktOpts)
 }
 
+// GetHandler returns the HTTP handler for the Buckt instance.
+// It provides access to the underlying router engine.
 func (b *Buckt) GetHandler() http.Handler {
 	return b.router.Engine
 }
 
+// StartServer starts the server on the specified port using the router.
+// It takes a port string as an argument and returns an error if the server fails to start.
+//
+// Parameters:
+//
+//	port (string): The port on which the server will listen.
+//
+// Returns:
+//
+//	error: An error if the server fails to start, otherwise nil.
 func (b *Buckt) StartServer(port string) error {
 	return b.router.Run(port)
 }
 
+// Close closes the Buckt instance.
+// It closes the database connection.
 func (b *Buckt) Close() {
 	b.db.Close()
 }
