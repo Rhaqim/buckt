@@ -242,6 +242,24 @@ func (a *APIService) DeleteFile(c *gin.Context) {
 	c.JSON(200, response.Success("file deleted"))
 }
 
+func (a *APIService) DeleteFilePermanently(c *gin.Context) {
+	// get the file_id from the request
+	fileID := c.Param("file_id")
+	if fileID == "" {
+		c.AbortWithStatusJSON(400, response.Error("file_id is required", ""))
+		return
+	}
+
+	// delete the file
+	_, err := a.FileService.ScrubFile(fileID)
+	if err != nil {
+		c.AbortWithStatusJSON(500, response.WrapError("failed to delete file", err))
+		return
+	}
+
+	c.JSON(200, response.Success("file deleted"))
+}
+
 /* Helper functions */
 
 func (f *APIService) constructURL(s string) string {

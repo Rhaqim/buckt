@@ -20,7 +20,8 @@ type FileRepository interface {
 	GetFiles(parent_id uuid.UUID) ([]*model.FileModel, error)
 	MoveFile(file_id, new_parent_id uuid.UUID) (string, string, error)
 	RenameFile(file_id uuid.UUID, new_name string) error
-	RestoreFile(hash string) (*model.FileModel, error)
+	RestoreFile(parent_id uuid.UUID, name string) (*model.FileModel, error)
 	Update(file *model.FileModel) error
 	DeleteFile(id uuid.UUID) error
+	ScrubFile(id uuid.UUID) error
 }

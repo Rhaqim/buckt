@@ -50,4 +50,5 @@ type FileService interface {
 	RenameFile(file_id, new_name string) error
 	UpdateFile(user_id, file_id, new_file_name string, new_file_data []byte) error
 	DeleteFile(file_id string) (string, error)
+	ScrubFile(file_id string) (string, error)
 }

@@ -301,3 +301,16 @@ func (b *Buckt) DeleteFile(file_id string) error {
 	_, err := b.fileService.DeleteFile(file_id)
 	return err
 }
+
+// DeleteFilePermanently deletes a file associated with the given user ID and file ID.
+// It returns an error if the deletion fails.
+//
+// Parameters:
+//   - file_id: The ID of the file to be deleted.
+//
+// Returns:
+//   - error: An error if the file deletion fails, otherwise nil.
+func (b *Buckt) DeleteFilePermanently(file_id string) error {
+	_, err := b.fileService.ScrubFile(file_id)
+	return err
+}

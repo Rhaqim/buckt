@@ -18,6 +18,7 @@ type APIService interface {
 	RenameFolder(c *gin.Context)
 	MoveFolder(c *gin.Context)
 	DeleteFolder(c *gin.Context)
+	DeleteFilePermanently(c *gin.Context)
 
 	// TODO: Might not be needed
 	GetFilesInFolder(c *gin.Context)
@@ -36,4 +37,5 @@ type WebService interface {
 	DownloadFile(c *gin.Context)
 	MoveFile(c *gin.Context)
 	DeleteFile(c *gin.Context)
+	DeleteFilePermanently(c *gin.Context)
 }

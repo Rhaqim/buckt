@@ -75,6 +75,7 @@ func (r *Router) registerAPIRoutes() {
 			r.POST("/upload", r.APIService.UploadFile)
 			r.GET("/download/:file_id", r.APIService.DownloadFile)
 			r.DELETE("/delete/:file_id", r.APIService.DeleteFile)
+			r.DELETE("/scrub/:file_id", r.APIService.DeleteFilePermanently)
 		}
 
 		{
@@ -108,6 +109,7 @@ func (r *Router) registerWebRoutes() {
 			web.GET("/file/:file_id", r.WebService.DownloadFile)
 			web.PUT("/file/:file_id", r.WebService.MoveFile)
 			web.DELETE("/file/:file_id", r.WebService.DeleteFile)
+			web.DELETE("/scrub/:file_id", r.WebService.DeleteFilePermanently)
 		}
 	}
 }

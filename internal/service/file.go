@@ -91,21 +91,21 @@ func (f *FileService) CreateFile(user_id, parent_id, file_name, content_type str
 		Size:        fileSize,
 	}
 
-	// Write the file to the file system
-	if err := f.FileSystemService.FSWriteFile(path, file_data); err != nil {
-		return "", err
-	}
-
 	// Create the file
 	err = f.FileRepository.Create(file)
 	if err != nil {
-		if err.Error() == "UNIQUE constraint failed: file_models.hash" {
-			file, err = f.FileRepository.RestoreFile(hash)
+		if err.Error() == "UNIQUE constraint failed: file_models.name, file_models.parent_id" {
+			file, err = f.FileRepository.RestoreFile(file.ParentID, file.Name)
 			if err != nil {
 				return "", f.WrapError("failed to restore file", err)
 			}
 		} else {
 			return "", f.WrapError("failed to create file", err)
+		}
+	} else {
+		// Write the file to the file system
+		if err := f.FileSystemService.FSWriteFile(file.Path, file_data); err != nil {
+			return "", err
 		}
 	}
 
@@ -306,9 +306,68 @@ func (f *FileService) DeleteFile(file_id string) (string, error) {
 		return parentID, f.WrapError("failed to parse uuid", err)
 	}
 
-	file, err := f.FileRepository.GetFile(fileID)
+	var file *model.FileModel
+
+	// Check cache first
+	if f.CacheManager != nil {
+		cached, err := f.CacheManager.GetBucktValue(file_id)
+		if err == nil {
+			var cachedFile model.FileModel
+			if jsonErr := json.Unmarshal([]byte(cached.(string)), &cachedFile); jsonErr == nil {
+				file = &cachedFile
+			}
+
+			// Delete from cache
+			_ = f.CacheManager.DeleteBucktValue(file_id)
+		}
+	}
+
+	// If not found in cache, fetch from repository
+	if file == nil {
+		file, err = f.FileRepository.GetFile(fileID)
+		if err != nil {
+			return parentID, f.WrapError("failed to get file metadata", err)
+		}
+	}
+
+	// Delete the file
+	if err := f.FileRepository.DeleteFile(fileID); err != nil {
+		return parentID, f.WrapError("failed to delete file", err)
+	}
+
+	return file.ParentID.String(), nil
+}
+
+func (f *FileService) ScrubFile(file_id string) (string, error) {
+	var parentID string
+
+	fileID, err := uuid.Parse(file_id)
 	if err != nil {
-		return parentID, f.WrapError("failed to get file", err)
+		return parentID, f.WrapError("failed to parse uuid", err)
+	}
+
+	var file *model.FileModel
+
+	// Check cache first
+	if f.CacheManager != nil {
+		cached, err := f.CacheManager.GetBucktValue(file_id)
+		if err == nil {
+			var cachedFile model.FileModel
+			if jsonErr := json.Unmarshal([]byte(cached.(string)), &cachedFile); jsonErr == nil {
+				file = &cachedFile
+			}
+
+			// Delete from cache
+			_ = f.CacheManager.DeleteBucktValue(file_id)
+		}
+	}
+
+	// If not found in cache, fetch from repository
+	if file == nil {
+		file, err = f.FileRepository.GetFile(fileID)
+		if err != nil {
+			return parentID, f.WrapError("failed to get file metadata", err)
+		}
 	}
 
 	// Delete the file from the file system
@@ -317,7 +376,7 @@ func (f *FileService) DeleteFile(file_id string) (string, error) {
 	}
 
 	// Delete the file
-	if err := f.FileRepository.DeleteFile(fileID); err != nil {
+	if err := f.FileRepository.ScrubFile(fileID); err != nil {
 		return parentID, f.WrapError("failed to delete file", err)
 	}
 

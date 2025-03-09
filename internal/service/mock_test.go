@@ -52,8 +52,8 @@ func (m *MockFileRepository) GetFile(fileID uuid.UUID) (*model.FileModel, error)
 }
 
 // RestoreFileByPath implements domain.FileRepository.
-func (m *MockFileRepository) RestoreFile(path string) (*model.FileModel, error) {
-	args := m.Called(path)
+func (m *MockFileRepository) RestoreFile(parent_id uuid.UUID, name string) (*model.FileModel, error) {
+	args := m.Called(parent_id, name)
 	return args.Get(0).(*model.FileModel), args.Error(1)
 }
 
@@ -68,6 +68,11 @@ func (m *MockFileRepository) Update(file *model.FileModel) error {
 }
 
 func (m *MockFileRepository) DeleteFile(fileID uuid.UUID) error {
+	args := m.Called(fileID)
+	return args.Error(0)
+}
+
+func (m *MockFileRepository) ScrubFile(fileID uuid.UUID) error {
 	args := m.Called(fileID)
 	return args.Error(0)
 }

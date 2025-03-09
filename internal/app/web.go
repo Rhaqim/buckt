@@ -226,3 +226,23 @@ func (w *WebService) DeleteFile(c *gin.Context) {
 
 	c.JSON(200, response.Success("file deleted"))
 }
+
+func (w *WebService) DeleteFilePermanently(c *gin.Context) {
+	// get the file_id from the request
+	fileID := c.Param("file_id")
+	if fileID == "" {
+		c.AbortWithStatusJSON(400, response.Error("file_id is required", ""))
+		return
+	}
+
+	// delete the file
+	parent_id, err := w.FileService.ScrubFile(fileID)
+	if err != nil {
+		c.AbortWithStatusJSON(500, response.WrapError("failed to delete file", err))
+		return
+	}
+
+	fmt.Println("parent_id", parent_id)
+
+	c.JSON(200, response.Success("file deleted"))
+}
