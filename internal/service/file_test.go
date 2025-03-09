@@ -144,6 +144,7 @@ func TestUpdateFile(t *testing.T) {
 func TestDeleteFile(t *testing.T) {
 	mockSetUp := setupFileTest()
 
+	userID := uuid.New()
 	fileID := uuid.New()
 	fileModel := &model.FileModel{
 		ID:   fileID,
@@ -154,8 +155,8 @@ func TestDeleteFile(t *testing.T) {
 
 	mockSetUp.MockFileSystemService.On("FSDeleteFile", "/parent/folder/file.txt").Return(nil)
 
-	mockSetUp.MockFileRepository.On("DeleteFile", fileID).Return(nil)
+	mockSetUp.MockFileRepository.On("DeleteFile", userID, fileID).Return(nil)
 
-	_, err := mockSetUp.FileService.DeleteFile(fileID.String())
+	_, err := mockSetUp.FileService.DeleteFile(userID.String(), fileID.String())
 	assert.NoError(t, err)
 }

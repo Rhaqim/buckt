@@ -223,6 +223,8 @@ func (a *APIService) ServeFile(c *gin.Context) {
 // DeleteFile implements domain.APIService.
 // Subtle: this method shadows the method (FileService).DeleteFile of APIService.FileService.
 func (a *APIService) DeleteFile(c *gin.Context) {
+	user_id := c.GetString("owner_id")
+
 	// get the file_id from the request
 	fileID := c.Param("file_id")
 	if fileID == "" {
@@ -231,7 +233,7 @@ func (a *APIService) DeleteFile(c *gin.Context) {
 	}
 
 	// delete the file
-	_, err := a.FileService.DeleteFile(fileID)
+	_, err := a.FileService.DeleteFile(user_id, fileID)
 	if err != nil {
 		c.AbortWithStatusJSON(500, response.WrapError("failed to delete file", err))
 		return
