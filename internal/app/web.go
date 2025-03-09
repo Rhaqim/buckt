@@ -206,8 +206,6 @@ func (w *WebService) MoveFile(c *gin.Context) {
 // DeleteFile implements domain.WebService.
 // Subtle: this method shadows the method (FileService).DeleteFile of WebService.FileService.
 func (w *WebService) DeleteFile(c *gin.Context) {
-	user_id := c.GetString("owner_id")
-
 	// get the file_id from the request
 	fileID := c.Param("file_id")
 	if fileID == "" {
@@ -216,7 +214,7 @@ func (w *WebService) DeleteFile(c *gin.Context) {
 	}
 
 	// delete the file
-	parent_id, err := w.FileService.DeleteFile(user_id, fileID)
+	parent_id, err := w.FileService.DeleteFile(fileID)
 	if err != nil {
 		c.AbortWithStatusJSON(500, response.WrapError("failed to delete file", err))
 		return

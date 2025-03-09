@@ -172,7 +172,7 @@ func (b *Buckt) MoveFile(user_id, file_id string, new_file_name string, new_file
 // Returns:
 //   - error: An error if the file deletion fails, otherwise nil.
 func (b *Buckt) DeleteFile(user_id, file_id string) error {
-	_, err := b.fileService.DeleteFile(user_id, file_id)
+	_, err := b.fileService.DeleteFile(file_id)
 	return err
 }
 

@@ -102,6 +102,6 @@ func (f *FileRepository) Update(file *model.FileModel) error {
 }
 
 // DeleteFile implements domain.FileRepository.
-func (f *FileRepository) DeleteFile(user_id, id uuid.UUID) error {
-	return f.DB.Delete(&model.FileModel{}, user_id, id).Error
+func (f *FileRepository) DeleteFile(id uuid.UUID) error {
+	return f.DB.Delete(&model.FileModel{}, id).Error
 }

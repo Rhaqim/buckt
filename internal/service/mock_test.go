@@ -67,7 +67,7 @@ func (m *MockFileRepository) Update(file *model.FileModel) error {
 	return args.Error(0)
 }
 
-func (m *MockFileRepository) DeleteFile(userID, fileID uuid.UUID) error {
+func (m *MockFileRepository) DeleteFile(fileID uuid.UUID) error {
 	args := m.Called(fileID)
 	return args.Error(0)
 }

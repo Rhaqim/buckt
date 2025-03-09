@@ -49,5 +49,5 @@ type FileService interface {
 	MoveFile(file_id, new_parent_id string) error
 	RenameFile(file_id, new_name string) error
 	UpdateFile(user_id, file_id, new_file_name string, new_file_data []byte) error
-	DeleteFile(user_id, file_id string) (string, error)
+	DeleteFile(file_id string) (string, error)
 }
