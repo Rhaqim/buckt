@@ -86,7 +86,8 @@ func (r *Router) registerAPIRoutes() {
 			// r.GET("/folder_descendants", r.APIService.GetDescendants)
 			r.PUT("/rename_folder", r.APIService.RenameFolder)
 			r.PUT("/move_folder", r.APIService.MoveFolder)
-			r.DELETE("/delete_folder", r.APIService.DeleteFolder)
+			r.DELETE("/delete_folder/:folder_id", r.APIService.DeleteFolder)
+			r.DELETE("/scrub_folder/:folder_id", r.APIService.DeleteFolderPermanently)
 		}
 	}
 }
@@ -104,6 +105,7 @@ func (r *Router) registerWebRoutes() {
 			web.PUT("/rename-folder", r.WebService.RenameFolder)
 			web.PUT("/move-folder", r.WebService.MoveFolder)
 			web.DELETE("/folder/:folder_id", r.WebService.DeleteFolder)
+			web.DELETE("/scrub-folder/:folder_id", r.WebService.DeleteFolderPermanently)
 
 			web.POST("/upload", r.WebService.UploadFile)
 			web.GET("/file/:file_id", r.WebService.DownloadFile)

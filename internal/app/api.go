@@ -99,7 +99,42 @@ func (a *APIService) GetDescendants(c *gin.Context) {
 
 // DeleteFolder implements domain.APIService.
 func (a *APIService) DeleteFolder(c *gin.Context) {
-	panic("unimplemented")
+	// get the folder_id from the request
+	folderID := c.Param("folder_id")
+	if folderID == "" {
+		c.AbortWithStatusJSON(400, response.Error("folder_id is required", ""))
+		return
+	}
+
+	// ge tthe folder with content
+	_, err := a.FolderService.DeleteFolder(folderID)
+	if err != nil {
+		c.AbortWithStatusJSON(500, response.WrapError("failed to delete folder", err))
+		return
+	}
+
+	c.JSON(200, response.Success("folder deleted"))
+}
+
+// DeleteFolderPermanently implements domain.APIService.
+func (a *APIService) DeleteFolderPermanently(c *gin.Context) {
+	user_id := c.GetString("owner_id")
+
+	// get the folder_id from the request
+	folderID := c.Param("folder_id")
+	if folderID == "" {
+		c.AbortWithStatusJSON(400, response.Error("folder_id is required", ""))
+		return
+	}
+
+	// ge tthe folder with content
+	_, err := a.FolderService.ScrubFolder(user_id, folderID)
+	if err != nil {
+		c.AbortWithStatusJSON(500, response.WrapError("failed to delete folder", err))
+		return
+	}
+
+	c.JSON(200, response.Success("folder deleted"))
 }
 
 // MoveFolder implements domain.APIService.

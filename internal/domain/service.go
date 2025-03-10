@@ -23,6 +23,10 @@ type FileSystemService interface {
 	// FSDeleteFile deletes the file or folder at the specified path.
 	// Returns an error if the operation fails.
 	FSDeleteFile(folderPath string) error
+
+	// FSDeleteFolder deletes the folder at the specified path.
+	// Returns an error if the operation fails.
+	FSDeleteFolder(folderPath string) error
 }
 
 type BucktFileSystemServiceMock struct {
@@ -40,6 +44,8 @@ type FolderService interface {
 	GetFolders(parent_id string) ([]model.FolderModel, error)
 	MoveFolder(folder_id, new_parent_id string) error
 	RenameFolder(user_id, folder_id, new_name string) error
+	DeleteFolder(folder_id string) (string, error)
+	ScrubFolder(user_id, folder_id string) (string, error)
 }
 
 type FileService interface {

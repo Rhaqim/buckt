@@ -96,3 +96,13 @@ func (bfs *FileSystemService) FSDeleteFile(folderPath string) error {
 
 	return nil
 }
+
+func (bfs *FileSystemService) FSDeleteFolder(folderPath string) error {
+	folderPath = filepath.Join(bfs.MediaDir, folderPath)
+
+	if err := os.RemoveAll(folderPath); err != nil {
+		return bfs.WrapError("failed to delete folder", err)
+	}
+
+	return nil
+}

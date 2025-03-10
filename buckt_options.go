@@ -22,11 +22,11 @@ type LogConfig struct {
 	Debug       bool
 }
 
-type DBDrivers string
+type DBDrivers = domain.DBDrivers // Type alias
 
 const (
-	Postgres DBDrivers = "postgres"
-	SQLite   DBDrivers = "sqlite"
+	Postgres = domain.Postgres
+	SQLite   = domain.SQLite
 )
 
 // DBConfig holds the configuration for the database connection.

@@ -133,3 +133,36 @@ func (f *FolderRepository) RenameFolder(user_id string, folder_id uuid.UUID, new
 		"path": newPath,
 	}).Error
 }
+
+// DeleteFolder implements domain.FolderRepository.
+func (f *FolderRepository) DeleteFolder(folder_id uuid.UUID) (parent_id string, err error) {
+	folder, err := f.GetFolder(folder_id)
+	if err != nil {
+		return "", err
+	}
+
+	// delete the folder
+	if err := f.DB.Delete(&folder).Error; err != nil {
+		return "", err
+	}
+
+	return folder.ParentID.String(), nil
+}
+
+// ScrubFolder implements domain.FolderRepository.
+func (f *FolderRepository) ScrubFolder(user_id string, folder_id uuid.UUID) (parent_id string, err error) {
+	var folder model.FolderModel
+	if err := f.DB.Where("id = ? AND user_id = ?", folder_id, user_id).First(&folder).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return "", fmt.Errorf("folder not found")
+		}
+		return "", err
+	}
+
+	// delete the folder
+	if err := f.DB.Unscoped().Delete(&folder).Error; err != nil {
+		return "", err
+	}
+
+	return folder.ParentID.String(), nil
+}

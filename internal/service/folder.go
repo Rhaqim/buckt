@@ -13,19 +13,26 @@ import (
 
 type FolderService struct {
 	*logger.BucktLogger
+
 	domain.CacheManager
+
 	domain.FolderRepository
+
+	domain.FileSystemService
 }
 
 func NewFolderService(
 	bucktLogger *logger.BucktLogger,
 	cacheManager domain.CacheManager,
-	folderRepository domain.FolderRepository) domain.FolderService {
+	folderRepository domain.FolderRepository,
+	fileSystemService domain.FileSystemService,
+) domain.FolderService {
 	bucktLogger.Info("🚀 Initialising folder services")
 	return &FolderService{
-		BucktLogger:      bucktLogger,
-		CacheManager:     cacheManager,
-		FolderRepository: folderRepository,
+		BucktLogger:       bucktLogger,
+		CacheManager:      cacheManager,
+		FolderRepository:  folderRepository,
+		FileSystemService: fileSystemService,
 	}
 }
 
@@ -182,4 +189,45 @@ func (f *FolderService) RenameFolder(user_id string, folder_id string, new_name 
 	}
 
 	return nil
+}
+
+// DeleteFolder implements domain.FolderService.
+func (f *FolderService) DeleteFolder(folder_id string) (string, error) {
+	folderID, err := uuid.Parse(folder_id)
+	if err != nil {
+		return "", f.WrapError("failed to parse uuid", err)
+	}
+
+	parent_id, err := f.FolderRepository.DeleteFolder(folderID)
+	if err != nil {
+		return "", f.WrapError("failed to delete folder", err)
+	}
+
+	return parent_id, nil
+}
+
+// ScrubFolder implements domain.FolderService.
+func (f *FolderService) ScrubFolder(user_id, folder_id string) (string, error) {
+	folderID, err := uuid.Parse(folder_id)
+	if err != nil {
+		return "", f.WrapError("failed to parse uuid", err)
+	}
+
+	// get folder
+	folder, err := f.FolderRepository.GetFolder(folderID)
+	if err != nil {
+		return "", f.WrapError("failed to get folder", err)
+	}
+
+	err = f.FileSystemService.FSDeleteFolder(folder.Path)
+	if err != nil {
+		return "", f.WrapError("failed to delete folder", err)
+	}
+
+	parent_id, err := f.FolderRepository.ScrubFolder(user_id, folderID)
+	if err != nil {
+		return "", f.WrapError("failed to scrub folder", err)
+	}
+
+	return parent_id, nil
 }

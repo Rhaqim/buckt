@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/Rhaqim/buckt/internal/domain"
 	"github.com/Rhaqim/buckt/internal/model"
 	"github.com/Rhaqim/buckt/pkg/logger"
 
@@ -20,13 +21,13 @@ type DB struct {
 }
 
 // NewSQLite creates a new SQLite database connection.
-func NewDB(sqlDBInstance *sql.DB, driver string, log *logger.BucktLogger, debug bool) (*DB, error) {
+func NewDB(sqlDBInstance *sql.DB, driver domain.DBDrivers, log *logger.BucktLogger, debug bool) (*DB, error) {
 	// Define supported database drivers
-	supportedDrivers := map[string]func(*sql.DB) gorm.Dialector{
-		"postgres": func(db *sql.DB) gorm.Dialector {
+	supportedDrivers := map[domain.DBDrivers]func(*sql.DB) gorm.Dialector{
+		domain.Postgres: func(db *sql.DB) gorm.Dialector {
 			return postgres.New(postgres.Config{DriverName: "postgres", Conn: db})
 		},
-		"sqlite": func(db *sql.DB) gorm.Dialector {
+		domain.SQLite: func(db *sql.DB) gorm.Dialector {
 			return sqlite.New(sqlite.Config{DriverName: "sqlite", Conn: db})
 		},
 		// Add more drivers as needed:
@@ -38,9 +39,11 @@ func NewDB(sqlDBInstance *sql.DB, driver string, log *logger.BucktLogger, debug 
 		// },
 	}
 
+	driverString := string(driver)
+
 	// If driver is empty or unsupported, fallback to SQLite
 	if _, exists := supportedDrivers[driver]; !exists {
-		log.Warn("⚠️ Unsupported or missing driver '" + driver + "'. Falling back to SQLite.")
+		log.Warn("⚠️ Unsupported or missing driver '" + driverString + "'. Falling back to SQLite.")
 		driver = "sqlite"
 	}
 
@@ -71,15 +74,22 @@ func NewDB(sqlDBInstance *sql.DB, driver string, log *logger.BucktLogger, debug 
 			log.Info("🛠️ Initializing new SQLite database (db.sqlite)...")
 			dialector = sqlite.Open("db.sqlite")
 		} else {
-			return nil, log.WrapError("❌ No instance provided for '"+driver+"' and cannot fall back to SQLite.", fmt.Errorf("no instance provided for '%s' ensure the database is running", driver))
+			return nil, log.WrapError("❌ No instance provided for '"+driverString+"' and cannot fall back to SQLite.", fmt.Errorf("no instance provided for '%s' ensure the database is running", driver))
 		}
 	}
 
 	// Establish database connection
-	log.Info("🚀 Connecting to " + driver + " database...")
+	log.Info("🚀 Connecting to " + driverString + " database...")
 	db, err := gorm.Open(dialector, gormConfig)
 	if err != nil {
 		return nil, log.WrapError("Failed to connect to database", err)
+	}
+
+	if driver == "sqlite" {
+		// enable foreign key support for sqlite
+		if err := db.Exec("PRAGMA foreign_keys = ON").Error; err != nil {
+			return nil, log.WrapError("Failed to enable foreign key support for SQLite:", err)
+		}
 	}
 
 	// Access the underlying *sql.DB object

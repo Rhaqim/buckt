@@ -41,7 +41,7 @@ func New(bucktOpts BucktConfig) (*Buckt, error) {
 	bucktLog.Info("🚀 Starting Buckt")
 
 	// Initialize database
-	db, err := database.NewDB(bucktOpts.DB.Database, string(bucktOpts.DB.Driver), bucktLog, bucktOpts.Log.Debug)
+	db, err := database.NewDB(bucktOpts.DB.Database, bucktOpts.DB.Driver, bucktLog, bucktOpts.Log.Debug)
 	if err != nil {
 		return nil, err
 	}
@@ -73,8 +73,8 @@ func New(bucktOpts BucktConfig) (*Buckt, error) {
 	var fileRepository domain.FileRepository = repository.NewFileRepository(db, bucktLog)
 
 	// initlize the services
-	var folderService domain.FolderService = service.NewFolderService(bucktLog, cacheManager, folderRepository)
 	var fileSystemService domain.FileSystemService = service.NewFileSystemService(bucktLog, bucktOpts.MediaDir)
+	var folderService domain.FolderService = service.NewFolderService(bucktLog, cacheManager, folderRepository, fileSystemService)
 	var fileService domain.FileService = service.NewFileService(bucktLog, cacheManager, bucktOpts.FlatNameSpaces, fileRepository, folderService, fileSystemService)
 
 	// Initialize the app services
@@ -227,9 +227,32 @@ func (b *Buckt) RenameFolder(user_id, folder_id string, new_name string) error {
 	return b.folderService.RenameFolder(user_id, folder_id, new_name)
 }
 
-// DeleteFolder implements Buckt.
-func (b *Buckt) DeleteFolder(user_id, folder_id string) error {
-	panic("unimplemented")
+// DeleteFolder soft deletes a folder with the given folder_id using the folderService.
+// It returns an error if the deletion fails.
+//
+// Parameters:
+//   - folder_id: The ID of the folder to be deleted.
+//
+// Returns:
+//   - error: An error if the deletion fails, otherwise nil.
+func (b *Buckt) DeleteFolder(folder_id string) error {
+	_, err := b.folderService.DeleteFolder(folder_id)
+	return err
+}
+
+// DeleteFolderPermanently deletes a folder permanently for a given user.
+// It takes the user ID and folder ID as parameters and returns an error if the operation fails.
+//
+// Parameters:
+//   - user_id: The ID of the user who owns the folder.
+//   - folder_id: The ID of the folder to be deleted.
+//
+// Returns:
+//   - error: An error object if the deletion fails, otherwise nil.
+func (b *Buckt) DeleteFolderPermanently(user_id, folder_id string) error {
+	_, err := b.folderService.ScrubFolder(user_id, folder_id)
+
+	return err
 }
 
 /* File Methods */

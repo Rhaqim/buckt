@@ -15,14 +15,16 @@ type MockFolderServices struct {
 	*FolderService
 	*MockCacheManager
 	*MockFolderRepository
+	*MockFileSystemService
 }
 
 func setupFolderTest() MockFolderServices {
 	mockLogger := logger.NewLogger("", true)
 	mockCache := new(MockCacheManager)
 	mockFolderRepo := new(MockFolderRepository)
+	mockFileSystemService := new(MockFileSystemService)
 
-	folderService := NewFolderService(mockLogger, mockCache, mockFolderRepo).(*FolderService)
+	folderService := NewFolderService(mockLogger, mockCache, mockFolderRepo, mockFileSystemService).(*FolderService)
 
 	return MockFolderServices{
 		FolderService:        folderService,

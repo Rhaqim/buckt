@@ -10,3 +10,10 @@ type CacheManager interface {
 	// Delete deletes the value for the given key.
 	DeleteBucktValue(key string) error
 }
+
+type DBDrivers string
+
+const (
+	Postgres DBDrivers = "postgres"
+	SQLite   DBDrivers = "sqlite"
+)

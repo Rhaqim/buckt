@@ -130,7 +130,43 @@ func (w *WebService) RenameFolder(c *gin.Context) {
 
 // DeleteFolder implements domain.WebService.
 func (w *WebService) DeleteFolder(c *gin.Context) {
-	panic("unimplemented")
+	// get the folder_id from the request
+	folderID := c.Param("folder_id")
+	if folderID == "" {
+		c.AbortWithStatusJSON(400, response.Error("folder_id is required", ""))
+		return
+	}
+
+	// ge tthe folder with content
+	parent_id, err := w.FolderService.DeleteFolder(folderID)
+	if err != nil {
+		c.AbortWithStatusJSON(500, response.WrapError("failed to delete folder", err))
+		return
+	}
+
+	c.Redirect(302, "/web/folder/"+parent_id)
+}
+
+// DeleteFolderPermanently implements domain.WebService.
+func (w *WebService) DeleteFolderPermanently(c *gin.Context) {
+	user_id := c.GetString("owner_id")
+
+	// get the folder_id from the request
+	folderID := c.Param("folder_id")
+	if folderID == "" {
+		c.AbortWithStatusJSON(400, response.Error("folder_id is required", ""))
+		return
+	}
+
+	// ge tthe folder with content
+	parent_id, err := w.FolderService.ScrubFolder(user_id, folderID)
+	if err != nil {
+		c.AbortWithStatusJSON(500, response.WrapError("failed to delete folder", err))
+		return
+	}
+
+	c.Redirect(302, "/web/folder/"+parent_id)
+
 }
 
 // UploadFile implements domain.WebService.

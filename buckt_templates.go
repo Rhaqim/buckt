@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"html/template"
 	"io/fs"
+	"strings"
 )
 
 //go:embed internal/web/templates/*.html
@@ -30,10 +31,20 @@ func loadTemplates() (*template.Template, error) {
 		return nil, fmt.Errorf("failed to load templates: %w", err)
 	}
 
-	tmpl, err := template.ParseFS(tmplFS, "*.html")
+	// Add custom functions to the template
+	tmpl := template.New("").Funcs(template.FuncMap{
+		"hasPrefix": hasPrefix,
+	})
+
+	tmpl, err = tmpl.ParseFS(tmplFS, "*.html")
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse templates: %w", err)
 	}
 
 	return tmpl, nil
+}
+
+// Function to check if a string has a prefix
+func hasPrefix(s, prefix string) bool {
+	return strings.HasPrefix(s, prefix)
 }

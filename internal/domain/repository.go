@@ -12,6 +12,8 @@ type FolderRepository interface {
 	GetFolders(parent_id uuid.UUID) ([]model.FolderModel, error)
 	MoveFolder(folder_id, new_parent_id uuid.UUID) error
 	RenameFolder(user_id string, folder_id uuid.UUID, new_name string) error
+	DeleteFolder(folder_id uuid.UUID) (parent_id string, err error)
+	ScrubFolder(user_id string, folder_id uuid.UUID) (parent_id string, err error)
 }
 
 type FileRepository interface {

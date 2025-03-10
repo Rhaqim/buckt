@@ -113,6 +113,18 @@ func (m *MockFolderRepository) RenameFolder(user_id string, folderID uuid.UUID, 
 	return args.Error(0)
 }
 
+// DeleteFolder implements domain.FolderRepository.
+func (m *MockFolderRepository) DeleteFolder(folder_id uuid.UUID) (parent_id string, err error) {
+	args := m.Called(folder_id)
+	return args.String(0), args.Error(1)
+}
+
+// ScrubFolder implements domain.FolderRepository.
+func (m *MockFolderRepository) ScrubFolder(user_id string, folder_id uuid.UUID) (parent_id string, err error) {
+	args := m.Called(user_id, folder_id)
+	return args.String(0), args.Error(1)
+}
+
 type MockFolderService struct {
 	mock.Mock
 }
@@ -152,6 +164,18 @@ func (m *MockFolderService) GetFolder(user_id, folderID string) (*model.FolderMo
 	return args.Get(0).(*model.FolderModel), args.Error(1)
 }
 
+// DeleteFolder implements domain.FolderService.
+func (m *MockFolderService) DeleteFolder(folder_id string) (string, error) {
+	args := m.Called(folder_id)
+	return args.String(0), args.Error(1)
+}
+
+// ScrubFolder implements domain.FolderService.
+func (m *MockFolderService) ScrubFolder(user_id string, folder_id string) (string, error) {
+	args := m.Called(user_id, folder_id)
+	return args.String(0), args.Error(1)
+}
+
 type MockFileSystemService struct {
 	mock.Mock
 }
@@ -180,5 +204,11 @@ func (m *MockFileSystemService) FSGetFile(path string) ([]byte, error) {
 
 func (m *MockFileSystemService) FSDeleteFile(path string) error {
 	args := m.Called(path)
+	return args.Error(0)
+}
+
+// FSDeleteFolder implements domain.FileSystemService.
+func (m *MockFileSystemService) FSDeleteFolder(folderPath string) error {
+	args := m.Called(folderPath)
 	return args.Error(0)
 }

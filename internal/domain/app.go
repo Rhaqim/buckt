@@ -8,16 +8,17 @@ type Middleware interface {
 }
 
 type APIService interface {
-	UploadFile(c *gin.Context)
-	DownloadFile(c *gin.Context)
-	ServeFile(c *gin.Context)
-	DeleteFile(c *gin.Context)
-
 	CreateFolder(c *gin.Context)
 	GetFolderContent(c *gin.Context)
 	RenameFolder(c *gin.Context)
 	MoveFolder(c *gin.Context)
 	DeleteFolder(c *gin.Context)
+	DeleteFolderPermanently(c *gin.Context)
+
+	UploadFile(c *gin.Context)
+	DownloadFile(c *gin.Context)
+	ServeFile(c *gin.Context)
+	DeleteFile(c *gin.Context)
 	DeleteFilePermanently(c *gin.Context)
 
 	// TODO: Might not be needed
@@ -32,6 +33,7 @@ type WebService interface {
 	RenameFolder(c *gin.Context)
 	MoveFolder(c *gin.Context)
 	DeleteFolder(c *gin.Context)
+	DeleteFolderPermanently(c *gin.Context)
 
 	UploadFile(c *gin.Context)
 	DownloadFile(c *gin.Context)
