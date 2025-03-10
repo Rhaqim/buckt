@@ -20,6 +20,8 @@ type Buckt struct {
 	db     *database.DB
 	router *router.Router
 
+	flatnameSpaces bool
+
 	fileService   domain.FileService
 	folderService domain.FolderService
 }
@@ -93,6 +95,7 @@ func New(bucktOpts BucktConfig) (*Buckt, error) {
 
 	buckt.db = db
 	buckt.router = router
+	buckt.flatnameSpaces = bucktOpts.FlatNameSpaces
 	buckt.fileService = fileService
 	buckt.folderService = folderService
 
@@ -250,6 +253,14 @@ func (b *Buckt) DeleteFolder(folder_id string) error {
 // Returns:
 //   - error: An error object if the deletion fails, otherwise nil.
 func (b *Buckt) DeleteFolderPermanently(user_id, folder_id string) error {
+
+	// If flatnameSpaces is enabled, we soft delete the folder
+	if b.flatnameSpaces {
+		_, err := b.folderService.DeleteFolder(folder_id)
+
+		return err
+	}
+
 	_, err := b.folderService.ScrubFolder(user_id, folder_id)
 
 	return err
