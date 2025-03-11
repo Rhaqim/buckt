@@ -27,9 +27,10 @@ func setupFolderTest() MockFolderServices {
 	folderService := NewFolderService(mockLogger, mockCache, mockFolderRepo, mockFileSystemService).(*FolderService)
 
 	return MockFolderServices{
-		FolderService:        folderService,
-		MockCacheManager:     mockCache,
-		MockFolderRepository: mockFolderRepo,
+		FolderService:         folderService,
+		MockCacheManager:      mockCache,
+		MockFolderRepository:  mockFolderRepo,
+		MockFileSystemService: mockFileSystemService,
 	}
 }
 
@@ -125,4 +126,38 @@ func TestRenameFolder(t *testing.T) {
 	err := mockSetUp.FolderService.RenameFolder(user_id, folderID.String(), newName)
 	assert.NoError(t, err)
 	mockSetUp.MockFolderRepository.AssertExpectations(t)
+}
+
+func TestDeleteFolder(t *testing.T) {
+	mockSetUp := setupFolderTest()
+
+	folderID := uuid.MustParse("550e8400-e29b-41d4-a716-446655440000")
+	parentID := uuid.MustParse("550e8400-e29b-41d4-a716-446655440001")
+
+	mockSetUp.MockFolderRepository.On("DeleteFolder", folderID).Return(parentID.String(), nil)
+
+	returnedParentID, err := mockSetUp.FolderService.DeleteFolder(folderID.String())
+	assert.NoError(t, err)
+	assert.Equal(t, parentID.String(), returnedParentID)
+	mockSetUp.MockFolderRepository.AssertExpectations(t)
+}
+
+func TestScrubFolder(t *testing.T) {
+	mockSetUp := setupFolderTest()
+
+	folderID := uuid.MustParse("550e8400-e29b-41d4-a716-446655440000")
+	parentID := uuid.MustParse("550e8400-e29b-41d4-a716-446655440001")
+	mockFolder := &model.FolderModel{ID: folderID, Path: "/path/to/folder"}
+
+	mockSetUp.MockFolderRepository.On("GetFolder", folderID).Return(mockFolder, nil)
+
+	mockSetUp.MockFileSystemService.On("FSDeleteFolder", mockFolder.Path).Return(nil)
+
+	mockSetUp.MockFolderRepository.On("ScrubFolder", "user1", folderID).Return(parentID.String(), nil)
+
+	returnedParentID, err := mockSetUp.FolderService.ScrubFolder("user1", folderID.String())
+	assert.NoError(t, err)
+	assert.Equal(t, parentID.String(), returnedParentID)
+	mockSetUp.MockFolderRepository.AssertExpectations(t)
+	mockSetUp.MockFileSystemService.AssertExpectations(t)
 }

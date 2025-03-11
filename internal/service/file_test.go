@@ -159,3 +159,36 @@ func TestDeleteFile(t *testing.T) {
 	_, err := mockSetUp.FileService.DeleteFile(fileID.String())
 	assert.NoError(t, err)
 }
+
+func TestScrubFile(t *testing.T) {
+	mockSetUp := setupFileTest()
+
+	fileID := uuid.New()
+	parentID := uuid.New()
+	fileModel := &model.FileModel{
+		ID:       fileID,
+		ParentID: parentID,
+		Path:     "/parent/folder/file.txt",
+	}
+
+	var jsonStr string
+
+	// Mock cache retrieval
+	mockSetUp.MockCacheManager.On("GetBucktValue", fileID.String()).Return(jsonStr, nil)
+
+	// Mock cache deletion
+	mockSetUp.MockCacheManager.On("DeleteBucktValue", fileID.String()).Return(nil)
+
+	// Mock repository retrieval
+	mockSetUp.MockFileRepository.On("GetFile", fileID).Return(fileModel, nil)
+
+	// Mock file system deletion
+	mockSetUp.MockFileSystemService.On("FSDeleteFile", "/parent/folder/file.txt").Return(nil)
+
+	// Mock repository scrub
+	mockSetUp.MockFileRepository.On("ScrubFile", fileID).Return(nil)
+
+	parentIDStr, err := mockSetUp.FileService.ScrubFile(fileID.String())
+	assert.NoError(t, err)
+	assert.Equal(t, parentID.String(), parentIDStr)
+}

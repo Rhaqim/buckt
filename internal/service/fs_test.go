@@ -127,3 +127,25 @@ func TestFSDeleteFile(t *testing.T) {
 	_, err = os.Stat(expectedPath)
 	assert.True(t, os.IsNotExist(err))
 }
+func TestFSDeleteFolder(t *testing.T) {
+	bfs, mediaDir := setupFSTest()
+	testFolderPath := "testfolder"
+	expectedFolderPath := filepath.Join(mediaDir, testFolderPath)
+
+	// Create a test folder
+	err := os.MkdirAll(expectedFolderPath, os.ModePerm)
+	assert.NoError(t, err)
+
+	// Create a test file inside the folder
+	testFilePath := filepath.Join(expectedFolderPath, "testfile.txt")
+	_, err = os.Create(testFilePath)
+	assert.NoError(t, err)
+
+	// Delete folder
+	err = bfs.FSDeleteFolder(testFolderPath)
+	assert.NoError(t, err)
+
+	// Validate folder does not exist
+	_, err = os.Stat(expectedFolderPath)
+	assert.True(t, os.IsNotExist(err))
+}
