@@ -11,7 +11,7 @@ import (
 )
 
 func TestNewDB(t *testing.T) {
-	log := logger.NewLogger("", true)
+	log := logger.NewLogger("", true, false)
 
 	t.Run("Unsupported driver falls back to SQLite", func(t *testing.T) {
 		db, err := database.NewDB(nil, "unsupported", log, true)
@@ -51,7 +51,7 @@ func TestNewDB(t *testing.T) {
 }
 
 func TestDB_Close(t *testing.T) {
-	log := logger.NewLogger("", true)
+	log := logger.NewLogger("", true, false)
 	sqlDB, err := sql.Open("sqlite3", ":memory:")
 	assert.NoError(t, err)
 	defer sqlDB.Close()
@@ -65,7 +65,7 @@ func TestDB_Close(t *testing.T) {
 }
 
 func TestDB_Migrate(t *testing.T) {
-	log := logger.NewLogger("", true)
+	log := logger.NewLogger("", true, false)
 	sqlDB, err := sql.Open("sqlite3", ":memory:")
 	assert.NoError(t, err)
 	defer sqlDB.Close()

@@ -10,7 +10,7 @@ import (
 )
 
 func setupFSTest() (*FileSystemService, string) {
-	log := logger.NewLogger("", true)
+	log := logger.NewLogger("", true, false)
 	mediaDir := os.TempDir()
 	bfs := NewFileSystemService(log, mediaDir).(*FileSystemService)
 	return bfs, mediaDir

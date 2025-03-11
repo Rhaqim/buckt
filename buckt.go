@@ -38,7 +38,7 @@ type Buckt struct {
 func New(bucktOpts BucktConfig) (*Buckt, error) {
 	buckt := &Buckt{}
 
-	bucktLog := logger.NewLogger(bucktOpts.Log.LogFile, bucktOpts.Log.LogTerminal, logger.WithLogger(bucktOpts.Log.Logger))
+	bucktLog := logger.NewLogger(bucktOpts.Log.LogFile, bucktOpts.Log.LogTerminal, bucktOpts.Log.Debug, logger.WithLogger(bucktOpts.Log.Logger))
 
 	bucktLog.Info("🚀 Starting Buckt")
 
