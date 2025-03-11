@@ -12,6 +12,8 @@ import (
 type Router struct {
 	*gin.Engine
 
+	StandaloneMode bool
+
 	domain.APIService
 	domain.WebService
 	domain.Middleware
@@ -48,14 +50,28 @@ func NewRouter(
 	router := &Router{
 		Engine: r,
 
+		StandaloneMode: StandaloneMode,
+
 		APIService: apiService,
 		WebService: webService,
 		Middleware: middleware,
 	}
 
-	router.registerAllRoutes(StandaloneMode)
-
 	return router
+}
+
+// Run starts the router on the given address.
+func (r *Router) Run(addr string) error {
+	r.registerAllRoutes(r.StandaloneMode)
+
+	return r.Engine.Run(addr)
+}
+
+// ServeHTTP makes Router compatible with http.Handler
+func (r *Router) Handler() http.Handler {
+	r.registerAllRoutes(r.StandaloneMode)
+
+	return r.Engine
 }
 
 // RegisterAllRoutes registers all routes for the router.
@@ -128,9 +144,4 @@ func (r *Router) registerAllRoutes(StandaloneMode bool) {
 
 	// Register API routes
 	r.registerAPIRoutes()
-}
-
-// ServeHTTP makes Router compatible with http.Handler
-func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
-	r.Engine.ServeHTTP(w, req)
 }

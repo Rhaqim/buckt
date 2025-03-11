@@ -135,7 +135,7 @@ func Default(opts ...ConfigFunc) (*Buckt, error) {
 // GetHandler returns the HTTP handler for the Buckt instance.
 // It provides access to the underlying router engine.
 func (b *Buckt) GetHandler() http.Handler {
-	return b.router.Engine
+	return b.router.Handler()
 }
 
 // StartServer starts the server on the specified port using the router.
