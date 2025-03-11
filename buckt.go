@@ -119,7 +119,7 @@ func New(bucktOpts BucktConfig) (*Buckt, error) {
 // - An error if the Buckt instance could not be created.
 func Default(opts ...ConfigFunc) (*Buckt, error) {
 	bucktOpts := BucktConfig{
-		Log:            LogConfig{LogTerminal: true, LogFile: "logs", Debug: true},
+		Log:            LogConfig{LogTerminal: true, Debug: true},
 		MediaDir:       "media",
 		StandaloneMode: true,
 		FlatNameSpaces: true,
