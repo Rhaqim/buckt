@@ -120,7 +120,7 @@ func (db *DB) Close() error {
 
 	err = sqlDB.Close()
 
-	return db.WrapError("Failed to close database connection: %v", err)
+	return err
 }
 
 func (db *DB) Migrate() error {

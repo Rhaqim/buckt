@@ -131,9 +131,23 @@ func WithCache(cache domain.CacheManager) ConfigFunc {
 //
 // Returns:
 //   - ConfigFunc: A function that takes a pointer to BucktConfig and sets its DB field.
-func WithDB(driver string, db *sql.DB) ConfigFunc {
+func WithDB(driver DBDrivers, db *sql.DB) ConfigFunc {
 	return func(c *BucktConfig) {
 		c.DB.Driver = DBDrivers(driver)
 		c.DB.Database = db
+	}
+}
+
+// WithLog is a configuration function that sets the logger for the BucktConfig.
+// It takes a Log instance as an argument and assigns it to the Log field of BucktConfig.
+//
+// Parameters:
+//   - log: An instance of Log to be used for logging.
+//
+// Returns:
+//   - A ConfigFunc that sets the Log field of BucktConfig.
+func WithLog(log LogConfig) ConfigFunc {
+	return func(c *BucktConfig) {
+		c.Log = log
 	}
 }

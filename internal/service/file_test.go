@@ -3,6 +3,7 @@ package service
 import (
 	"testing"
 
+	"github.com/Rhaqim/buckt/internal/mocks"
 	"github.com/Rhaqim/buckt/internal/model"
 	"github.com/Rhaqim/buckt/pkg/logger"
 	"github.com/google/uuid"
@@ -12,18 +13,18 @@ import (
 
 type MockFileServices struct {
 	*FileService
-	*MockCacheManager
-	*MockFileRepository
-	*MockFolderService
-	*MockFileSystemService
+	*mocks.MockCacheManager
+	*mocks.MockFileRepository
+	*mocks.MockFolderService
+	*mocks.MockFileSystemService
 }
 
 func setupFileTest() MockFileServices {
 	mockLogger := logger.NewLogger("", true)
-	mockCache := new(MockCacheManager)
-	mockFileRepo := new(MockFileRepository)
-	mockFolderService := new(MockFolderService)
-	mockFileSystemService := new(MockFileSystemService)
+	mockCache := new(mocks.MockCacheManager)
+	mockFileRepo := new(mocks.MockFileRepository)
+	mockFolderService := new(mocks.MockFolderService)
+	mockFileSystemService := new(mocks.MockFileSystemService)
 
 	fileService := NewFileService(mockLogger, mockCache, false, mockFileRepo, mockFolderService, mockFileSystemService).(*FileService)
 
@@ -149,6 +150,11 @@ func TestDeleteFile(t *testing.T) {
 		ID:   fileID,
 		Path: "/parent/folder/file.txt",
 	}
+
+	mockSetUp.MockCacheManager.On("GetBucktValue", fileID.String()).Return("", nil)
+
+	// Mock cache deletion
+	mockSetUp.MockCacheManager.On("DeleteBucktValue", fileID.String()).Return(nil)
 
 	mockSetUp.MockFileRepository.On("GetFile", fileID).Return(fileModel, nil)
 

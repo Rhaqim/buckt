@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"testing"
 
+	"github.com/Rhaqim/buckt/internal/mocks"
 	"github.com/Rhaqim/buckt/internal/model"
 	"github.com/Rhaqim/buckt/pkg/logger"
 	"github.com/google/uuid"
@@ -13,16 +14,16 @@ import (
 
 type MockFolderServices struct {
 	*FolderService
-	*MockCacheManager
-	*MockFolderRepository
-	*MockFileSystemService
+	*mocks.MockCacheManager
+	*mocks.MockFolderRepository
+	*mocks.MockFileSystemService
 }
 
 func setupFolderTest() MockFolderServices {
 	mockLogger := logger.NewLogger("", true)
-	mockCache := new(MockCacheManager)
-	mockFolderRepo := new(MockFolderRepository)
-	mockFileSystemService := new(MockFileSystemService)
+	mockCache := new(mocks.MockCacheManager)
+	mockFolderRepo := new(mocks.MockFolderRepository)
+	mockFileSystemService := new(mocks.MockFileSystemService)
 
 	folderService := NewFolderService(mockLogger, mockCache, mockFolderRepo, mockFileSystemService).(*FolderService)
 
