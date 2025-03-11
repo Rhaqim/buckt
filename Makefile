@@ -1,15 +1,24 @@
-.PHONY: all build run start test coverage clean
+.PHONY: all build run start docker-build docker-run test coverage clean
 
-all: run
+PORT ?= 8080
+
+all: build run
 
 build:
 	go build -o bin/main cmd/main.go
 
 run: build
-	./bin/main
+	./bin/mainb -port=$(PORT)
 
 start:
-	go run cmd/main.go
+	go run cmd/main.go -port=$(PORT)
+
+docker-build:
+	docker build -t buckt -f Dockerfile .
+
+docker-run:
+	docker run -p $(PORT):$(PORT) buckt
+	# docker run -e PORT=$(PORT) -p $(PORT):$(PORT) buckt
 
 test:
 	go test ./... -v
