@@ -47,7 +47,7 @@ func NewLogger(logFile string, logTerminal, debug bool, opts ...LogFunc) *BucktL
 		}
 	} else {
 		// If no log file and debugging, silence logs; otherwise, use stdout
-		if logTerminal && debug {
+		if logTerminal && !debug {
 			logWriter = io.Discard // Silence terminal logs
 		} else {
 			logWriter = os.Stdout
