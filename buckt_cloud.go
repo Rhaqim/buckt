@@ -82,7 +82,7 @@ func (g GCPConfig) Validate() error {
 	return nil
 }
 
-func InitCloudClient(cfg CloudConfig, fileService domain.FileService, folderService domain.FolderService) (domain.CloudService, error) {
+func initCloudClient(cfg CloudConfig, fileService domain.FileService, folderService domain.FolderService) (domain.CloudService, error) {
 	// Validate provider configuration
 	if err := cfg.Credentials.Validate(); err != nil {
 		return nil, err

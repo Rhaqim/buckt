@@ -635,6 +635,71 @@ func TestTransferFile(t *testing.T) {
 	})
 }
 
+func TestTransferFolder(t *testing.T) {
+	t.Run("With CloudProviderNone", func(t *testing.T) {
+		config := CloudConfig{Provider: CloudProviderNone}
+
+		buckt := setupBucktTest(t)
+
+		// set cloudService to nil to simulate an error
+		buckt.cloudService = nil
+
+		err := buckt.InitCloudService(config)
+		assert.Error(t, err)
+		assert.Nil(t, buckt.cloudService)
+
+		buckt.MockCloudService.On("UploadFolderToCloud", "user_1", "550e8400-e29b-41d4-a716-446655440000").
+			Return(nil)
+
+		// Call the method
+		err = buckt.Buckt.TransferFolder("user_1", "550e8400-e29b-41d4-a716-446655440000")
+		assert.Error(t, err)
+
+		// Verify expectations
+		buckt.MockFolderService.AssertExpectations(t)
+	})
+
+	t.Run("With CloudProviderAWS", func(t *testing.T) {
+		config := CloudConfig{
+			Provider: CloudProviderAWS,
+			Credentials: AWSConfig{
+				AccessKey: "accessKey",
+				SecretKey: "secretKey",
+				Region:    "region",
+				Bucket:    "bucket",
+			},
+		}
+
+		buckt := setupBucktTest(t)
+
+		// Cleanup to ensure the server is closed after the test
+		t.Cleanup(func() {
+			buckt.Close()
+		})
+
+		// set cloudService to nil to simulate an error
+		buckt.cloudService = nil
+
+		err := buckt.InitCloudService(config)
+		assert.NoError(t, err)
+		assert.NotNil(t, buckt.cloudService)
+
+		// Add mock cloud service]
+		buckt.cloudService = buckt.MockCloudService
+
+		// Mock the expected behavior
+		buckt.MockCloudService.On("UploadFolderToCloud", "user_1", "550e8400-e29b-41d4-a716-446655440000").
+			Return(nil)
+
+		// Call the method
+		err = buckt.Buckt.TransferFolder("user_1", "550e8400-e29b-41d4-a716-446655440000")
+		assert.NoError(t, err)
+
+		// Verify expectations
+		buckt.MockFolderService.AssertExpectations(t)
+	})
+}
+
 // ✅ Test CloudProvider String() method
 func TestCloudProviderString(t *testing.T) {
 	tests := []struct {
@@ -815,7 +880,7 @@ func TestInitCloudClient(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		_, err := InitCloudClient(test.config, fileService, folderService)
+		_, err := initCloudClient(test.config, fileService, folderService)
 		if err == nil && test.expected != nil || err != nil && test.expected == nil || err != nil && test.expected != nil && err.Error() != test.expected.Error() {
 			t.Errorf("expected %v, got %v", test.expected, err)
 		}

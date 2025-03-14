@@ -85,6 +85,7 @@ func New(bucktOpts BucktConfig) (*Buckt, error) {
 	buckt.fileService = fileService
 	buckt.folderService = folderService
 
+	// Initialize cloud service if provided
 	if !bucktOpts.Cloud.isEmpty() {
 		fmt.Println("🚀 Initializing cloud service")
 		err = buckt.InitCloudService(bucktOpts.Cloud)
@@ -345,6 +346,14 @@ func (b *Buckt) DeleteFilePermanently(file_id string) error {
 
 /* Cloud Methods */
 
+// InitCloudService initializes the cloud service with the provided cloud configuration.
+// It takes a CloudConfig struct as an argument and returns an error if the initialization fails.
+//
+// Parameters:
+//   - cloudConfig: A CloudConfig struct containing the configuration options for the cloud service.
+//
+// Returns:
+//   - error: An error if the cloud service initialization fails, otherwise nil.
 func (b *Buckt) InitCloudService(cloudConfig CloudConfig) error {
 	var err error
 
@@ -355,7 +364,7 @@ func (b *Buckt) InitCloudService(cloudConfig CloudConfig) error {
 	fmt.Println("🚀 Initializing cloud service")
 
 	// Initialize the cloud service
-	b.cloudService, err = InitCloudClient(cloudConfig, b.fileService, b.folderService)
+	b.cloudService, err = initCloudClient(cloudConfig, b.fileService, b.folderService)
 
 	return err
 }

@@ -83,7 +83,7 @@ type ConfigFunc func(*BucktConfig)
 
 // StandaloneMode sets the standalone mode for the BucktConfig.
 // When standalone mode is enabled, the application will run independently
-// without relying on external services or configurations.
+// without relying on gin or any other web server.
 //
 // Parameters:
 //
