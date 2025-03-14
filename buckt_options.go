@@ -5,6 +5,7 @@ import (
 	"log"
 
 	"github.com/Rhaqim/buckt/internal/domain"
+	"github.com/Rhaqim/buckt/internal/model"
 )
 
 // LogConfig holds the configuration for logging in the application.
@@ -22,11 +23,11 @@ type LogConfig struct {
 	Debug       bool
 }
 
-type DBDrivers = domain.DBDrivers // Type alias
+type DBDrivers = model.DBDrivers // Type alias
 
 const (
-	Postgres = domain.Postgres
-	SQLite   = domain.SQLite
+	Postgres = model.Postgres
+	SQLite   = model.SQLite
 )
 
 // DBConfig holds the configuration for the database connection.
@@ -58,6 +59,7 @@ type BucktConfig struct {
 	MediaDir       string
 	FlatNameSpaces bool
 	StandaloneMode bool
+	Cloud          CloudConfig
 }
 
 type ConfigFunc func(*BucktConfig)

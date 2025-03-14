@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"github.com/Rhaqim/buckt/internal/database"
-	"github.com/Rhaqim/buckt/internal/domain"
+	"github.com/Rhaqim/buckt/internal/model"
 	"github.com/Rhaqim/buckt/pkg/logger"
 	"github.com/stretchr/testify/assert"
 )
@@ -25,7 +25,7 @@ func TestNewDB(t *testing.T) {
 		assert.NoError(t, err)
 		defer sqlDB.Close()
 
-		db, err := database.NewDB(sqlDB, domain.SQLite, log, true)
+		db, err := database.NewDB(sqlDB, model.SQLite, log, true)
 		assert.NoError(t, err)
 		assert.NotNil(t, db)
 		assert.Equal(t, "sqlite", db.Dialector.Name())
@@ -43,7 +43,7 @@ func TestNewDB(t *testing.T) {
 	// })
 
 	t.Run("SQLite without provided instance", func(t *testing.T) {
-		db, err := database.NewDB(nil, domain.SQLite, log, true)
+		db, err := database.NewDB(nil, model.SQLite, log, true)
 		assert.NoError(t, err)
 		assert.NotNil(t, db)
 		assert.Equal(t, "sqlite", db.Dialector.Name())
@@ -56,7 +56,7 @@ func TestDB_Close(t *testing.T) {
 	assert.NoError(t, err)
 	defer sqlDB.Close()
 
-	db, err := database.NewDB(sqlDB, domain.SQLite, log, true)
+	db, err := database.NewDB(sqlDB, model.SQLite, log, true)
 	assert.NoError(t, err)
 	assert.NotNil(t, db)
 
@@ -70,7 +70,7 @@ func TestDB_Migrate(t *testing.T) {
 	assert.NoError(t, err)
 	defer sqlDB.Close()
 
-	db, err := database.NewDB(sqlDB, domain.SQLite, log, true)
+	db, err := database.NewDB(sqlDB, model.SQLite, log, true)
 	assert.NoError(t, err)
 	assert.NotNil(t, db)
 

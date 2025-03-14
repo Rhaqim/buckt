@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/Rhaqim/buckt/internal/domain"
 	"github.com/Rhaqim/buckt/internal/model"
 	"github.com/Rhaqim/buckt/pkg/logger"
 
@@ -21,13 +20,13 @@ type DB struct {
 }
 
 // NewSQLite creates a new SQLite database connection.
-func NewDB(sqlDBInstance *sql.DB, driver domain.DBDrivers, log *logger.BucktLogger, debug bool) (*DB, error) {
+func NewDB(sqlDBInstance *sql.DB, driver model.DBDrivers, log *logger.BucktLogger, debug bool) (*DB, error) {
 	// Define supported database drivers
-	supportedDrivers := map[domain.DBDrivers]func(*sql.DB) gorm.Dialector{
-		domain.Postgres: func(db *sql.DB) gorm.Dialector {
+	supportedDrivers := map[model.DBDrivers]func(*sql.DB) gorm.Dialector{
+		model.Postgres: func(db *sql.DB) gorm.Dialector {
 			return postgres.New(postgres.Config{DriverName: "postgres", Conn: db})
 		},
-		domain.SQLite: func(db *sql.DB) gorm.Dialector {
+		model.SQLite: func(db *sql.DB) gorm.Dialector {
 			return sqlite.New(sqlite.Config{DriverName: "sqlite", Conn: db})
 		},
 		// Add more drivers as needed:

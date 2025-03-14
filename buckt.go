@@ -79,6 +79,14 @@ func New(bucktOpts BucktConfig) (*Buckt, error) {
 	var folderService domain.FolderService = service.NewFolderService(bucktLog, cacheManager, folderRepository, fileSystemService)
 	var fileService domain.FileService = service.NewFileService(bucktLog, cacheManager, bucktOpts.FlatNameSpaces, fileRepository, folderService, fileSystemService)
 
+	// Cloud storage service
+	cloudClient, err := InitCloudClient(bucktOpts.Cloud, fileService, folderService)
+	if err != nil {
+		return nil, err
+	}
+
+	_ = service.NewCloudStorage(cloudClient)
+
 	// Initialize the app services
 	var apiService domain.APIService = app.NewAPIService(folderService, fileService)
 	var webService domain.WebService = app.NewWebService(folderService, fileService)
