@@ -123,8 +123,10 @@ func TestNew(t *testing.T) {
 	// 	}
 
 	// 	buckt, err := New(bucktOpts)
-	// 	assert.NoError(t, err)
-	// 	assert.NotNil(t, buckt)
+	// 	// assert.NoError(t, err)
+	// 	// assert.NotNil(t, buckt)
+	// 	assert.Error(t, err) // 🚨 Error: pq: database "postgres" does not exist
+	// 	assert.Nil(t, buckt)
 	// })
 
 	t.Run("Postgres without provided instance", func(t *testing.T) {
@@ -574,11 +576,12 @@ func TestTransferFile(t *testing.T) {
 
 		buckt := setupBucktTest(t)
 
-		service, err := buckt.InitCloudService(config)
-		assert.Error(t, err)
-		assert.Nil(t, service)
+		// set cloudService to nil to simulate an error
+		buckt.cloudService = nil
 
-		buckt.cloudService = service
+		err := buckt.InitCloudService(config)
+		assert.Error(t, err)
+		assert.Nil(t, buckt.cloudService)
 
 		buckt.MockCloudService.On("UploadFileToCloud", "550e8400-e29b-41d4-a716-446655440000").
 			Return(nil)
@@ -609,20 +612,17 @@ func TestTransferFile(t *testing.T) {
 			buckt.Close()
 		})
 
-		service, err := buckt.InitCloudService(config)
+		// set cloudService to nil to simulate an error
+		buckt.cloudService = nil
+
+		err := buckt.InitCloudService(config)
 		assert.NoError(t, err)
-		assert.NotNil(t, service)
+		assert.NotNil(t, buckt.cloudService)
 
-		buckt.cloudService = service
+		// Add mock cloud service]
+		buckt.cloudService = buckt.MockCloudService
 
-		buckt.MockFileService.On("GetFile", "550e8400-e29b-41d4-a716-446655440000").
-			Return(&model.FileModel{
-				ID:          uuid.MustParse("550e8400-e29b-41d4-a716-446655440000"),
-				Name:        "file1",
-				ContentType: "text/plain",
-				Data:        []byte("file content"),
-			}, nil)
-
+		// Mock the expected behavior
 		buckt.MockCloudService.On("UploadFileToCloud", "550e8400-e29b-41d4-a716-446655440000").
 			Return(nil)
 
@@ -759,17 +759,17 @@ func TestInitCloudClient(t *testing.T) {
 			expected: fmt.Errorf("AWS credentials are incomplete"),
 		},
 		// ✅ Valid Azure Config
-		// {
-		// 	config: CloudConfig{
-		// 		Provider: CloudProviderAzure,
-		// 		Credentials: AzureConfig{
-		// 			AccountName: "accountName",
-		// 			AccountKey:  "accountKey",
-		// 			Container:   "container",
-		// 		},
-		// 	},
-		// 	expected: nil,
-		// },
+		{
+			config: CloudConfig{
+				Provider: CloudProviderAzure,
+				Credentials: AzureConfig{
+					AccountName: "accountName",
+					AccountKey:  "xYSz7q9wykiD7DPH/8tsukMQImrura/6MdwPdDR53D4=",
+					Container:   "container",
+				},
+			},
+			expected: nil,
+		},
 		// 🚨 Invalid Azure Config (missing AccountName)
 		{
 			config: CloudConfig{
@@ -783,16 +783,16 @@ func TestInitCloudClient(t *testing.T) {
 			expected: fmt.Errorf("AZURE credentials are incomplete"),
 		},
 		// ✅ Valid GCP Config
-		// {
-		// 	config: CloudConfig{
-		// 		Provider: CloudProviderGCP,
-		// 		Credentials: GCPConfig{
-		// 			CredentialsFile: "file.json",
-		// 			Bucket:          "bucket",
-		// 		},
-		// 	},
-		// 	expected: nil,
-		// },
+		{
+			config: CloudConfig{
+				Provider: CloudProviderGCP,
+				Credentials: GCPConfig{
+					CredentialsFile: "internal/mocks/file.json",
+					Bucket:          "bucket",
+				},
+			},
+			expected: nil,
+		},
 		// 🚨 Invalid GCP Config (missing CredentialsFile)
 		{
 			config: CloudConfig{
@@ -870,7 +870,7 @@ func TestCloudConfig_IsEmpty(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := tt.cloudConfig.IsEmpty(); got != tt.want {
+			if got := tt.cloudConfig.isEmpty(); got != tt.want {
 				t.Errorf("CloudConfig.IsEmpty() = %v, want %v", got, tt.want)
 			}
 		})

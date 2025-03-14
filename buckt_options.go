@@ -3,6 +3,7 @@ package buckt
 import (
 	"database/sql"
 	"log"
+	"reflect"
 
 	"github.com/Rhaqim/buckt/internal/domain"
 	"github.com/Rhaqim/buckt/internal/model"
@@ -53,8 +54,8 @@ type CloudConfig struct {
 	Credentials CloudCredentials
 }
 
-func (cc CloudConfig) IsEmpty() bool {
-	return cc.Provider == CloudProviderNone || cc.Credentials == nil
+func (cc CloudConfig) isEmpty() bool {
+	return cc.Provider == CloudProviderNone || cc.Credentials == nil || (reflect.ValueOf(cc.Credentials).Kind() == reflect.Ptr && reflect.ValueOf(cc.Credentials).IsNil())
 }
 
 // BucktOptions represents the configuration options for the Buckt application.

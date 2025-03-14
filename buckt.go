@@ -85,9 +85,9 @@ func New(bucktOpts BucktConfig) (*Buckt, error) {
 	buckt.fileService = fileService
 	buckt.folderService = folderService
 
-	if !bucktOpts.Cloud.IsEmpty() {
+	if !bucktOpts.Cloud.isEmpty() {
 		fmt.Println("🚀 Initializing cloud service")
-		buckt.cloudService, err = buckt.InitCloudService(bucktOpts.Cloud)
+		err = buckt.InitCloudService(bucktOpts.Cloud)
 		if err != nil {
 			return nil, fmt.Errorf("failed to initialize cloud service: %w", err)
 		}
@@ -345,19 +345,19 @@ func (b *Buckt) DeleteFilePermanently(file_id string) error {
 
 /* Cloud Methods */
 
-func (b *Buckt) InitCloudService(cloudConfig CloudConfig) (domain.CloudService, error) {
+func (b *Buckt) InitCloudService(cloudConfig CloudConfig) error {
+	var err error
 
-	if cloudConfig.IsEmpty() {
-		return nil, fmt.Errorf("cloud configuration is empty")
+	if cloudConfig.isEmpty() {
+		return fmt.Errorf("cloud configuration is empty")
 	}
+
+	fmt.Println("🚀 Initializing cloud service")
 
 	// Initialize the cloud service
-	cloudService, err := InitCloudClient(cloudConfig, b.fileService, b.folderService)
-	if err != nil {
-		return nil, err
-	}
+	b.cloudService, err = InitCloudClient(cloudConfig, b.fileService, b.folderService)
 
-	return cloudService, nil
+	return err
 }
 
 // TransferFile transfers a file from the local storage to the cloud storage.

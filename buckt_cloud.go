@@ -91,11 +91,11 @@ func InitCloudClient(cfg CloudConfig, fileService domain.FileService, folderServ
 	// Use type assertion to determine provider and create cloud service
 	switch c := cfg.Credentials.(type) {
 	case AWSConfig:
-		return cloud.NewAWSCloud(c.Bucket, c.Region, fileService, folderService), nil
+		return cloud.NewAWSCloud(c.Bucket, c.Region, fileService, folderService)
 	case AzureConfig:
-		return cloud.NewAzureCloud(c.AccountName, c.AccountKey, c.Container, fileService, folderService), nil
+		return cloud.NewAzureCloud(c.AccountName, c.AccountKey, c.Container, fileService, folderService)
 	case GCPConfig:
-		return cloud.NewGCPCloud(c.CredentialsFile, c.Bucket, fileService, folderService), nil
+		return cloud.NewGCPCloud(c.CredentialsFile, c.Bucket, fileService, folderService)
 	case NoCredentials:
 		return NewLocalCloud(fileService, folderService)
 	default:

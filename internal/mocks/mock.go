@@ -222,6 +222,11 @@ func (m *MockFolderService) RenameFolder(user_id, folder_id string, new_name str
 
 func (m *MockFolderService) GetFolder(user_id, folderID string) (*model.FolderModel, error) {
 	args := m.Called(user_id, folderID)
+
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+
 	return args.Get(0).(*model.FolderModel), args.Error(1)
 }
 
@@ -254,6 +259,11 @@ func (m *MockFileService) CreateFile(user_id, parent_id, file_name, content_type
 // GetFile implements domain.FileService.
 func (m *MockFileService) GetFile(file_id string) (*model.FileModel, error) {
 	args := m.Called(file_id)
+
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+
 	return args.Get(0).(*model.FileModel), args.Error(1)
 }
 

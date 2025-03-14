@@ -6,7 +6,6 @@ import (
 
 	"cloud.google.com/go/storage"
 	"github.com/Rhaqim/buckt/internal/domain"
-	"github.com/Rhaqim/buckt/internal/model"
 	"google.golang.org/api/option"
 )
 
@@ -16,11 +15,11 @@ type GCPCloud struct {
 	Client     *storage.Client
 }
 
-func NewGCPCloud(credentialsFile, bucketName string, fileService domain.FileService, folderService domain.FolderService) domain.CloudService {
+func NewGCPCloud(credentialsFile, bucketName string, fileService domain.FileService, folderService domain.FolderService) (domain.CloudService, error) {
 	ctx := context.Background()
 	client, err := storage.NewClient(ctx, option.WithCredentialsFile(credentialsFile))
 	if err != nil {
-		panic(fmt.Sprintf("Failed to create GCP storage client: %v", err))
+		return nil, fmt.Errorf("failed to create GCP storage client: %v", err)
 	}
 
 	gcpCloud := &GCPCloud{
@@ -35,16 +34,23 @@ func NewGCPCloud(credentialsFile, bucketName string, fileService domain.FileServ
 		UploadFileFn:        gcpCloud.uploadFile,
 		CreateEmptyFolderFn: gcpCloud.createEmptyFolder,
 	}
-	return gcpCloud
+	return gcpCloud, nil
 }
 
-func (g *GCPCloud) uploadFile(file model.FileModel) error {
+func (g *GCPCloud) uploadFile(file_name, content_type, file_path string, data []byte, metadata map[string]string) error {
 	bucket := g.Client.Bucket(g.BucketName)
-	wc := bucket.Object(file.Path).NewWriter(g.ctx)
+	wc := bucket.Object(file_path).NewWriter(g.ctx)
 	defer wc.Close()
 
-	wc.ContentType = file.ContentType
-	_, err := wc.Write(file.Data)
+	objectAttrs := storage.ObjectAttrs{
+		ContentType: content_type,
+		Name:        file_name,
+		Metadata:    metadata,
+	}
+
+	wc.ObjectAttrs = objectAttrs
+	wc.ContentType = content_type
+	_, err := wc.Write(data)
 	return err
 }
 
