@@ -29,12 +29,6 @@ func (cp CloudProvider) String() string {
 	}
 }
 
-// CloudConfig stores configurations for different providers
-type CloudConfig struct {
-	Provider    CloudProvider
-	Credentials map[CloudProvider]CloudCredentials // Dynamically store credentials
-}
-
 // CloudCredentials interface ensures every provider has a `Validate()` method
 type CloudCredentials interface {
 	Validate() error
@@ -88,24 +82,14 @@ func (g GCPConfig) Validate() error {
 	return nil
 }
 
-// ValidateCloudConfig ensures the selected provider has valid credentials
-func (c *CloudConfig) ValidateCloudConfig() (CloudCredentials, error) {
-	creds, exists := c.Credentials[c.Provider]
-	if !exists {
-		return nil, fmt.Errorf("no credentials found for provider: %s", c.Provider.String())
-	}
-	return creds, creds.Validate()
-}
-
 func InitCloudClient(cfg CloudConfig, fileService domain.FileService, folderService domain.FolderService) (domain.CloudService, error) {
 	// Validate provider configuration
-	creds, err := cfg.ValidateCloudConfig()
-	if err != nil {
+	if err := cfg.Credentials.Validate(); err != nil {
 		return nil, err
 	}
 
 	// Use type assertion to determine provider and create cloud service
-	switch c := creds.(type) {
+	switch c := cfg.Credentials.(type) {
 	case AWSConfig:
 		return cloud.NewAWSCloud(c.Bucket, c.Region, fileService, folderService), nil
 	case AzureConfig:

@@ -159,6 +159,21 @@ func TestDefault(t *testing.T) {
 		assert.NotNil(t, buckt)
 	})
 
+	t.Run("With Cloud", func(t *testing.T) {
+		cloudConfig := CloudConfig{
+			Provider: CloudProviderAWS,
+			Credentials: AWSConfig{
+				AccessKey: "accessKey",
+				SecretKey: "secretKey",
+				Region:    "region",
+				Bucket:    "bucket",
+			},
+		}
+		buckt, err := Default(WithCloud(cloudConfig))
+		assert.NoError(t, err)
+		assert.NotNil(t, buckt)
+	})
+
 	t.Run("With all options", func(t *testing.T) {
 		sqlDB, err := sql.Open("sqlite3", ":memory:")
 		assert.NoError(t, err)

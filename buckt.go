@@ -2,6 +2,7 @@ package buckt
 
 import (
 	"fmt"
+	"html/template"
 	"net/http"
 
 	"github.com/Rhaqim/buckt/internal/app"
@@ -70,36 +71,11 @@ func New(bucktOpts BucktConfig) (*Buckt, error) {
 		return nil, fmt.Errorf("failed to load templates: %w", err)
 	}
 
-	// Initialize the stores
-	var folderRepository domain.FolderRepository = repository.NewFolderRepository(db, bucktLog)
-	var fileRepository domain.FileRepository = repository.NewFileRepository(db, bucktLog)
-
-	// initlize the services
-	var fileSystemService domain.FileSystemService = service.NewFileSystemService(bucktLog, bucktOpts.MediaDir)
-	var folderService domain.FolderService = service.NewFolderService(bucktLog, cacheManager, folderRepository, fileSystemService)
-	var fileService domain.FileService = service.NewFileService(bucktLog, cacheManager, bucktOpts.FlatNameSpaces, fileRepository, folderService, fileSystemService)
-
-	// Cloud storage service
-	cloudClient, err := InitCloudClient(bucktOpts.Cloud, fileService, folderService)
-	if err != nil {
-		return nil, err
-	}
-
-	_ = service.NewCloudStorage(cloudClient)
-
 	// Initialize the app services
-	var apiService domain.APIService = app.NewAPIService(folderService, fileService)
-	var webService domain.WebService = app.NewWebService(folderService, fileService)
+	folderService, fileService := newAppServices(bucktLog, bucktOpts, db, cacheManager)
 
-	// middleware server
-	var middleware domain.Middleware = middleware.NewBucketMiddleware(bucktLog, bucktOpts.StandaloneMode)
-
-	// Run the router
-	router := router.NewRouter(
-		bucktLog, tmpl,
-		bucktOpts.Log.Debug,
-		bucktOpts.StandaloneMode,
-		apiService, webService, middleware)
+	// Initialize the router
+	router := newRouterService(tmpl, bucktLog, bucktOpts, fileService, folderService)
 
 	buckt.db = db
 	buckt.router = router
@@ -355,4 +331,37 @@ func (b *Buckt) DeleteFile(file_id string) error {
 func (b *Buckt) DeleteFilePermanently(file_id string) error {
 	_, err := b.fileService.ScrubFile(file_id)
 	return err
+}
+
+/* Helper Methods */
+
+func newAppServices(bucktLog *logger.BucktLogger, bucktOpts BucktConfig, db *database.DB, cacheManager domain.CacheManager) (domain.FolderService, domain.FileService) {
+	// Initialize the stores
+	var folderRepository domain.FolderRepository = repository.NewFolderRepository(db, bucktLog)
+	var fileRepository domain.FileRepository = repository.NewFileRepository(db, bucktLog)
+
+	// initlize the services
+	var fileSystemService domain.FileSystemService = service.NewFileSystemService(bucktLog, bucktOpts.MediaDir)
+	var folderService domain.FolderService = service.NewFolderService(bucktLog, cacheManager, folderRepository, fileSystemService)
+	var fileService domain.FileService = service.NewFileService(bucktLog, cacheManager, bucktOpts.FlatNameSpaces, fileRepository, folderService, fileSystemService)
+
+	return folderService, fileService
+}
+
+func newRouterService(tmpl *template.Template, bucktLog *logger.BucktLogger, bucktOpts BucktConfig, fileService domain.FileService, folderService domain.FolderService) *router.Router {
+	// Initialize the app services
+	var apiService domain.APIService = app.NewAPIService(folderService, fileService)
+	var webService domain.WebService = app.NewWebService(folderService, fileService)
+
+	// middleware server
+	var middleware domain.Middleware = middleware.NewBucketMiddleware(bucktLog, bucktOpts.StandaloneMode)
+
+	// Run the router
+	router := router.NewRouter(
+		bucktLog, tmpl,
+		bucktOpts.Log.Debug,
+		bucktOpts.StandaloneMode,
+		apiService, webService, middleware)
+
+	return router
 }

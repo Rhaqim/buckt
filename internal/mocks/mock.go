@@ -3,6 +3,7 @@ package mocks
 import (
 	"net/http"
 
+	"github.com/Rhaqim/buckt/internal/domain"
 	"github.com/Rhaqim/buckt/internal/model"
 	"github.com/Rhaqim/buckt/pkg/logger"
 	"github.com/google/uuid"
@@ -185,6 +186,10 @@ type MockFolderService struct {
 	mock.Mock
 }
 
+func NewMockFolderService() domain.FolderService {
+	return &MockFolderService{}
+}
+
 // GetRootFolder implements domain.FolderService.
 func (m *MockFolderService) GetRootFolder(user_id string) (*model.FolderModel, error) {
 	args := m.Called(user_id)
@@ -234,6 +239,10 @@ func (m *MockFolderService) ScrubFolder(user_id string, folder_id string) (strin
 
 type MockFileService struct {
 	mock.Mock
+}
+
+func NewMockFileService() domain.FileService {
+	return &MockFileService{}
 }
 
 // CreateFile implements domain.FileService.
