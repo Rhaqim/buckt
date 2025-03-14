@@ -361,6 +361,10 @@ func (b *Buckt) InitCloudService(cloudConfig CloudConfig) error {
 		return fmt.Errorf("cloud configuration is empty")
 	}
 
+	if b.fileService == nil || b.folderService == nil {
+		return fmt.Errorf("bucket services not initialized, please call buckt.New(yourConfig) or buckt.Default() first")
+	}
+
 	fmt.Println("🚀 Initializing cloud service")
 
 	// Initialize the cloud service

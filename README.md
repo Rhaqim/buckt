@@ -20,9 +20,13 @@ The Buckt package provides a flexible media storage service with optional integr
   - [Services](#services)
     - [Direct Services](#direct-services)
     - [Gin Web Server](#gin-web-server)
+    - [Cloud Services](#cloud-services)
   - [Examples](#examples)
-    - [With Built-in Gin Web Server](#with-built-in-gin-web-server)
-    - [Using with Other Routers](#using-with-other-routers)
+    - [Direct Services Example](#direct-services-example)
+    - [Web Server Example](#web-server-example)
+      - [With Built-in Gin Web Server](#with-built-in-gin-web-server)
+      - [Using with Other Routers](#using-with-other-routers)
+    - [Cloud Services Example](#cloud-services-example)
     - [Postman Collection](#postman-collection)
   - [License](#license)
   
@@ -135,9 +139,89 @@ The Buckt package exposes the services directly via the Buckt interface. You can
 
 The Buckt package includes an HTTP server that exposes its services via HTTP endpoints. You can configure the server settings in the configuration file. The host and port fields should contain the address and port for the HTTP server. Alternatively you can use the **GetHandler** method to get the handler and use it with your own router.
 
+### Cloud Services
+
+The Buckt package can be integrated with cloud storage services to transfer files from the fileSystem, such as Amazon S3, Google Cloud Storage, or Azure Blob Storage. You can configure the cloud storage settings in the configuration file. The accessKey, secretKey, and region fields should contain the access key, secret key, and region for the cloud storage service.
+
 ## Examples
 
-### With Built-in Gin Web Server
+### Direct Services Example
+
+```go
+import (
+    "log"
+
+    "github.com/Rhaqim/buckt"
+  )
+
+func main() {
+    // Create a new instance of the Buckt package
+    bucktInstance, err := buckt.NewBuckt(buckt.BucktOptions{
+        Log: buckt.Log{
+            LogTerminal: true,
+        },
+        MediaDir:       "media",
+        StandaloneMode: true,
+    })
+    if err != nil {
+        log.Fatal(err)
+    }
+
+    defer bucktInstance.Close() // Close the Buckt instance when done
+
+    // Create a new folder
+    folder, err := bucktInstance.CreateFolder("images", 0)
+    if err != nil {
+        log.Fatal(err)
+    }
+
+    // Create a new file
+    file, err := bucktInstance.CreateFile("image.jpg", 1024, "image/jpeg", folder.ID)
+    if err != nil {
+        log.Fatal(err)
+    }
+
+    // Get a file by ID
+    file, err = bucktInstance.GetFile(file.ID)
+    if err != nil {
+        log.Fatal(err)
+    }
+
+    // Get a file by name
+    file, err = bucktInstance.GetFile(file.ID)
+    if err != nil {
+        log.Fatal(err)
+    }
+
+    // Get all files
+    files, err := bucktInstance.GetFiles()
+    if err != nil {
+        log.Fatal(err)
+    }
+
+    // Get all files in a folder
+    folder, err = bucktInstance.GetFolderWithContent(folder.ID)
+    if err != nil {
+        log.Fatal(err)
+    }
+
+    // Delete a file
+    err = bucktInstance.DeleteFile(file.ID)
+    if err != nil {
+        log.Fatal(err)
+    }
+
+    // Delete a folder
+    err = bucktInstance.DeleteFolder(folder.ID)
+    if err != nil {
+        log.Fatal(err)
+    }
+}
+```
+
+### Web Server Example
+
+#### With Built-in Gin Web Server
 
 ```go
 import (
@@ -169,7 +253,7 @@ func main() {
 }
 ```
 
-### Using with Other Routers
+#### Using with Other Routers
 
 The Buckt package can be integrated with other routers, such as Fiber, Echo, Chi or Go's HTTP package . You can use the GetHandler method to get the handler and mount it under a specific route.
 
@@ -216,6 +300,78 @@ func main() {
       log.Fatalf("Server failed: %v", err)
     }
 }
+```
+
+### Cloud Services Example
+
+```go
+import (
+    "log"
+
+    "github.com/Rhaqim/buckt"
+  )
+
+  func main() {
+    // Create a new CloudConfig object
+    cloudConfig := buckt.CloudConfig{
+      Provider: buckt.CloudProviderAWS,
+      Credentials: buckt.AWSConfig{
+        AccessKey: "accessKey",
+        SecretKey: "secretKey",
+        Region:    "us-west-2",
+        Bucket:    "my-bucket",
+      },
+    }
+
+    bucktInstance, err := buckt.Default(buckt.WithCloud(cloudConfig))
+    if err != nil {
+      fmt.Println(err)
+      return
+    }
+
+    defer buckt.Close()
+
+    fmt.Println("File uploaded successfully")
+  }
+```
+
+Note: You can also use the InitCloud method to initialize the cloud storage service.
+
+```go
+import (
+    "log"
+
+    "github.com/Rhaqim/buckt"
+  )
+
+  func main() {
+    // Create a new CloudConfig object
+    cloudConfig := buckt.CloudConfig{
+      Provider: buckt.CloudProviderAWS,
+      Credentials: buckt.AWSConfig{
+        AccessKey: "accessKey",
+        SecretKey: "secretKey",
+        Region:    "us-west-2",
+        Bucket:    "my-bucket",
+      },
+    }
+
+    buckt, err := buckt.Default(buckt.WithLog(buckt.LogConfig{}))
+    if err != nil {
+      fmt.Println(err)
+      return
+    }
+
+    err := buckt.InitCloudService(cloudConfig)
+    if err != nil {
+      fmt.Println(err)
+      return
+    }
+
+    defer buckt.Close()
+
+    fmt.Println("File uploaded successfully")
+  }
 ```
 
 More examples can be found in the [examples](example/) directory.
