@@ -389,3 +389,23 @@ func (m *MockBuckt) StartServer(port string) error {
 func (m *MockBuckt) Close() {
 	m.MockFolderService.Called()
 }
+
+type MockCloudService struct {
+	mock.Mock
+}
+
+func NewMockCloudService() domain.CloudService {
+	return &MockCloudService{}
+}
+
+// UploadFile implements domain.CloudService.
+func (m *MockCloudService) UploadFileToCloud(file_id string) error {
+	args := m.Called(file_id)
+	return args.Error(0)
+}
+
+// UploadFolder implements domain.CloudService.
+func (m *MockCloudService) UploadFolderToCloud(user_id string, folder_id string) error {
+	args := m.Called(user_id, folder_id)
+	return args.Error(0)
+}

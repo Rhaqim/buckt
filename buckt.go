@@ -25,6 +25,8 @@ type Buckt struct {
 
 	fileService   domain.FileService
 	folderService domain.FolderService
+
+	cloudService domain.CloudService
 }
 
 // New initializes a new Buckt instance with the provided configuration options.
@@ -82,6 +84,14 @@ func New(bucktOpts BucktConfig) (*Buckt, error) {
 	buckt.flatnameSpaces = bucktOpts.FlatNameSpaces
 	buckt.fileService = fileService
 	buckt.folderService = folderService
+
+	if !bucktOpts.Cloud.IsEmpty() {
+		fmt.Println("🚀 Initializing cloud service")
+		buckt.cloudService, err = buckt.InitCloudService(bucktOpts.Cloud)
+		if err != nil {
+			return nil, fmt.Errorf("failed to initialize cloud service: %w", err)
+		}
+	}
 
 	return buckt, nil
 }
@@ -331,6 +341,56 @@ func (b *Buckt) DeleteFile(file_id string) error {
 func (b *Buckt) DeleteFilePermanently(file_id string) error {
 	_, err := b.fileService.ScrubFile(file_id)
 	return err
+}
+
+/* Cloud Methods */
+
+func (b *Buckt) InitCloudService(cloudConfig CloudConfig) (domain.CloudService, error) {
+
+	if cloudConfig.IsEmpty() {
+		return nil, fmt.Errorf("cloud configuration is empty")
+	}
+
+	// Initialize the cloud service
+	cloudService, err := InitCloudClient(cloudConfig, b.fileService, b.folderService)
+	if err != nil {
+		return nil, err
+	}
+
+	return cloudService, nil
+}
+
+// TransferFile transfers a file from the local storage to the cloud storage.
+// It takes the file ID as a parameter and returns an error if the transfer fails.
+//
+// Parameters:
+//   - file_id: The ID of the file to be transferred.
+//
+// Returns:
+//   - error: An error if the transfer fails, otherwise nil.
+func (b *Buckt) TransferFile(file_id string) error {
+	if b.cloudService == nil {
+		return fmt.Errorf("cloud service not initialized")
+	}
+
+	return b.cloudService.UploadFileToCloud(file_id)
+}
+
+// TransferFolder transfers a folder from the local storage to the cloud storage.
+// It takes the user_id and folder ID as a parameter and returns an error if the transfer fails.
+//
+// Parameters:
+//   - user_id: The ID of the user who owns the folder.
+//   - folder_id: The ID of the folder to be transferred.
+//
+// Returns:
+//   - error: An error if the transfer fails, otherwise nil.
+func (b *Buckt) TransferFolder(user_id, folder_id string) error {
+	if b.cloudService == nil {
+		return fmt.Errorf("cloud service not initialized")
+	}
+
+	return b.cloudService.UploadFolderToCloud(user_id, folder_id)
 }
 
 /* Helper Methods */

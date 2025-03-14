@@ -18,7 +18,7 @@ type BaseCloudStorage struct {
 }
 
 // UploadFolder implements domain.CloudService.
-func (a *BaseCloudStorage) UploadFolder(user_id, folder_id string) error {
+func (a *BaseCloudStorage) UploadFolderToCloud(user_id, folder_id string) error {
 	// get the folder with content
 	folder, err := a.FolderService.GetFolder(user_id, folder_id)
 	if err != nil {
@@ -34,7 +34,7 @@ func (a *BaseCloudStorage) UploadFolder(user_id, folder_id string) error {
 }
 
 // UploadFile implements domain.CloudService.
-func (a *BaseCloudStorage) UploadFile(file_id string) error {
+func (a *BaseCloudStorage) UploadFileToCloud(file_id string) error {
 	// Get the file from the file service.
 	file, err := a.FileService.GetFile(file_id)
 	if err != nil {

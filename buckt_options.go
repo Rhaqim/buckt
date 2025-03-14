@@ -53,6 +53,10 @@ type CloudConfig struct {
 	Credentials CloudCredentials
 }
 
+func (cc CloudConfig) IsEmpty() bool {
+	return cc.Provider == CloudProviderNone || cc.Credentials == nil
+}
+
 // BucktOptions represents the configuration options for the Buckt application.
 // It includes settings for logging, media directory, and standalone mode.
 //

@@ -2,10 +2,12 @@ package buckt
 
 import (
 	"database/sql"
+	"fmt"
 	"testing"
 	"time"
 
 	"github.com/Rhaqim/buckt/internal/cache"
+	"github.com/Rhaqim/buckt/internal/domain"
 	"github.com/Rhaqim/buckt/internal/mocks"
 	"github.com/Rhaqim/buckt/internal/model"
 	"github.com/google/uuid"
@@ -21,6 +23,28 @@ type MockBuckt struct {
 	*Buckt
 	*mocks.MockFileService
 	*mocks.MockFolderService
+	*mocks.MockCloudService
+}
+
+func setup(t *testing.T, bucktOpts BucktConfig) MockBuckt {
+	buckt, err := New(bucktOpts)
+	assert.NoError(t, err)
+	assert.NotNil(t, buckt)
+
+	mockFileService := new(mocks.MockFileService)
+	mockFolderService := new(mocks.MockFolderService)
+	mockCloudService := new(mocks.MockCloudService)
+
+	buckt.fileService = mockFileService
+	buckt.folderService = mockFolderService
+	buckt.cloudService = mockCloudService
+
+	return MockBuckt{
+		Buckt:             buckt,
+		MockFileService:   mockFileService,
+		MockFolderService: mockFolderService,
+		MockCloudService:  mockCloudService,
+	}
 }
 
 func setupBucktTest(t *testing.T) MockBuckt {
@@ -36,21 +60,28 @@ func setupBucktTest(t *testing.T) MockBuckt {
 		FlatNameSpaces: false,
 	}
 
-	buckt, err := New(bucktOpts)
+	return setup(t, bucktOpts)
+}
+
+func setupCloudTest(t *testing.T, config CloudConfig) MockBuckt {
+	sqlDB, err := sql.Open("sqlite3", ":memory:")
 	assert.NoError(t, err)
-	assert.NotNil(t, buckt)
 
-	mockFileService := new(mocks.MockFileService)
-	mockFolderService := new(mocks.MockFolderService)
+	// Ensure database is properly closed after the test
+	t.Cleanup(func() {
+		sqlDB.Close()
+	})
 
-	buckt.fileService = mockFileService
-	buckt.folderService = mockFolderService
-
-	return MockBuckt{
-		Buckt:             buckt,
-		MockFileService:   mockFileService,
-		MockFolderService: mockFolderService,
+	bucktOpts := BucktConfig{
+		DB:             DBConfig{Driver: SQLite, Database: sqlDB},
+		Log:            LogConfig{LogTerminal: false, Debug: false},
+		MediaDir:       "media",
+		StandaloneMode: true,
+		FlatNameSpaces: false,
+		Cloud:          config,
 	}
+
+	return setup(t, bucktOpts)
 }
 
 func TestNew(t *testing.T) {
@@ -115,36 +146,61 @@ func TestNew(t *testing.T) {
 func TestDefault(t *testing.T) {
 	t.Run("With Default", func(t *testing.T) {
 		buckt, err := Default()
+		// Cleanup to ensure the server is closed after the test
+		t.Cleanup(func() {
+			buckt.Close()
+		})
+
 		assert.NoError(t, err)
 		assert.NotNil(t, buckt)
 	})
 
 	t.Run("With Standalone", func(t *testing.T) {
 		buckt, err := Default(StandaloneMode(true))
+		// Cleanup to ensure the server is closed after the test
+		t.Cleanup(func() {
+			buckt.Close()
+		})
 		assert.NoError(t, err)
 		assert.NotNil(t, buckt)
 	})
 
 	t.Run("With FlatNameSpaces", func(t *testing.T) {
 		buckt, err := Default(FlatNameSpaces(true))
+		// Cleanup to ensure the server is closed after the test
+		t.Cleanup(func() {
+			buckt.Close()
+		})
 		assert.NoError(t, err)
 		assert.NotNil(t, buckt)
 	})
 
 	t.Run("With MediaDir", func(t *testing.T) {
 		buckt, err := Default(MediaDir("media"))
+		// Cleanup to ensure the server is closed after the test
+		t.Cleanup(func() {
+			buckt.Close()
+		})
 		assert.NoError(t, err)
 		assert.NotNil(t, buckt)
 	})
 
 	t.Run("With Cache", func(t *testing.T) {
 		buckt, err := Default(WithCache(cache.NewNoOpCache()))
+		// Cleanup to ensure the server is closed after the test
+		t.Cleanup(func() {
+			buckt.Close()
+		})
 		assert.NoError(t, err)
 		assert.NotNil(t, buckt)
 	})
 
 	t.Run("With Log", func(t *testing.T) {
 		buckt, err := Default(WithLog(LogConfig{LogTerminal: false, Debug: false}))
+		// Cleanup to ensure the server is closed after the test
+		t.Cleanup(func() {
+			buckt.Close()
+		})
 		assert.NoError(t, err)
 		assert.NotNil(t, buckt)
 	})
@@ -155,6 +211,10 @@ func TestDefault(t *testing.T) {
 		defer sqlDB.Close()
 
 		buckt, err := Default(WithDB(SQLite, sqlDB))
+		// Cleanup to ensure the server is closed after the test
+		t.Cleanup(func() {
+			buckt.Close()
+		})
 		assert.NoError(t, err)
 		assert.NotNil(t, buckt)
 	})
@@ -170,6 +230,10 @@ func TestDefault(t *testing.T) {
 			},
 		}
 		buckt, err := Default(WithCloud(cloudConfig))
+		// Cleanup to ensure the server is closed after the test
+		t.Cleanup(func() {
+			buckt.Close()
+		})
 		assert.NoError(t, err)
 		assert.NotNil(t, buckt)
 	})
@@ -502,4 +566,313 @@ func TestDeleteFilePermanently(t *testing.T) {
 
 	// Verify expectations
 	buckt.MockFileService.AssertExpectations(t)
+}
+
+func TestTransferFile(t *testing.T) {
+	t.Run("With CloudProviderNone", func(t *testing.T) {
+		config := CloudConfig{Provider: CloudProviderNone}
+
+		buckt := setupBucktTest(t)
+
+		service, err := buckt.InitCloudService(config)
+		assert.Error(t, err)
+		assert.Nil(t, service)
+
+		buckt.cloudService = service
+
+		buckt.MockCloudService.On("UploadFileToCloud", "550e8400-e29b-41d4-a716-446655440000").
+			Return(nil)
+
+		// Call the method
+		err = buckt.Buckt.TransferFile("550e8400-e29b-41d4-a716-446655440000")
+		assert.Error(t, err)
+
+		// Verify expectations
+		buckt.MockFileService.AssertExpectations(t)
+	})
+
+	t.Run("With CloudProviderAWS", func(t *testing.T) {
+		config := CloudConfig{
+			Provider: CloudProviderAWS,
+			Credentials: AWSConfig{
+				AccessKey: "accessKey",
+				SecretKey: "secretKey",
+				Region:    "region",
+				Bucket:    "bucket",
+			},
+		}
+
+		buckt := setupBucktTest(t)
+
+		// Cleanup to ensure the server is closed after the test
+		t.Cleanup(func() {
+			buckt.Close()
+		})
+
+		service, err := buckt.InitCloudService(config)
+		assert.NoError(t, err)
+		assert.NotNil(t, service)
+
+		buckt.cloudService = service
+
+		buckt.MockFileService.On("GetFile", "550e8400-e29b-41d4-a716-446655440000").
+			Return(&model.FileModel{
+				ID:          uuid.MustParse("550e8400-e29b-41d4-a716-446655440000"),
+				Name:        "file1",
+				ContentType: "text/plain",
+				Data:        []byte("file content"),
+			}, nil)
+
+		buckt.MockCloudService.On("UploadFileToCloud", "550e8400-e29b-41d4-a716-446655440000").
+			Return(nil)
+
+		// Call the method
+		err = buckt.Buckt.TransferFile("550e8400-e29b-41d4-a716-446655440000")
+		assert.NoError(t, err)
+
+		// Verify expectations
+		buckt.MockFileService.AssertExpectations(t)
+	})
+}
+
+// ✅ Test CloudProvider String() method
+func TestCloudProviderString(t *testing.T) {
+	tests := []struct {
+		provider CloudProvider
+		expected string
+	}{
+		{CloudProviderNone, "None"},
+		{CloudProviderAWS, "AWS"},
+		{CloudProviderAzure, "Azure"},
+		{CloudProviderGCP, "GCP"},
+		{CloudProvider(999), "None"}, // 🚨 Invalid provider
+	}
+
+	for _, test := range tests {
+		if result := test.provider.String(); result != test.expected {
+			t.Errorf("expected %s, got %s", test.expected, result)
+		}
+	}
+}
+
+// ✅ Test AWSConfig validation
+func TestAWSConfigValidate(t *testing.T) {
+	tests := []struct {
+		config   AWSConfig
+		expected error
+	}{
+		{AWSConfig{"accessKey", "secretKey", "region", "bucket"}, nil},
+		{AWSConfig{"", "secretKey", "region", "bucket"}, fmt.Errorf("AWS credentials are incomplete")},
+		{AWSConfig{"accessKey", "", "region", "bucket"}, fmt.Errorf("AWS credentials are incomplete")},
+		{AWSConfig{"accessKey", "secretKey", "", "bucket"}, fmt.Errorf("AWS credentials are incomplete")},
+		{AWSConfig{"accessKey", "secretKey", "region", ""}, fmt.Errorf("AWS credentials are incomplete")},
+	}
+
+	for _, test := range tests {
+		err := test.config.Validate()
+		if err == nil && test.expected != nil || err != nil && test.expected == nil || err != nil && test.expected != nil && err.Error() != test.expected.Error() {
+			t.Errorf("expected %v, got %v", test.expected, err)
+		}
+	}
+}
+
+// ✅ Test AzureConfig validation
+func TestAzureConfigValidate(t *testing.T) {
+	tests := []struct {
+		config   AzureConfig
+		expected error
+	}{
+		{AzureConfig{"accountName", "accountKey", "container"}, nil},
+		{AzureConfig{"", "accountKey", "container"}, fmt.Errorf("AZURE credentials are incomplete")},
+		{AzureConfig{"accountName", "", "container"}, fmt.Errorf("AZURE credentials are incomplete")},
+		{AzureConfig{"accountName", "accountKey", ""}, fmt.Errorf("AZURE credentials are incomplete")},
+	}
+
+	for _, test := range tests {
+		err := test.config.Validate()
+		if err == nil && test.expected != nil || err != nil && test.expected == nil || err != nil && test.expected != nil && err.Error() != test.expected.Error() {
+			t.Errorf("expected %v, got %v", test.expected, err)
+		}
+	}
+}
+
+// ✅ Test GCPConfig validation
+func TestGCPConfigValidate(t *testing.T) {
+	tests := []struct {
+		config   GCPConfig
+		expected error
+	}{
+		{GCPConfig{"credentialsFile", "bucket"}, nil},
+		{GCPConfig{"", "bucket"}, fmt.Errorf("GCP credentials are incomplete")},
+		{GCPConfig{"credentialsFile", ""}, fmt.Errorf("GCP credentials are incomplete")},
+	}
+
+	for _, test := range tests {
+		err := test.config.Validate()
+		if err == nil && test.expected != nil || err != nil && test.expected == nil || err != nil && test.expected != nil && err.Error() != test.expected.Error() {
+			t.Errorf("expected %v, got %v", test.expected, err)
+		}
+	}
+}
+
+// ✅ Test NoCredentials validation
+func TestNoCredentialsValidate(t *testing.T) {
+	var creds NoCredentials
+	if err := creds.Validate(); err != nil {
+		t.Errorf("expected nil, got %v", err)
+	}
+}
+
+// ✅ Test InitCloudClient with valid and invalid inputs
+func TestInitCloudClient(t *testing.T) {
+	var fileService domain.FileService = mocks.NewMockFileService()
+	var folderService domain.FolderService = mocks.NewMockFolderService()
+
+	tests := []struct {
+		config   CloudConfig
+		expected error
+	}{
+		// ✅ Valid AWS Config
+		{
+			config: CloudConfig{
+				Provider: CloudProviderAWS,
+				Credentials: AWSConfig{
+					AccessKey: "accessKey",
+					SecretKey: "secretKey",
+					Region:    "us-west-2",
+					Bucket:    "my-bucket",
+				},
+			},
+			expected: nil,
+		},
+		// 🚨 Invalid AWS Config (missing AccessKey)
+		{
+			config: CloudConfig{
+				Provider: CloudProviderAWS,
+				Credentials: AWSConfig{
+					AccessKey: "",
+					SecretKey: "secretKey",
+					Region:    "us-west-2",
+					Bucket:    "my-bucket",
+				},
+			},
+			expected: fmt.Errorf("AWS credentials are incomplete"),
+		},
+		// ✅ Valid Azure Config
+		// {
+		// 	config: CloudConfig{
+		// 		Provider: CloudProviderAzure,
+		// 		Credentials: AzureConfig{
+		// 			AccountName: "accountName",
+		// 			AccountKey:  "accountKey",
+		// 			Container:   "container",
+		// 		},
+		// 	},
+		// 	expected: nil,
+		// },
+		// 🚨 Invalid Azure Config (missing AccountName)
+		{
+			config: CloudConfig{
+				Provider: CloudProviderAzure,
+				Credentials: AzureConfig{
+					AccountName: "",
+					AccountKey:  "accountKey",
+					Container:   "container",
+				},
+			},
+			expected: fmt.Errorf("AZURE credentials are incomplete"),
+		},
+		// ✅ Valid GCP Config
+		// {
+		// 	config: CloudConfig{
+		// 		Provider: CloudProviderGCP,
+		// 		Credentials: GCPConfig{
+		// 			CredentialsFile: "file.json",
+		// 			Bucket:          "bucket",
+		// 		},
+		// 	},
+		// 	expected: nil,
+		// },
+		// 🚨 Invalid GCP Config (missing CredentialsFile)
+		{
+			config: CloudConfig{
+				Provider: CloudProviderGCP,
+				Credentials: GCPConfig{
+					CredentialsFile: "",
+					Bucket:          "bucket",
+				},
+			},
+			expected: fmt.Errorf("GCP credentials are incomplete"),
+		},
+		// 🚨 Invalid Cloud Provider
+		{
+			config: CloudConfig{
+				Provider:    CloudProvider(999), // 🚨 Unknown provider
+				Credentials: NoCredentials{},
+			},
+			expected: fmt.Errorf("local cloud service not implemented"),
+		},
+	}
+
+	for _, test := range tests {
+		_, err := InitCloudClient(test.config, fileService, folderService)
+		if err == nil && test.expected != nil || err != nil && test.expected == nil || err != nil && test.expected != nil && err.Error() != test.expected.Error() {
+			t.Errorf("expected %v, got %v", test.expected, err)
+		}
+	}
+}
+
+type MockCredentials struct{}
+
+func (m MockCredentials) Validate() error {
+	return nil
+}
+
+func TestCloudConfig_IsEmpty(t *testing.T) {
+	tests := []struct {
+		name        string
+		cloudConfig CloudConfig
+		want        bool
+	}{
+		{
+			name: "Empty CloudConfig",
+			cloudConfig: CloudConfig{
+				Provider:    CloudProviderNone,
+				Credentials: nil,
+			},
+			want: true,
+		},
+		{
+			name: "Non-empty CloudConfig with Provider",
+			cloudConfig: CloudConfig{
+				Provider:    CloudProviderAWS,
+				Credentials: nil,
+			},
+			want: true,
+		},
+		{
+			name: "Non-empty CloudConfig with Credentials",
+			cloudConfig: CloudConfig{
+				Provider:    CloudProviderNone,
+				Credentials: &MockCredentials{},
+			},
+			want: true,
+		},
+		{
+			name: "Non-empty CloudConfig with Provider and Credentials",
+			cloudConfig: CloudConfig{
+				Provider:    CloudProviderAWS,
+				Credentials: &MockCredentials{},
+			},
+			want: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.cloudConfig.IsEmpty(); got != tt.want {
+				t.Errorf("CloudConfig.IsEmpty() = %v, want %v", got, tt.want)
+			}
+		})
+	}
 }
