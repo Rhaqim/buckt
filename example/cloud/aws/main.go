@@ -18,7 +18,13 @@ func main() {
 		},
 	}
 
-	buckt, err := buckt.Default(buckt.WithCloud(cloudConfig))
+	buckt, err := buckt.Default(buckt.WithLog(buckt.LogConfig{}))
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	err = buckt.InitCloudService(cloudConfig)
 	if err != nil {
 		fmt.Println(err)
 		return
