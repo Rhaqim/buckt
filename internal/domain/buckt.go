@@ -10,3 +10,8 @@ type CacheManager interface {
 	// Delete deletes the value for the given key.
 	DeleteBucktValue(key string) error
 }
+
+type LRUCache interface {
+	Add(key any, value any) (evicted bool)
+	Get(key any) (value any, ok bool)
+}

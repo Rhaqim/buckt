@@ -126,10 +126,13 @@ func (f *FileService) GetFile(file_id string) (*model.FileModel, error) {
 	// Check cache first
 	if f.CacheManager != nil {
 		cached, err := f.CacheManager.GetBucktValue(file_id)
-		if err == nil {
-			var cachedFile model.FileModel
-			if jsonErr := json.Unmarshal([]byte(cached.(string)), &cachedFile); jsonErr == nil {
-				file = &cachedFile
+		if err == nil && cached != nil { // Ensure cached value is not nil
+			cachedStr, ok := cached.(string)
+			if ok { // Ensure type assertion succeeds
+				var cachedFile model.FileModel
+				if jsonErr := json.Unmarshal([]byte(cachedStr), &cachedFile); jsonErr == nil {
+					file = &cachedFile
+				}
 			}
 		}
 	}
@@ -151,7 +154,7 @@ func (f *FileService) GetFile(file_id string) (*model.FileModel, error) {
 	if f.CacheManager != nil {
 		cachedFileData, _ := f.CacheManager.GetBucktValue(file.Path)
 		if cachedFileData != nil {
-			file.Data = []byte(cachedFileData.(string))
+			file.Data = cachedFileData.([]byte)
 		} else {
 			fileData, err := f.FileSystemService.FSGetFile(file.Path)
 			if err != nil {
@@ -160,7 +163,7 @@ func (f *FileService) GetFile(file_id string) (*model.FileModel, error) {
 			file.Data = fileData
 
 			// Store file data in cache for future reads
-			f.CacheManager.SetBucktValue(file.Path, string(fileData))
+			f.CacheManager.SetBucktValue(file.Path, fileData)
 		}
 	}
 

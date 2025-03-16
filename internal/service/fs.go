@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/Rhaqim/buckt/internal/cache"
 	"github.com/Rhaqim/buckt/internal/domain"
 	"github.com/Rhaqim/buckt/pkg/logger"
 	"golang.org/x/sync/singleflight"
@@ -15,7 +16,8 @@ type FileSystemService struct {
 
 	MediaDir string
 
-	g singleflight.Group
+	g     singleflight.Group
+	cache domain.LRUCache
 }
 
 func NewFileSystemService(bucktLogger *logger.BucktLogger, medaiDir string) domain.FileSystemService {
@@ -24,7 +26,8 @@ func NewFileSystemService(bucktLogger *logger.BucktLogger, medaiDir string) doma
 		BucktLogger: bucktLogger,
 		MediaDir:    medaiDir,
 
-		g: singleflight.Group{},
+		g:     singleflight.Group{},
+		cache: cache.NewFileCache(),
 	}
 }
 
@@ -77,10 +80,16 @@ func (bfs *FileSystemService) FSGetFileStream(path string) (io.ReadCloser, error
 		return nil, err
 	}
 
+	if file, ok := bfs.cache.Get(filePath); ok {
+		return file.(*os.File), nil
+	}
+
 	file, err := os.Open(filePath)
 	if err != nil {
-		return nil, bfs.WrapError("failed to open file", err)
+		return nil, err
 	}
+
+	bfs.cache.Add(filePath, file)
 
 	return file, nil // Caller should close the file after reading
 }
