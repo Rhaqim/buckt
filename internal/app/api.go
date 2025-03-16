@@ -3,6 +3,8 @@ package app
 import (
 	"fmt"
 	"io"
+	"strconv"
+	"strings"
 
 	"github.com/Rhaqim/buckt/internal/domain"
 	"github.com/Rhaqim/buckt/internal/utils"
@@ -299,7 +301,7 @@ func (a *APIService) StreamFile(c *gin.Context) {
 
 	// Set headers
 	c.Header("Content-Disposition", "attachment; filename="+file.Name)
-	c.Header("Content-Type", "application/octet-stream")
+	c.Header("Content-Type", file.ContentType)
 	c.Header("Content-Length", fmt.Sprintf("%d", file.Size))
 
 	// If file is small, use io.Copy
@@ -328,6 +330,41 @@ func (a *APIService) StreamFile(c *gin.Context) {
 			}
 		}
 	})
+
+	// // Set headers to enable streaming
+	// c.Header("Accept-Ranges", "bytes")
+	// c.Header("Content-Type", file.ContentType)
+
+	// // Get file size
+	// fileSize := file.Size
+	// rangeHeader := c.GetHeader("Range")
+
+	// // Default range (entire file)
+	// start, end := int64(0), fileSize-1
+
+	// if rangeHeader != "" {
+	// 	var parseErr error
+	// 	start, end, parseErr = parseRange(rangeHeader, fileSize)
+	// 	if parseErr != nil {
+	// 		c.AbortWithStatusJSON(http.StatusRequestedRangeNotSatisfiable, response.Error("invalid range", ""))
+	// 		return
+	// 	}
+
+	// 	// Set partial content headers
+	// 	c.Header("Content-Range", fmt.Sprintf("bytes %d-%d/%d", start, end, fileSize))
+	// 	c.Status(http.StatusPartialContent)
+
+	// 	// Manually discard bytes up to `start`
+	// 	discarded, err := io.CopyN(io.Discard, stream, start)
+	// 	if err != nil || discarded != start {
+	// 		c.AbortWithStatusJSON(http.StatusInternalServerError, response.WrapError("failed to discard bytes", err))
+	// 		return
+	// 	}
+	// }
+
+	// // Stream only the requested range
+	// bytesToSend := end - start + 1
+	// io.CopyN(c.Writer, stream, bytesToSend)
 }
 
 // DeleteFile implements domain.APIService.
@@ -372,4 +409,33 @@ func (a *APIService) DeleteFilePermanently(c *gin.Context) {
 
 func (f *APIService) constructURL(s string) string {
 	return fmt.Sprintf("/serve/%s", s)
+}
+
+func parseRange(rangeHeader string, fileSize int64) (start, end int64, err error) {
+	// Example: "bytes=500-1000"
+	if !strings.HasPrefix(rangeHeader, "bytes=") {
+		return 0, 0, fmt.Errorf("invalid range")
+	}
+	rangeParts := strings.Split(strings.TrimPrefix(rangeHeader, "bytes="), "-")
+
+	start, err = strconv.ParseInt(rangeParts[0], 10, 64)
+	if err != nil {
+		return 0, 0, fmt.Errorf("invalid range start")
+	}
+
+	if rangeParts[1] != "" {
+		end, err = strconv.ParseInt(rangeParts[1], 10, 64)
+		if err != nil {
+			return 0, 0, fmt.Errorf("invalid range end")
+		}
+	} else {
+		end = fileSize - 1
+	}
+
+	// Ensure valid range
+	if start > end || start < 0 || end >= fileSize {
+		return 0, 0, fmt.Errorf("invalid range")
+	}
+
+	return start, end, nil
 }
