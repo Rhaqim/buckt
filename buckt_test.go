@@ -1,8 +1,10 @@
 package buckt
 
 import (
+	"bytes"
 	"database/sql"
 	"fmt"
+	"io"
 	"testing"
 	"time"
 
@@ -479,6 +481,36 @@ func TestGetFile(t *testing.T) {
 	file, err := buckt.Buckt.GetFile("550e8400-e29b-41d4-a716-446655440000")
 	assert.NoError(t, err)
 	assert.NotNil(t, file)
+
+	// Verify expectations
+	buckt.MockFileService.AssertExpectations(t)
+}
+
+func TestGetFileStream(t *testing.T) {
+	buckt := setupBucktTest(t)
+
+	// Ensure cleanup after test execution
+	t.Cleanup(func() {
+		buckt.Close() // Assuming there's a method to clean up resources
+	})
+
+	// Mock the expected behavior
+	expectedFile := model.FileModel{
+		ID:          uuid.MustParse("550e8400-e29b-41d4-a716-446655440000"),
+		Name:        "file1",
+		ContentType: "text/plain",
+		Data:        []byte("file content"),
+	}
+	expectedStream := io.NopCloser(bytes.NewReader([]byte("file content")))
+
+	buckt.MockFileService.On("GetFileStream", "550e8400-e29b-41d4-a716-446655440000").
+		Return(&expectedFile, expectedStream, nil)
+
+	// Call the method
+	file, stream, err := buckt.Buckt.GetFileStream("550e8400-e29b-41d4-a716-446655440000")
+	assert.NoError(t, err)
+	assert.NotNil(t, file)
+	assert.NotNil(t, stream)
 
 	// Verify expectations
 	buckt.MockFileService.AssertExpectations(t)

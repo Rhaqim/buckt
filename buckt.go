@@ -3,6 +3,7 @@ package buckt
 import (
 	"fmt"
 	"html/template"
+	"io"
 	"net/http"
 
 	"github.com/Rhaqim/buckt/internal/app"
@@ -290,6 +291,20 @@ func (b *Buckt) UploadFile(user_id string, parent_id string, file_name string, c
 //   - error: An error object if an error occurred, otherwise nil.
 func (b *Buckt) GetFile(file_id string) (*model.FileModel, error) {
 	return b.fileService.GetFile(file_id)
+}
+
+// GetFileStream retrieves a file stream based on the provided file ID.
+// It returns the file data and an error, if any occurred during the retrieval process.
+//
+// Parameters:
+//   - file_id: A string representing the unique identifier of the file to be retrieved.
+//
+// Returns:
+//   - *model.FileModel: The file structure containing metadata.
+//   - io.ReadCloser: An io.ReadCloser object representing the file stream.
+//   - error: An error object if an error occurred, otherwise nil.
+func (b *Buckt) GetFileStream(file_id string) (*model.FileModel, io.ReadCloser, error) {
+	return b.fileService.GetFileStream(file_id)
 }
 
 // ListFiles retrieves a list of files for a given folder.

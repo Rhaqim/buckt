@@ -1,17 +1,21 @@
 package service
 
 import (
+	"io"
 	"os"
 	"path/filepath"
 
 	"github.com/Rhaqim/buckt/internal/domain"
 	"github.com/Rhaqim/buckt/pkg/logger"
+	"golang.org/x/sync/singleflight"
 )
 
 type FileSystemService struct {
 	*logger.BucktLogger
 
 	MediaDir string
+
+	g singleflight.Group
 }
 
 func NewFileSystemService(bucktLogger *logger.BucktLogger, medaiDir string) domain.FileSystemService {
@@ -19,6 +23,8 @@ func NewFileSystemService(bucktLogger *logger.BucktLogger, medaiDir string) doma
 	return &FileSystemService{
 		BucktLogger: bucktLogger,
 		MediaDir:    medaiDir,
+
+		g: singleflight.Group{},
 	}
 }
 
@@ -54,12 +60,29 @@ func (bfs *FileSystemService) FSGetFile(path string) ([]byte, error) {
 		return nil, err
 	}
 
-	file, err := os.ReadFile(filePath)
+	result, err, _ := bfs.g.Do(filePath, func() (any, error) {
+		return os.ReadFile(filePath)
+	})
+
 	if err != nil {
 		return nil, bfs.WrapError("failed to read file", err)
 	}
 
-	return file, nil
+	return result.([]byte), nil
+}
+
+func (bfs *FileSystemService) FSGetFileStream(path string) (io.ReadCloser, error) {
+	filePath, err := bfs.FSValidatePath(path)
+	if err != nil {
+		return nil, err
+	}
+
+	file, err := os.Open(filePath)
+	if err != nil {
+		return nil, bfs.WrapError("failed to open file", err)
+	}
+
+	return file, nil // Caller should close the file after reading
 }
 
 func (bfs *FileSystemService) FSUpdateFile(oldPath, newPath string) error {

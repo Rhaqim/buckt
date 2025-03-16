@@ -1,6 +1,7 @@
 package mocks
 
 import (
+	"io"
 	"net/http"
 
 	"github.com/Rhaqim/buckt/internal/domain"
@@ -171,6 +172,11 @@ func (m *MockFileSystemService) FSGetFile(path string) ([]byte, error) {
 	return args.Get(0).([]byte), args.Error(1)
 }
 
+func (m *MockFileSystemService) FSGetFileStream(path string) (io.ReadCloser, error) {
+	args := m.Called(path)
+	return args.Get(0).(io.ReadCloser), args.Error(1)
+}
+
 func (m *MockFileSystemService) FSDeleteFile(path string) error {
 	args := m.Called(path)
 	return args.Error(0)
@@ -265,6 +271,16 @@ func (m *MockFileService) GetFile(file_id string) (*model.FileModel, error) {
 	}
 
 	return args.Get(0).(*model.FileModel), args.Error(1)
+}
+
+func (m *MockFileService) GetFileStream(file_id string) (*model.FileModel, io.ReadCloser, error) {
+	args := m.Called(file_id)
+
+	if args.Get(0) == nil {
+		return nil, nil, args.Error(2)
+	}
+
+	return args.Get(0).(*model.FileModel), args.Get(1).(io.ReadCloser), args.Error(2)
 }
 
 // GetFiles implements domain.FileService.
