@@ -1,8 +1,10 @@
 package mocks
 
 import (
+	"io"
 	"net/http"
 
+	"github.com/Rhaqim/buckt/internal/domain"
 	"github.com/Rhaqim/buckt/internal/model"
 	"github.com/Rhaqim/buckt/pkg/logger"
 	"github.com/google/uuid"
@@ -170,6 +172,11 @@ func (m *MockFileSystemService) FSGetFile(path string) ([]byte, error) {
 	return args.Get(0).([]byte), args.Error(1)
 }
 
+func (m *MockFileSystemService) FSGetFileStream(path string) (io.ReadCloser, error) {
+	args := m.Called(path)
+	return args.Get(0).(io.ReadCloser), args.Error(1)
+}
+
 func (m *MockFileSystemService) FSDeleteFile(path string) error {
 	args := m.Called(path)
 	return args.Error(0)
@@ -183,6 +190,10 @@ func (m *MockFileSystemService) FSDeleteFolder(folderPath string) error {
 
 type MockFolderService struct {
 	mock.Mock
+}
+
+func NewMockFolderService() domain.FolderService {
+	return &MockFolderService{}
 }
 
 // GetRootFolder implements domain.FolderService.
@@ -217,6 +228,11 @@ func (m *MockFolderService) RenameFolder(user_id, folder_id string, new_name str
 
 func (m *MockFolderService) GetFolder(user_id, folderID string) (*model.FolderModel, error) {
 	args := m.Called(user_id, folderID)
+
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+
 	return args.Get(0).(*model.FolderModel), args.Error(1)
 }
 
@@ -236,6 +252,10 @@ type MockFileService struct {
 	mock.Mock
 }
 
+func NewMockFileService() domain.FileService {
+	return &MockFileService{}
+}
+
 // CreateFile implements domain.FileService.
 func (m *MockFileService) CreateFile(user_id, parent_id, file_name, content_type string, file_data []byte) (string, error) {
 	args := m.Called(user_id, parent_id, file_name, content_type, file_data)
@@ -245,7 +265,22 @@ func (m *MockFileService) CreateFile(user_id, parent_id, file_name, content_type
 // GetFile implements domain.FileService.
 func (m *MockFileService) GetFile(file_id string) (*model.FileModel, error) {
 	args := m.Called(file_id)
+
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+
 	return args.Get(0).(*model.FileModel), args.Error(1)
+}
+
+func (m *MockFileService) GetFileStream(file_id string) (*model.FileModel, io.ReadCloser, error) {
+	args := m.Called(file_id)
+
+	if args.Get(0) == nil {
+		return nil, nil, args.Error(2)
+	}
+
+	return args.Get(0).(*model.FileModel), args.Get(1).(io.ReadCloser), args.Error(2)
 }
 
 // GetFiles implements domain.FileService.
@@ -379,4 +414,24 @@ func (m *MockBuckt) StartServer(port string) error {
 
 func (m *MockBuckt) Close() {
 	m.MockFolderService.Called()
+}
+
+type MockCloudService struct {
+	mock.Mock
+}
+
+func NewMockCloudService() domain.CloudService {
+	return &MockCloudService{}
+}
+
+// UploadFile implements domain.CloudService.
+func (m *MockCloudService) UploadFileToCloud(file_id string) error {
+	args := m.Called(file_id)
+	return args.Error(0)
+}
+
+// UploadFolder implements domain.CloudService.
+func (m *MockCloudService) UploadFolderToCloud(user_id string, folder_id string) error {
+	args := m.Called(user_id, folder_id)
+	return args.Error(0)
 }

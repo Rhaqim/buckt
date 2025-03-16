@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
+	"io"
 	"path/filepath"
 
 	"github.com/Rhaqim/buckt/internal/domain"
@@ -125,10 +126,13 @@ func (f *FileService) GetFile(file_id string) (*model.FileModel, error) {
 	// Check cache first
 	if f.CacheManager != nil {
 		cached, err := f.CacheManager.GetBucktValue(file_id)
-		if err == nil {
-			var cachedFile model.FileModel
-			if jsonErr := json.Unmarshal([]byte(cached.(string)), &cachedFile); jsonErr == nil {
-				file = &cachedFile
+		if err == nil && cached != nil { // Ensure cached value is not nil
+			cachedStr, ok := cached.(string)
+			if ok { // Ensure type assertion succeeds
+				var cachedFile model.FileModel
+				if jsonErr := json.Unmarshal([]byte(cachedStr), &cachedFile); jsonErr == nil {
+					file = &cachedFile
+				}
 			}
 		}
 	}
@@ -147,16 +151,67 @@ func (f *FileService) GetFile(file_id string) (*model.FileModel, error) {
 		}
 	}
 
-	// Fetch actual file data separately
-	fileData, err := f.FileSystemService.FSGetFile(file.Path)
-	if err != nil {
-		return nil, f.WrapError("failed to get file data", err)
+	if f.CacheManager != nil {
+		cachedFileData, _ := f.CacheManager.GetBucktValue(file.Path)
+		if cachedFileData != nil {
+			file.Data = cachedFileData.([]byte)
+		} else {
+			fileData, err := f.FileSystemService.FSGetFile(file.Path)
+			if err != nil {
+				return nil, f.WrapError("failed to get file data", err)
+			}
+			file.Data = fileData
+
+			// Store file data in cache for future reads
+			f.CacheManager.SetBucktValue(file.Path, fileData)
+		}
 	}
 
-	// Attach file data
-	file.Data = fileData
-
 	return file, nil
+}
+
+// GetFileStream implements domain.FileService.
+// Subtle: this method shadows the method (FileSystemService).GetFilStream of FileService.FileSystemService.
+func (f *FileService) GetFileStream(file_id string) (*model.FileModel, io.ReadCloser, error) {
+	fileID, err := uuid.Parse(file_id)
+	if err != nil {
+		return nil, nil, f.WrapError("failed to parse uuid", err)
+	}
+
+	var file *model.FileModel
+
+	// Check cache first
+	if f.CacheManager != nil {
+		cached, err := f.CacheManager.GetBucktValue(file_id)
+		if err == nil {
+			var cachedFile model.FileModel
+			if jsonErr := json.Unmarshal([]byte(cached.(string)), &cachedFile); jsonErr == nil {
+				file = &cachedFile
+			}
+		}
+	}
+
+	// If not found in cache, fetch from repository
+	if file == nil {
+		file, err = f.FileRepository.GetFile(fileID)
+		if err != nil {
+			return nil, nil, f.WrapError("failed to get file metadata", err)
+		}
+
+		// Store metadata in cache (without file data)
+		if f.CacheManager != nil {
+			jsonData, _ := json.Marshal(file) // Ignore errors for now
+			_ = f.CacheManager.SetBucktValue(file_id, string(jsonData))
+		}
+	}
+
+	// Fetch actual file data separately
+	fileStream, err := f.FileSystemService.FSGetFileStream(file.Path)
+	if err != nil {
+		return nil, nil, f.WrapError("failed to get file data", err)
+	}
+
+	return file, fileStream, nil
 }
 
 // GetFiles implements domain.FileService.
@@ -382,41 +437,3 @@ func (f *FileService) ScrubFile(file_id string) (string, error) {
 
 	return file.ParentID.String(), nil
 }
-
-// func (f *FileService) ScrubFolder(user_id, folder_id string, visited map[string]bool) (string, error) {
-// 	var errs []error
-
-// 	if visited == nil {
-// 		visited = make(map[string]bool)
-// 	}
-// 	if visited[folder_id] {
-// 		return "", fmt.Errorf("detected circular reference in folder structure")
-// 	}
-// 	visited[folder_id] = true
-
-// 	// get the folder with content
-// 	folder, err := f.GetFolder(user_id, folder_id)
-// 	if err != nil {
-// 		errs = append(errs, err)
-// 	}
-
-// 	// delete all files in the folder
-// 	for _, file := range folder.Files {
-// 		if _, err := f.ScrubFile(file.ID.String()); err != nil {
-// 			errs = append(errs, err)
-// 		}
-// 	}
-
-// 	// recursively delete all subfolders
-// 	for _, subFolder := range folder.Folders {
-// 		if _, err := f.ScrubFolder(user_id, subFolder.ID.String(), visited); err != nil {
-// 			errs = append(errs, err)
-// 		}
-// 	}
-
-// 	if len(errs) > 0 {
-// 		return "", fmt.Errorf("errors occurred while scrubbing folder: %v", errs)
-// 	}
-
-// 	return f.FolderService.ScrubFolder(user_id, folder_id)
-// }

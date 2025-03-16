@@ -11,9 +11,7 @@ type CacheManager interface {
 	DeleteBucktValue(key string) error
 }
 
-type DBDrivers string
-
-const (
-	Postgres DBDrivers = "postgres"
-	SQLite   DBDrivers = "sqlite"
-)
+type LRUCache interface {
+	Add(key any, value any) (evicted bool)
+	Get(key any) (value any, ok bool)
+}

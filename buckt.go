@@ -2,6 +2,8 @@ package buckt
 
 import (
 	"fmt"
+	"html/template"
+	"io"
 	"net/http"
 
 	"github.com/Rhaqim/buckt/internal/app"
@@ -24,6 +26,8 @@ type Buckt struct {
 
 	fileService   domain.FileService
 	folderService domain.FolderService
+
+	cloudService domain.CloudService
 }
 
 // New initializes a new Buckt instance with the provided configuration options.
@@ -70,34 +74,26 @@ func New(bucktOpts BucktConfig) (*Buckt, error) {
 		return nil, fmt.Errorf("failed to load templates: %w", err)
 	}
 
-	// Initialize the stores
-	var folderRepository domain.FolderRepository = repository.NewFolderRepository(db, bucktLog)
-	var fileRepository domain.FileRepository = repository.NewFileRepository(db, bucktLog)
-
-	// initlize the services
-	var fileSystemService domain.FileSystemService = service.NewFileSystemService(bucktLog, bucktOpts.MediaDir)
-	var folderService domain.FolderService = service.NewFolderService(bucktLog, cacheManager, folderRepository, fileSystemService)
-	var fileService domain.FileService = service.NewFileService(bucktLog, cacheManager, bucktOpts.FlatNameSpaces, fileRepository, folderService, fileSystemService)
-
 	// Initialize the app services
-	var apiService domain.APIService = app.NewAPIService(folderService, fileService)
-	var webService domain.WebService = app.NewWebService(folderService, fileService)
+	folderService, fileService := newAppServices(bucktLog, bucktOpts, db, cacheManager)
 
-	// middleware server
-	var middleware domain.Middleware = middleware.NewBucketMiddleware(bucktLog, bucktOpts.StandaloneMode)
-
-	// Run the router
-	router := router.NewRouter(
-		bucktLog, tmpl,
-		bucktOpts.Log.Debug,
-		bucktOpts.StandaloneMode,
-		apiService, webService, middleware)
+	// Initialize the router
+	router := newRouterService(tmpl, bucktLog, bucktOpts, fileService, folderService)
 
 	buckt.db = db
 	buckt.router = router
 	buckt.flatnameSpaces = bucktOpts.FlatNameSpaces
 	buckt.fileService = fileService
 	buckt.folderService = folderService
+
+	// Initialize cloud service if provided
+	if !bucktOpts.Cloud.isEmpty() {
+		fmt.Println("🚀 Initializing cloud service")
+		err = buckt.InitCloudService(bucktOpts.Cloud)
+		if err != nil {
+			return nil, fmt.Errorf("failed to initialize cloud service: %w", err)
+		}
+	}
 
 	return buckt, nil
 }
@@ -297,6 +293,20 @@ func (b *Buckt) GetFile(file_id string) (*model.FileModel, error) {
 	return b.fileService.GetFile(file_id)
 }
 
+// GetFileStream retrieves a file stream based on the provided file ID.
+// It returns the file data and an error, if any occurred during the retrieval process.
+//
+// Parameters:
+//   - file_id: A string representing the unique identifier of the file to be retrieved.
+//
+// Returns:
+//   - *model.FileModel: The file structure containing metadata.
+//   - io.ReadCloser: An io.ReadCloser object representing the file stream.
+//   - error: An error object if an error occurred, otherwise nil.
+func (b *Buckt) GetFileStream(file_id string) (*model.FileModel, io.ReadCloser, error) {
+	return b.fileService.GetFileStream(file_id)
+}
+
 // ListFiles retrieves a list of files for a given folder.
 //
 // Parameters:
@@ -347,4 +357,99 @@ func (b *Buckt) DeleteFile(file_id string) error {
 func (b *Buckt) DeleteFilePermanently(file_id string) error {
 	_, err := b.fileService.ScrubFile(file_id)
 	return err
+}
+
+/* Cloud Methods */
+
+// InitCloudService initializes the cloud service with the provided cloud configuration.
+// It takes a CloudConfig struct as an argument and returns an error if the initialization fails.
+//
+// Parameters:
+//   - cloudConfig: A CloudConfig struct containing the configuration options for the cloud service.
+//
+// Returns:
+//   - error: An error if the cloud service initialization fails, otherwise nil.
+func (b *Buckt) InitCloudService(cloudConfig CloudConfig) error {
+	var err error
+
+	if cloudConfig.isEmpty() {
+		return fmt.Errorf("cloud configuration is empty")
+	}
+
+	if b.fileService == nil || b.folderService == nil {
+		return fmt.Errorf("bucket services not initialized, please call buckt.New(yourConfig) or buckt.Default() first")
+	}
+
+	fmt.Println("🚀 Initializing cloud service")
+
+	// Initialize the cloud service
+	b.cloudService, err = initCloudClient(cloudConfig, b.fileService, b.folderService)
+
+	return err
+}
+
+// TransferFile transfers a file from the local storage to the cloud storage.
+// It takes the file ID as a parameter and returns an error if the transfer fails.
+//
+// Parameters:
+//   - file_id: The ID of the file to be transferred.
+//
+// Returns:
+//   - error: An error if the transfer fails, otherwise nil.
+func (b *Buckt) TransferFile(file_id string) error {
+	if b.cloudService == nil {
+		return fmt.Errorf("cloud service not initialized")
+	}
+
+	return b.cloudService.UploadFileToCloud(file_id)
+}
+
+// TransferFolder transfers a folder from the local storage to the cloud storage.
+// It takes the user_id and folder ID as a parameter and returns an error if the transfer fails.
+//
+// Parameters:
+//   - user_id: The ID of the user who owns the folder.
+//   - folder_id: The ID of the folder to be transferred.
+//
+// Returns:
+//   - error: An error if the transfer fails, otherwise nil.
+func (b *Buckt) TransferFolder(user_id, folder_id string) error {
+	if b.cloudService == nil {
+		return fmt.Errorf("cloud service not initialized")
+	}
+
+	return b.cloudService.UploadFolderToCloud(user_id, folder_id)
+}
+
+/* Helper Methods */
+
+func newAppServices(bucktLog *logger.BucktLogger, bucktOpts BucktConfig, db *database.DB, cacheManager domain.CacheManager) (domain.FolderService, domain.FileService) {
+	// Initialize the stores
+	var folderRepository domain.FolderRepository = repository.NewFolderRepository(db, bucktLog)
+	var fileRepository domain.FileRepository = repository.NewFileRepository(db, bucktLog)
+
+	// initlize the services
+	var fileSystemService domain.FileSystemService = service.NewFileSystemService(bucktLog, bucktOpts.MediaDir)
+	var folderService domain.FolderService = service.NewFolderService(bucktLog, cacheManager, folderRepository, fileSystemService)
+	var fileService domain.FileService = service.NewFileService(bucktLog, cacheManager, bucktOpts.FlatNameSpaces, fileRepository, folderService, fileSystemService)
+
+	return folderService, fileService
+}
+
+func newRouterService(tmpl *template.Template, bucktLog *logger.BucktLogger, bucktOpts BucktConfig, fileService domain.FileService, folderService domain.FolderService) *router.Router {
+	// Initialize the app services
+	var apiService domain.APIService = app.NewAPIService(folderService, fileService)
+	var webService domain.WebService = app.NewWebService(folderService, fileService)
+
+	// middleware server
+	var middleware domain.Middleware = middleware.NewBucketMiddleware(bucktLog, bucktOpts.StandaloneMode)
+
+	// Run the router
+	router := router.NewRouter(
+		bucktLog, tmpl,
+		bucktOpts.Log.Debug,
+		bucktOpts.StandaloneMode,
+		apiService, webService, middleware)
+
+	return router
 }

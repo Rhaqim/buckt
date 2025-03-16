@@ -1,6 +1,10 @@
 package domain
 
-import "github.com/Rhaqim/buckt/internal/model"
+import (
+	"io"
+
+	"github.com/Rhaqim/buckt/internal/model"
+)
 
 // BucktFileSystemService defines the interface for file system operations within the Buckt domain.
 // It provides methods to validate paths, write, retrieve, update, and delete files.
@@ -15,6 +19,10 @@ type FileSystemService interface {
 	// FSGetFile retrieves the file data from the specified path.
 	// Returns the file data or an error if the operation fails.
 	FSGetFile(path string) ([]byte, error)
+
+	// FSGetFileStream retrieves the file data from the specified path.
+	// Returns an io.ReadCloser or an error if the operation fails.
+	FSGetFileStream(path string) (io.ReadCloser, error)
 
 	// FSUpdateFile updates the file from the old path to the new path.
 	// Returns an error if the operation fails.
@@ -51,6 +59,7 @@ type FolderService interface {
 type FileService interface {
 	CreateFile(user_id, parent_id, file_name, content_type string, file_data []byte) (string, error)
 	GetFile(file_id string) (*model.FileModel, error)
+	GetFileStream(file_id string) (*model.FileModel, io.ReadCloser, error)
 	GetFiles(parent_id string) ([]model.FileModel, error)
 	MoveFile(file_id, new_parent_id string) error
 	RenameFile(file_id, new_name string) error
