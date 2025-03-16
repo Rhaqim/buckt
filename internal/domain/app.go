@@ -18,6 +18,7 @@ type APIService interface {
 	UploadFile(c *gin.Context)
 	DownloadFile(c *gin.Context)
 	ServeFile(c *gin.Context)
+	StreamFile(c *gin.Context)
 	DeleteFile(c *gin.Context)
 	DeleteFilePermanently(c *gin.Context)
 
