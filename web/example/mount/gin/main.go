@@ -43,8 +43,7 @@ func main() {
 			LogFile:     "logs",
 			Debug:       true,
 		},
-		MediaDir:       "media",
-		StandaloneMode: false,
+		MediaDir: "media",
 	}
 
 	b, err := buckt.New(opts)
@@ -53,7 +52,7 @@ func main() {
 	}
 	defer b.Close() // Ensure resources are cleaned up
 
-	err = b.InitRouterService()
+	err = b.InitRouterService(buckt.WebModeMount)
 	if err != nil {
 		log.Fatalf("Failed to initialize Buckt router service: %v", err)
 	}

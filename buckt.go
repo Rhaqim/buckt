@@ -21,7 +21,6 @@ type Buckt struct {
 	logger *logger.BucktLogger
 
 	FlatnameSpaces bool
-	StandAloneMode bool
 	Debug          bool
 
 	fileService   domain.FileService
@@ -75,7 +74,6 @@ func New(bucktOpts BucktConfig) (*Buckt, error) {
 	buckt.logger = bucktLog
 
 	buckt.FlatnameSpaces = bucktOpts.FlatNameSpaces
-	buckt.StandAloneMode = bucktOpts.StandaloneMode
 	buckt.Debug = bucktOpts.Log.Debug
 
 	buckt.fileService = fileService
@@ -112,7 +110,6 @@ func Default(opts ...ConfigFunc) (*Buckt, error) {
 	bucktOpts := BucktConfig{
 		Log:            LogConfig{LogTerminal: true, Debug: true},
 		MediaDir:       "media",
-		StandaloneMode: true,
 		FlatNameSpaces: true,
 	}
 
@@ -123,9 +120,9 @@ func Default(opts ...ConfigFunc) (*Buckt, error) {
 	return New(bucktOpts)
 }
 
-func (b *Buckt) InitRouterService() error {
+func (b *Buckt) InitRouterService(mode WebMode) error {
 
-	service, err := web.GetRouterService(b.logger, true, true, b.fileService, b.folderService)
+	service, err := web.GetRouterService(b.logger, mode, true, b.fileService, b.folderService)
 	if err != nil {
 		return err
 	}

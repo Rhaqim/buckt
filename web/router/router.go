@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	mainDomain "github.com/Rhaqim/buckt/internal/domain"
+	"github.com/Rhaqim/buckt/internal/model"
 	"github.com/Rhaqim/buckt/pkg/logger"
 	"github.com/Rhaqim/buckt/web/domain"
 	"github.com/gin-gonic/gin"
@@ -13,7 +14,7 @@ import (
 type Router struct {
 	*gin.Engine
 
-	StandaloneMode bool
+	mode model.WebMode
 
 	domain.APIService
 	domain.WebService
@@ -26,7 +27,7 @@ func NewRouter(
 	tmpl *template.Template,
 
 	Debug bool,
-	StandaloneMode bool,
+	mode model.WebMode,
 
 	apiService domain.APIService,
 	webService domain.WebService,
@@ -51,7 +52,7 @@ func NewRouter(
 	router := &Router{
 		Engine: r,
 
-		StandaloneMode: StandaloneMode,
+		mode: mode,
 
 		APIService: apiService,
 		WebService: webService,
@@ -63,14 +64,14 @@ func NewRouter(
 
 // Run starts the router on the given address.
 func (r *Router) Run(addr string) error {
-	r.registerAllRoutes(r.StandaloneMode)
+	r.registerAllRoutes(r.mode)
 
 	return r.Engine.Run(addr)
 }
 
 // ServeHTTP makes Router compatible with http.Handler
 func (r *Router) Handler() http.Handler {
-	r.registerAllRoutes(r.StandaloneMode)
+	r.registerAllRoutes(model.WebModeMount)
 
 	return r.Engine
 }
@@ -135,15 +136,17 @@ func (r *Router) registerWebRoutes() {
 }
 
 // registerAllRoutes registers all required routes
-func (r *Router) registerAllRoutes(StandaloneMode bool) {
+func (r *Router) registerAllRoutes(mode model.WebMode) {
 	// Register core routes
 	r.registerBaseRoutes()
 
-	// Register web routes **only if in standalone mode**
-	if StandaloneMode {
+	switch mode {
+	case model.WebModeAPI, model.WebModeMount:
+		r.registerAPIRoutes()
+	case model.WebModeUI:
+		r.registerWebRoutes()
+	default:
+		r.registerAPIRoutes()
 		r.registerWebRoutes()
 	}
-
-	// Register API routes
-	r.registerAPIRoutes()
 }

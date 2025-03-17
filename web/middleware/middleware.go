@@ -9,24 +9,24 @@ import (
 )
 
 type bucketMiddleware struct {
-	*logger.BucktLogger
-	Standalone bool
+	logger  *logger.BucktLogger
+	mounted bool
 }
 
-func NewBucketMiddleware(bucktLog *logger.BucktLogger, standalone bool) webDomain.Middleware {
+func NewBucketMiddleware(bucktLog *logger.BucktLogger, mounted bool) webDomain.Middleware {
 	return &bucketMiddleware{
-		BucktLogger: bucktLog,
-		Standalone:  standalone,
+		logger:  bucktLog,
+		mounted: mounted,
 	}
 }
 
 func (b *bucketMiddleware) APIGuardMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		if !b.Standalone {
+		if !b.mounted {
 			// Read user_id from header
 			userID := c.GetHeader("buckt-User-ID")
 			if userID == "" {
-				c.AbortWithStatusJSON(401, b.WrapError("unauthorised", fmt.Errorf("user_id not found in headers")))
+				c.AbortWithStatusJSON(401, b.logger.WrapError("unauthorised", fmt.Errorf("user_id not found in headers")))
 				return
 			}
 

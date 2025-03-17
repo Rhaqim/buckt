@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	mainDomain "github.com/Rhaqim/buckt/internal/domain"
+	"github.com/Rhaqim/buckt/internal/model"
 	mainWeb "github.com/Rhaqim/buckt/internal/web"
 	"github.com/Rhaqim/buckt/pkg/logger"
 	"github.com/Rhaqim/buckt/web/app"
@@ -12,7 +13,7 @@ import (
 	"github.com/Rhaqim/buckt/web/router"
 )
 
-func NewRouterService(bucktLog *logger.BucktLogger, standaloneMode, debug bool, fileService mainDomain.FileService, folderService mainDomain.FolderService) (mainDomain.RouterService, error) {
+func NewRouterService(bucktLog *logger.BucktLogger, mode model.WebMode, debug bool, fileService mainDomain.FileService, folderService mainDomain.FolderService) (mainDomain.RouterService, error) {
 	// Load templates
 	bucktLog.Info("🚀 Loading templates")
 	tmpl, err := loadTemplates()
@@ -25,13 +26,13 @@ func NewRouterService(bucktLog *logger.BucktLogger, standaloneMode, debug bool, 
 	var webService domain.WebService = app.NewWebService(folderService, fileService)
 
 	// middleware server
-	var middleware domain.Middleware = middleware.NewBucketMiddleware(bucktLog, standaloneMode)
+	var middleware domain.Middleware = middleware.NewBucketMiddleware(bucktLog, mode == model.WebModeMount)
 
 	// Run the router
 	router := router.NewRouter(
 		bucktLog, tmpl,
 		debug,
-		standaloneMode,
+		mode,
 		apiService, webService, middleware)
 
 	return router, nil

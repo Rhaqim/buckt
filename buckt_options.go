@@ -26,8 +26,10 @@ type LogConfig struct {
 type DBDrivers = model.DBDrivers // Type alias
 
 const (
+	// Posstgres represents the Postgres database driver.
 	Postgres = model.Postgres
-	SQLite   = model.SQLite
+	// SQLite represents the SQLite database driver.
+	SQLite = model.SQLite
 )
 
 // DBConfig holds the configuration for the database connection.
@@ -50,17 +52,63 @@ type DBConfig struct {
 //	Credentials: The credentials for the cloud provider.
 type CloudConfig = model.CloudConfig
 
+// AWSConfig credentials for AWS cloud provider.
+//
+// Fields:
+//
+//	AccessKey: The access key for AWS.
+//	SecretKey: The secret key for AWS.
+//	Region: The region for AWS.
+//	Bucket: The bucket name for AWS.
 type AWSConfig = model.AWSConfig
+
+// AzureConfig credentials for Azure cloud provider.
+//
+// Fields:
+//
+//	AccountName: The account name for Azure.
+//	AccountKey: The account key for Azure.
+//	Container: The container name for Azure.
 type AzureConfig = model.AzureConfig
+
+// GCPConfig credentials for GCP cloud provider.
+//
+// Fields:
+//
+//	CredentialsFile: The path to the credentials file for GCP.
+//	Bucket: The bucket name for GCP.
 type GCPConfig = model.GCPConfig
 
 type CloudProvider = model.CloudProvider
 
 const (
-	CloudProviderNone  = model.CloudProviderNone
-	CloudProviderAWS   = model.CloudProviderAWS
+	// CloudProviderNone represents no cloud provider.
+	CloudProviderNone = model.CloudProviderNone
+
+	// CloudProviderAWS represents the AWS cloud provider.
+	CloudProviderAWS = model.CloudProviderAWS
+
+	// CloudProviderAzure represents the Azure cloud provider.
 	CloudProviderAzure = model.CloudProviderAzure
-	CloudProviderGCP   = model.CloudProviderGCP
+
+	// CloudProviderGCP represents the GCP cloud provider.
+	CloudProviderGCP = model.CloudProviderGCP
+)
+
+type WebMode = model.WebMode
+
+const (
+	// WebModeAll registers all routes.
+	WebModeAll = model.WebModeAll
+
+	// WebModeAPI registers only the API routes.
+	WebModeAPI = model.WebModeAPI
+
+	// WebModeUI registers only the UI routes.
+	WebModeUI = model.WebModeUI
+
+	// WebModeMount registers only the API routes for the mount point.
+	WebModeMount = model.WebModeMount
 )
 
 // BucktOptions represents the configuration options for the Buckt application.
@@ -80,28 +128,10 @@ type BucktConfig struct {
 	Log            LogConfig
 	MediaDir       string
 	FlatNameSpaces bool
-	StandaloneMode bool
 	Cloud          CloudConfig
 }
 
 type ConfigFunc func(*BucktConfig)
-
-// StandaloneMode sets the standalone mode for the BucktConfig.
-// When standalone mode is enabled, the application will run independently
-// without relying on gin or any other web server.
-//
-// Parameters:
-//
-//	standalone - a boolean value indicating whether to enable standalone mode.
-//
-// Returns:
-//
-//	A ConfigFunc that sets the standalone mode in the BucktConfig.
-func StandaloneMode(standalone bool) ConfigFunc {
-	return func(c *BucktConfig) {
-		c.StandaloneMode = standalone
-	}
-}
 
 // FlatNameSpaces is a configuration function that sets the FlatNameSpaces
 // option in the BucktConfig. When the flat parameter is true, it enables

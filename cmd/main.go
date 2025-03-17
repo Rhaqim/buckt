@@ -8,14 +8,21 @@ import (
 	"sync"
 
 	"github.com/Rhaqim/buckt"
+	_ "github.com/Rhaqim/buckt/web"
 )
 
 func main() {
-	b, err := buckt.Default(buckt.StandaloneMode(true), buckt.FlatNameSpaces(true), buckt.WithCache(NewCache()))
+	b, err := buckt.Default(buckt.FlatNameSpaces(true), buckt.WithCache(NewCache()))
 	if err != nil {
 		log.Fatalf("Failed to initialize Buckt: %v", err)
 	}
 	defer b.Close() // Ensure resources are cleaned up
+
+	// initialize router
+	err = b.InitRouterService(buckt.WebModeAll)
+	if err != nil {
+		log.Fatalf("Failed to initialize Buckt router: %v", err)
+	}
 
 	port := os.Getenv("PORT")
 	if port == "" {

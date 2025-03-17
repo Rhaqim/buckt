@@ -1,6 +1,8 @@
 package service
 
 import (
+	"encoding/json"
+	"fmt"
 	"testing"
 
 	"github.com/Rhaqim/buckt/internal/mocks"
@@ -197,4 +199,97 @@ func TestScrubFile(t *testing.T) {
 	parentIDStr, err := mockSetUp.FileService.ScrubFile(fileID.String())
 	assert.NoError(t, err)
 	assert.Equal(t, parentID.String(), parentIDStr)
+}
+
+func TestGetFile_CacheHit(t *testing.T) {
+	mockSetUp := setupFileTest()
+
+	fileID := uuid.New()
+	fileModel := &model.FileModel{
+		ID:   fileID,
+		Path: "/parent/folder/file.txt",
+	}
+	jsonData, _ := json.Marshal(fileModel)
+
+	mockSetUp.MockCacheManager.On("GetBucktValue", fileID.String()).Return(string(jsonData), nil)
+
+	file, err := mockSetUp.FileService.GetFile(fileID.String())
+	assert.NoError(t, err)
+	assert.Equal(t, fileModel.ID, file.ID)
+	assert.Equal(t, fileModel.Path, file.Path)
+}
+
+func TestGetFile_CacheMiss_RepoHit(t *testing.T) {
+	mockSetUp := setupFileTest()
+
+	fileID := uuid.New()
+	fileModel := &model.FileModel{
+		ID:   fileID,
+		Path: "/parent/folder/file.txt",
+	}
+
+	mockSetUp.MockCacheManager.On("GetBucktValue", fileID.String()).Return(nil, nil)
+	mockSetUp.MockFileRepository.On("GetFile", fileID).Return(fileModel, nil)
+	mockSetUp.MockCacheManager.On("SetBucktValue", fileID.String(), mock.Anything).Return(nil)
+	mockSetUp.MockFileSystemService.On("FSGetFile", fileModel.Path).Return([]byte("file data"), nil)
+	mockSetUp.MockCacheManager.On("GetBucktValue", fileModel.Path).Return(nil, nil)
+	mockSetUp.MockCacheManager.On("SetBucktValue", fileModel.Path, []byte("file data")).Return(nil)
+
+	file, err := mockSetUp.FileService.GetFile(fileID.String())
+	assert.NoError(t, err)
+	assert.Equal(t, fileModel.ID, file.ID)
+	assert.Equal(t, []byte("file data"), file.Data)
+}
+
+func TestGetFile_CacheMiss_RepoMiss(t *testing.T) {
+	mockSetUp := setupFileTest()
+
+	fileID := uuid.New()
+
+	mockSetUp.MockCacheManager.On("GetBucktValue", fileID.String()).Return(nil, nil)
+	mockSetUp.MockFileRepository.On("GetFile", fileID).Return(nil, fmt.Errorf("file not found"))
+
+	file, err := mockSetUp.FileService.GetFile(fileID.String())
+	assert.Error(t, err)
+	assert.Nil(t, file)
+}
+
+func TestGetFile_CacheHit_FileDataCacheHit(t *testing.T) {
+	mockSetUp := setupFileTest()
+
+	fileID := uuid.New()
+	fileModel := &model.FileModel{
+		ID:   fileID,
+		Path: "/parent/folder/file.txt",
+	}
+	jsonData, _ := json.Marshal(fileModel)
+
+	mockSetUp.MockCacheManager.On("GetBucktValue", fileID.String()).Return(string(jsonData), nil)
+	mockSetUp.MockCacheManager.On("GetBucktValue", fileModel.Path).Return([]byte("file data"), nil)
+
+	file, err := mockSetUp.FileService.GetFile(fileID.String())
+	assert.NoError(t, err)
+	assert.Equal(t, fileModel.ID, file.ID)
+	assert.Equal(t, []byte("file data"), file.Data)
+}
+
+func TestGetFile_CacheHit_FileDataCacheMiss(t *testing.T) {
+	mockSetUp := setupFileTest()
+
+	fileID := uuid.New()
+	fileModel := &model.FileModel{
+		ID:   fileID,
+		Path: "/parent/folder/file.txt",
+	}
+	jsonData, _ := json.Marshal(fileModel)
+
+	mockSetUp.MockCacheManager.On("GetBucktValue", fileID.String()).Return(string(jsonData), nil)
+	mockSetUp.MockCacheManager.On("GetBucktValue", fileModel.Path).Return(nil, nil)
+	mockSetUp.MockFileSystemService.On("FSGetFile", fileModel.Path).Return([]byte("file data"), nil)
+	mockSetUp.MockCacheManager.On("SetBucktValue", fileModel.Path, []byte("file data")).Return(nil)
+
+	file, err := mockSetUp.FileService.GetFile(fileID.String())
+	assert.NoError(t, err)
+	assert.Equal(t, fileModel.ID, file.ID)
+	assert.Equal(t, []byte("file data"), file.Data)
 }
