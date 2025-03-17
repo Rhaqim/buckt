@@ -155,44 +155,12 @@ func (f *FileService) GetFile(file_id string) (*model.FileModel, error) {
 		}
 	}
 
-	// get fileData from cache if cache is not nil
-	var fileData []byte
-	if f.CacheManager != nil {
-
-		cachedFileData, err := f.CacheManager.GetBucktValue(file.Path)
-		if err != nil {
-			f.BucktLogger.Warn("failed to get file data from cache: " + err.Error())
-		}
-
-		if cachedFileData != nil {
-			if cachedBytes, ok := cachedFileData.([]byte); ok {
-				fileData = cachedBytes
-			} else if cachedString, ok := cachedFileData.(string); ok {
-				fileData = []byte(cachedString) // Convert string to []byte if stored as string
-			} else {
-				fileData = nil
-			}
-		}
+	data, err := f.FileSystemService.FSGetFile(file.Path)
+	if err != nil {
+		return nil, f.WrapError("failed to get file data", err)
 	}
 
-	if fileData == nil {
-		data, err := f.FileSystemService.FSGetFile(file.Path)
-		if err != nil {
-			return nil, f.WrapError("failed to get file data", err)
-		}
-
-		fileData = data
-
-		// Store file data in cache
-		if f.CacheManager != nil {
-			err = f.CacheManager.SetBucktValue(file.Path, fileData)
-			if err != nil {
-				f.BucktLogger.Warn("failed to set file data in cache: " + err.Error())
-			}
-		}
-	}
-
-	file.Data = fileData
+	file.Data = data
 
 	return file, nil
 }

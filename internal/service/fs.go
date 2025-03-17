@@ -63,6 +63,10 @@ func (bfs *FileSystemService) FSGetFile(path string) ([]byte, error) {
 		return nil, err
 	}
 
+	if file, ok := bfs.cache.Get(filePath); ok {
+		return file.([]byte), nil
+	}
+
 	result, err, _ := bfs.g.Do(filePath, func() (any, error) {
 		return os.ReadFile(filePath)
 	})
@@ -70,6 +74,8 @@ func (bfs *FileSystemService) FSGetFile(path string) ([]byte, error) {
 	if err != nil {
 		return nil, bfs.WrapError("failed to read file", err)
 	}
+
+	bfs.cache.Add(filePath, result)
 
 	return result.([]byte), nil
 }
