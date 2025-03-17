@@ -3,7 +3,7 @@ module github.com/Rhaqim/buckt/web
 go 1.24.0
 
 require (
-	github.com/Rhaqim/buckt v1.3.0-beta
+	github.com/Rhaqim/buckt v1.3.2-beta
 	github.com/gin-gonic/gin v1.10.0
 )
 
@@ -36,6 +36,7 @@ require (
 	golang.org/x/sys v0.31.0 // indirect
 	golang.org/x/text v0.23.0 // indirect
 	google.golang.org/protobuf v1.36.5 // indirect
+	gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	gorm.io/gorm v1.25.12 // indirect
 )
