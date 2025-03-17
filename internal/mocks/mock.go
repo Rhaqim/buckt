@@ -69,6 +69,11 @@ func (m *MockFileRepository) Create(file *model.FileModel) error {
 
 func (m *MockFileRepository) GetFile(fileID uuid.UUID) (*model.FileModel, error) {
 	args := m.Called(fileID)
+
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+
 	return args.Get(0).(*model.FileModel), args.Error(1)
 }
 

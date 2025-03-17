@@ -213,6 +213,12 @@ func TestGetFile_CacheHit(t *testing.T) {
 
 	mockSetUp.MockCacheManager.On("GetBucktValue", fileID.String()).Return(string(jsonData), nil)
 
+	mockSetUp.MockCacheManager.On("GetBucktValue", fileModel.Path).Return(nil, nil)
+
+	mockSetUp.MockFileSystemService.On("FSGetFile", fileModel.Path).Return([]byte("file data"), nil)
+
+	mockSetUp.MockCacheManager.On("SetBucktValue", fileModel.Path, []byte("file data")).Return(nil)
+
 	file, err := mockSetUp.FileService.GetFile(fileID.String())
 	assert.NoError(t, err)
 	assert.Equal(t, fileModel.ID, file.ID)

@@ -154,7 +154,13 @@ func (f *FileService) GetFile(file_id string) (*model.FileModel, error) {
 	if f.CacheManager != nil {
 		cachedFileData, _ := f.CacheManager.GetBucktValue(file.Path)
 		if cachedFileData != nil {
-			file.Data = cachedFileData.([]byte)
+			if cachedBytes, ok := cachedFileData.([]byte); ok {
+				file.Data = cachedBytes
+			} else if cachedString, ok := cachedFileData.(string); ok {
+				file.Data = []byte(cachedString) // Convert string to []byte if stored as string
+			} else {
+				return nil, fmt.Errorf("unexpected cache data type: %T", cachedFileData)
+			}
 		} else {
 			fileData, err := f.FileSystemService.FSGetFile(file.Path)
 			if err != nil {
