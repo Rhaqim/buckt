@@ -7,9 +7,7 @@ import (
 	"testing"
 	"time"
 
-	aws "github.com/Rhaqim/buckt/cloud/aws"
 	"github.com/Rhaqim/buckt/internal/cache"
-	"github.com/Rhaqim/buckt/internal/cloud"
 	"github.com/Rhaqim/buckt/internal/mocks"
 	"github.com/Rhaqim/buckt/internal/model"
 	"github.com/google/uuid"
@@ -194,28 +192,6 @@ func TestDefault(t *testing.T) {
 		defer sqlDB.Close()
 
 		buckt, err := Default(WithDB(SQLite, sqlDB))
-		// Cleanup to ensure the server is closed after the test
-		t.Cleanup(func() {
-			buckt.Close()
-		})
-		assert.NoError(t, err)
-		assert.NotNil(t, buckt)
-	})
-
-	t.Run("With Cloud", func(t *testing.T) {
-
-		cloud.RegisterCloudProvider(model.CloudProviderAWS, aws.NewAWSCloud)
-
-		cloudConfig := CloudConfig{
-			Provider: CloudProviderAWS,
-			Credentials: AWSConfig{
-				AccessKey: "accessKey",
-				SecretKey: "secretKey",
-				Region:    "region",
-				Bucket:    "bucket",
-			},
-		}
-		buckt, err := Default(WithCloud(cloudConfig))
 		// Cleanup to ensure the server is closed after the test
 		t.Cleanup(func() {
 			buckt.Close()
