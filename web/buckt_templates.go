@@ -1,4 +1,4 @@
-package buckt
+package web
 
 import (
 	"embed"
@@ -8,7 +8,7 @@ import (
 	"strings"
 )
 
-//go:embed internal/web/templates/*.html
+//go:embed templates/*.html
 var templatesFS embed.FS
 
 // loadTemplates loads and parses HTML templates from the embedded filesystem.
@@ -26,7 +26,7 @@ var templatesFS embed.FS
 // - *template.Template: The parsed templates.
 // - error: An error if the templates could not be loaded or parsed.
 func loadTemplates() (*template.Template, error) {
-	tmplFS, err := fs.Sub(templatesFS, "internal/web/templates")
+	tmplFS, err := fs.Sub(templatesFS, "templates")
 	if err != nil {
 		return nil, fmt.Errorf("failed to load templates: %w", err)
 	}

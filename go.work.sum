@@ -110,6 +110,7 @@ cloud.google.com/go/vpcaccess v1.8.3/go.mod h1:bqOhyeSh/nEmLIsIUoCiQCBHeNPNjaK9M
 cloud.google.com/go/webrisk v1.10.3/go.mod h1:rRAqCA5/EQOX8ZEEF4HMIrLHGTK/Y1hEQgWMnih+jAw=
 cloud.google.com/go/websecurityscanner v1.7.3/go.mod h1:gy0Kmct4GNLoCePWs9xkQym1D7D59ld5AjhXrjipxSs=
 cloud.google.com/go/workflows v1.13.3/go.mod h1:Xi7wggEt/ljoEcyk+CB/Oa1AHBCk0T1f5UH/exBB5CE=
+github.com/Rhaqim/buckt v1.2.8-beta-fix/go.mod h1:aj9K3lCpOORD3rdVTddBYOtWTZPtJk9igbQHgw1lx14=
 github.com/golang/glog v1.2.4/go.mod h1:6AhwSGph0fcJtXVM/PEHPqZlFeoLxhs7/t5UDAwmO+w=
 github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da/go.mod h1:cIg4eruTrX1D+g88fzRXU5OdNfaM+9IcxsU14FzY7Hc=
 github.com/golang/snappy v0.0.4/go.mod h1:/XxbfmMg8lxefKM7IXC3fBNl/7bRcc72aCRzEWrmP2Q=

@@ -3,40 +3,40 @@ package main
 import (
 	"sync"
 
-	_ "github.com/lib/pq"
+	// _ "github.com/lib/pq"
 
-	"database/sql"
 	"fmt"
 	"log"
 	"strings"
 
 	"github.com/Rhaqim/buckt"
+	_ "github.com/Rhaqim/buckt/web"
 	"github.com/gin-gonic/gin"
 )
 
 func main() {
 
 	var err error
-	var db *sql.DB
+	// var db *sql.DB
 
-	// Postgres database
-	conn_string := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=disable",
-		"localhost", 5432, "postgres", "password", "postgres")
+	// // Postgres database
+	// conn_string := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=disable",
+	// 	"localhost", 5432, "postgres", "password", "postgres")
 
-	db, err = sql.Open("postgres", conn_string)
-	if err != nil {
-		log.Fatalf("Failed to connect to the database: %v", err)
-	}
+	// db, err = sql.Open("postgres", conn_string)
+	// if err != nil {
+	// 	log.Fatalf("Failed to connect to the database: %v", err)
+	// }
 
 	// File cache
 	cache := NewCache()
 
 	// Initialize Buckt
 	opts := buckt.BucktConfig{
-		DB: buckt.DBConfig{
-			Driver:   buckt.Postgres,
-			Database: db,
-		}, // Pass the database connection
+		// DB: buckt.DBConfig{
+		// 	Driver:   buckt.Postgres,
+		// 	Database: db,
+		// }, // Pass the database connection
 		Cache: cache,
 		Log: buckt.LogConfig{
 			LogTerminal: false,
@@ -52,6 +52,11 @@ func main() {
 		log.Fatalf("Failed to initialize Buckt: %v", err)
 	}
 	defer b.Close() // Ensure resources are cleaned up
+
+	err = b.InitRouterService()
+	if err != nil {
+		log.Fatalf("Failed to initialize Buckt router service: %v", err)
+	}
 
 	// Get the Buckt handler
 	handler := b.GetHandler()

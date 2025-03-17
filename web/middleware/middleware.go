@@ -3,8 +3,8 @@ package middleware
 import (
 	"fmt"
 
-	"github.com/Rhaqim/buckt/internal/domain"
 	"github.com/Rhaqim/buckt/pkg/logger"
+	webDomain "github.com/Rhaqim/buckt/web/domain"
 	"github.com/gin-gonic/gin"
 )
 
@@ -13,7 +13,7 @@ type bucketMiddleware struct {
 	Standalone bool
 }
 
-func NewBucketMiddleware(bucktLog *logger.BucktLogger, standalone bool) domain.Middleware {
+func NewBucketMiddleware(bucktLog *logger.BucktLogger, standalone bool) webDomain.Middleware {
 	return &bucketMiddleware{
 		BucktLogger: bucktLog,
 		Standalone:  standalone,

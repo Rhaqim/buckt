@@ -6,6 +6,7 @@ import (
 	"github.com/Rhaqim/buckt/internal/domain"
 	"github.com/Rhaqim/buckt/internal/utils"
 	"github.com/Rhaqim/buckt/pkg/response"
+	webDomain "github.com/Rhaqim/buckt/web/domain"
 	"github.com/gin-gonic/gin"
 )
 
@@ -14,7 +15,7 @@ type WebService struct {
 	domain.FileService
 }
 
-func NewWebService(fs domain.FolderService, f domain.FileService) domain.WebService {
+func NewWebService(fs domain.FolderService, f domain.FileService) webDomain.WebService {
 	return &WebService{
 		FolderService: fs,
 		FileService:   f,

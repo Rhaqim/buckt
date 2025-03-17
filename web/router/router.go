@@ -4,8 +4,9 @@ import (
 	"html/template"
 	"net/http"
 
-	"github.com/Rhaqim/buckt/internal/domain"
+	mainDomain "github.com/Rhaqim/buckt/internal/domain"
 	"github.com/Rhaqim/buckt/pkg/logger"
+	"github.com/Rhaqim/buckt/web/domain"
 	"github.com/gin-gonic/gin"
 )
 
@@ -30,7 +31,7 @@ func NewRouter(
 	apiService domain.APIService,
 	webService domain.WebService,
 	middleware domain.Middleware,
-) *Router {
+) mainDomain.RouterService {
 	r := gin.New()
 
 	// Set logger
