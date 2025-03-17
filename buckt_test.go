@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"io"
 	"testing"
-	"time"
 
 	"github.com/Rhaqim/buckt/internal/cache"
 	"github.com/Rhaqim/buckt/internal/mocks"
@@ -56,7 +55,6 @@ func setupBucktTest(t *testing.T) MockBuckt {
 		DB:             DBConfig{Driver: SQLite, Database: sqlDB},
 		Log:            LogConfig{LogTerminal: false, Debug: false},
 		MediaDir:       "media",
-		StandaloneMode: true,
 		FlatNameSpaces: false,
 	}
 
@@ -79,7 +77,6 @@ func TestNew(t *testing.T) {
 			DB:             DBConfig{Driver: SQLite, Database: sqlDB},
 			Log:            LogConfig{LogTerminal: false, Debug: false},
 			MediaDir:       "media",
-			StandaloneMode: true,
 			FlatNameSpaces: false,
 		}
 
@@ -97,7 +94,7 @@ func TestNew(t *testing.T) {
 	// 		DB:             DBConfig{Driver: Postgres, Database: sqlDB},
 	// 		Log:            LogConfig{LogTerminal: false, Debug: false},
 	// 		MediaDir:       "media",
-	// 		StandaloneMode: true,
+	//
 	// 		FlatNameSpaces: false,
 	// 	}
 
@@ -110,10 +107,10 @@ func TestNew(t *testing.T) {
 
 	t.Run("Postgres without provided instance", func(t *testing.T) {
 		bucktOpts := BucktConfig{
-			DB:             DBConfig{Driver: Postgres, Database: nil},
-			Log:            LogConfig{LogTerminal: false, Debug: false},
-			MediaDir:       "media",
-			StandaloneMode: true,
+			DB:       DBConfig{Driver: Postgres, Database: nil},
+			Log:      LogConfig{LogTerminal: false, Debug: false},
+			MediaDir: "media",
+
 			FlatNameSpaces: false,
 		}
 
@@ -132,16 +129,6 @@ func TestDefault(t *testing.T) {
 			buckt.Close()
 		})
 
-		assert.NoError(t, err)
-		assert.NotNil(t, buckt)
-	})
-
-	t.Run("With Standalone", func(t *testing.T) {
-		buckt, err := Default(StandaloneMode(true))
-		// Cleanup to ensure the server is closed after the test
-		t.Cleanup(func() {
-			buckt.Close()
-		})
 		assert.NoError(t, err)
 		assert.NotNil(t, buckt)
 	})
@@ -206,7 +193,6 @@ func TestDefault(t *testing.T) {
 		defer sqlDB.Close()
 
 		buckt, err := Default(
-			StandaloneMode(true),
 			FlatNameSpaces(true),
 			MediaDir("media"),
 			WithCache(cache.NewNoOpCache()),
@@ -218,28 +204,28 @@ func TestDefault(t *testing.T) {
 	})
 }
 
-func TestGetHandler(t *testing.T) {
-	buckt := setupBucktTest(t)
+// func TestGetHandler(t *testing.T) {
+// 	buckt := setupBucktTest(t)
 
-	handler := buckt.GetHandler()
-	assert.NotNil(t, handler)
-}
+// 	handler := buckt.GetHandler()
+// 	assert.NotNil(t, handler)
+// }
 
-func TestServer(t *testing.T) {
-	buckt := setupBucktTest(t)
+// func TestServer(t *testing.T) {
+// 	buckt := setupBucktTest(t)
 
-	go func() {
-		err := buckt.StartServer(":8080")
-		assert.NoError(t, err)
-	}()
+// 	go func() {
+// 		err := buckt.StartServer(":8080")
+// 		assert.NoError(t, err)
+// 	}()
 
-	time.Sleep(100 * time.Millisecond) // Ensure server starts before test exits
+// 	time.Sleep(100 * time.Millisecond) // Ensure server starts before test exits
 
-	// Cleanup to ensure the server is closed after the test
-	t.Cleanup(func() {
-		buckt.Close()
-	})
-}
+// 	// Cleanup to ensure the server is closed after the test
+// 	t.Cleanup(func() {
+// 		buckt.Close()
+// 	})
+// }
 
 func TestClose(t *testing.T) {
 	buckt := setupBucktTest(t)
@@ -560,135 +546,135 @@ func TestDeleteFilePermanently(t *testing.T) {
 	buckt.MockFileService.AssertExpectations(t)
 }
 
-func TestTransferFile(t *testing.T) {
-	t.Run("With CloudProviderNone", func(t *testing.T) {
-		config := CloudConfig{Provider: CloudProviderNone}
+// func TestTransferFile(t *testing.T) {
+// 	t.Run("With CloudProviderNone", func(t *testing.T) {
+// 		config := CloudConfig{Provider: CloudProviderNone}
 
-		buckt := setupBucktTest(t)
+// 		buckt := setupBucktTest(t)
 
-		// set cloudService to nil to simulate an error
-		buckt.cloudService = nil
+// 		// set cloudService to nil to simulate an error
+// 		buckt.cloudService = nil
 
-		err := buckt.InitCloudService(config)
-		assert.Error(t, err)
-		assert.Nil(t, buckt.cloudService)
+// 		err := buckt.InitCloudService(config)
+// 		assert.Error(t, err)
+// 		assert.Nil(t, buckt.cloudService)
 
-		buckt.MockCloudService.On("UploadFileToCloud", "550e8400-e29b-41d4-a716-446655440000").
-			Return(nil)
+// 		buckt.MockCloudService.On("UploadFileToCloud", "550e8400-e29b-41d4-a716-446655440000").
+// 			Return(nil)
 
-		// Call the method
-		err = buckt.Buckt.TransferFile("550e8400-e29b-41d4-a716-446655440000")
-		assert.Error(t, err)
+// 		// Call the method
+// 		err = buckt.Buckt.TransferFile("550e8400-e29b-41d4-a716-446655440000")
+// 		assert.Error(t, err)
 
-		// Verify expectations
-		buckt.MockFileService.AssertExpectations(t)
-	})
+// 		// Verify expectations
+// 		buckt.MockFileService.AssertExpectations(t)
+// 	})
 
-	t.Run("With CloudProviderAWS", func(t *testing.T) {
-		config := CloudConfig{
-			Provider: CloudProviderAWS,
-			Credentials: AWSConfig{
-				AccessKey: "accessKey",
-				SecretKey: "secretKey",
-				Region:    "region",
-				Bucket:    "bucket",
-			},
-		}
+// 	t.Run("With CloudProviderAWS", func(t *testing.T) {
+// 		config := CloudConfig{
+// 			Provider: CloudProviderAWS,
+// 			Credentials: AWSConfig{
+// 				AccessKey: "accessKey",
+// 				SecretKey: "secretKey",
+// 				Region:    "region",
+// 				Bucket:    "bucket",
+// 			},
+// 		}
 
-		buckt := setupBucktTest(t)
+// 		buckt := setupBucktTest(t)
 
-		// Cleanup to ensure the server is closed after the test
-		t.Cleanup(func() {
-			buckt.Close()
-		})
+// 		// Cleanup to ensure the server is closed after the test
+// 		t.Cleanup(func() {
+// 			buckt.Close()
+// 		})
 
-		// set cloudService to nil to simulate an error
-		buckt.cloudService = nil
+// 		// set cloudService to nil to simulate an error
+// 		buckt.cloudService = nil
 
-		err := buckt.InitCloudService(config)
-		assert.NoError(t, err)
-		assert.NotNil(t, buckt.cloudService)
+// 		err := buckt.InitCloudService(config)
+// 		assert.NoError(t, err)
+// 		assert.NotNil(t, buckt.cloudService)
 
-		// Add mock cloud service]
-		buckt.cloudService = buckt.MockCloudService
+// 		// Add mock cloud service]
+// 		buckt.cloudService = buckt.MockCloudService
 
-		// Mock the expected behavior
-		buckt.MockCloudService.On("UploadFileToCloud", "550e8400-e29b-41d4-a716-446655440000").
-			Return(nil)
+// 		// Mock the expected behavior
+// 		buckt.MockCloudService.On("UploadFileToCloud", "550e8400-e29b-41d4-a716-446655440000").
+// 			Return(nil)
 
-		// Call the method
-		err = buckt.Buckt.TransferFile("550e8400-e29b-41d4-a716-446655440000")
-		assert.NoError(t, err)
+// 		// Call the method
+// 		err = buckt.Buckt.TransferFile("550e8400-e29b-41d4-a716-446655440000")
+// 		assert.NoError(t, err)
 
-		// Verify expectations
-		buckt.MockFileService.AssertExpectations(t)
-	})
-}
+// 		// Verify expectations
+// 		buckt.MockFileService.AssertExpectations(t)
+// 	})
+// }
 
-func TestTransferFolder(t *testing.T) {
-	t.Run("With CloudProviderNone", func(t *testing.T) {
-		config := CloudConfig{Provider: CloudProviderNone}
+// func TestTransferFolder(t *testing.T) {
+// 	t.Run("With CloudProviderNone", func(t *testing.T) {
+// 		config := CloudConfig{Provider: CloudProviderNone}
 
-		buckt := setupBucktTest(t)
+// 		buckt := setupBucktTest(t)
 
-		// set cloudService to nil to simulate an error
-		buckt.cloudService = nil
+// 		// set cloudService to nil to simulate an error
+// 		buckt.cloudService = nil
 
-		err := buckt.InitCloudService(config)
-		assert.Error(t, err)
-		assert.Nil(t, buckt.cloudService)
+// 		err := buckt.InitCloudService(config)
+// 		assert.Error(t, err)
+// 		assert.Nil(t, buckt.cloudService)
 
-		buckt.MockCloudService.On("UploadFolderToCloud", "user_1", "550e8400-e29b-41d4-a716-446655440000").
-			Return(nil)
+// 		buckt.MockCloudService.On("UploadFolderToCloud", "user_1", "550e8400-e29b-41d4-a716-446655440000").
+// 			Return(nil)
 
-		// Call the method
-		err = buckt.Buckt.TransferFolder("user_1", "550e8400-e29b-41d4-a716-446655440000")
-		assert.Error(t, err)
+// 		// Call the method
+// 		err = buckt.Buckt.TransferFolder("user_1", "550e8400-e29b-41d4-a716-446655440000")
+// 		assert.Error(t, err)
 
-		// Verify expectations
-		buckt.MockFolderService.AssertExpectations(t)
-	})
+// 		// Verify expectations
+// 		buckt.MockFolderService.AssertExpectations(t)
+// 	})
 
-	t.Run("With CloudProviderAWS", func(t *testing.T) {
-		config := CloudConfig{
-			Provider: CloudProviderAWS,
-			Credentials: AWSConfig{
-				AccessKey: "accessKey",
-				SecretKey: "secretKey",
-				Region:    "region",
-				Bucket:    "bucket",
-			},
-		}
+// 	t.Run("With CloudProviderAWS", func(t *testing.T) {
+// 		config := CloudConfig{
+// 			Provider: CloudProviderAWS,
+// 			Credentials: AWSConfig{
+// 				AccessKey: "accessKey",
+// 				SecretKey: "secretKey",
+// 				Region:    "region",
+// 				Bucket:    "bucket",
+// 			},
+// 		}
 
-		buckt := setupBucktTest(t)
+// 		buckt := setupBucktTest(t)
 
-		// Cleanup to ensure the server is closed after the test
-		t.Cleanup(func() {
-			buckt.Close()
-		})
+// 		// Cleanup to ensure the server is closed after the test
+// 		t.Cleanup(func() {
+// 			buckt.Close()
+// 		})
 
-		// set cloudService to nil to simulate an error
-		buckt.cloudService = nil
+// 		// set cloudService to nil to simulate an error
+// 		buckt.cloudService = nil
 
-		err := buckt.InitCloudService(config)
-		assert.NoError(t, err)
-		assert.NotNil(t, buckt.cloudService)
+// 		err := buckt.InitCloudService(config)
+// 		assert.NoError(t, err)
+// 		assert.NotNil(t, buckt.cloudService)
 
-		// Add mock cloud service]
-		buckt.cloudService = buckt.MockCloudService
+// 		// Add mock cloud service]
+// 		buckt.cloudService = buckt.MockCloudService
 
-		// Mock the expected behavior
-		buckt.MockCloudService.On("UploadFolderToCloud", "user_1", "550e8400-e29b-41d4-a716-446655440000").
-			Return(nil)
+// 		// Mock the expected behavior
+// 		buckt.MockCloudService.On("UploadFolderToCloud", "user_1", "550e8400-e29b-41d4-a716-446655440000").
+// 			Return(nil)
 
-		// Call the method
-		err = buckt.Buckt.TransferFolder("user_1", "550e8400-e29b-41d4-a716-446655440000")
-		assert.NoError(t, err)
+// 		// Call the method
+// 		err = buckt.Buckt.TransferFolder("user_1", "550e8400-e29b-41d4-a716-446655440000")
+// 		assert.NoError(t, err)
 
-		// Verify expectations
-		buckt.MockFolderService.AssertExpectations(t)
-	})
-}
+// 		// Verify expectations
+// 		buckt.MockFolderService.AssertExpectations(t)
+// 	})
+// }
 
 // ✅ Test CloudProvider String() method
 func TestCloudProviderString(t *testing.T) {

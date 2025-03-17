@@ -1,12 +1,8 @@
-package main
+package gin
 
 import (
-	"sync"
+	_ "github.com/Rhaqim/buckt/web" // Web package for side effects
 
-	_ "github.com/lib/pq"
-
-	"database/sql"
-	"fmt"
 	"log"
 	"strings"
 
@@ -16,35 +12,14 @@ import (
 
 func main() {
 
-	var err error
-	var db *sql.DB
-
-	// Postgres database
-	conn_string := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=disable",
-		"localhost", 5432, "postgres", "password", "postgres")
-
-	db, err = sql.Open("postgres", conn_string)
-	if err != nil {
-		log.Fatalf("Failed to connect to the database: %v", err)
-	}
-
-	// File cache
-	cache := NewCache()
-
 	// Initialize Buckt
 	opts := buckt.BucktConfig{
-		DB: buckt.DBConfig{
-			Driver:   buckt.Postgres,
-			Database: db,
-		}, // Pass the database connection
-		Cache: cache,
 		Log: buckt.LogConfig{
 			LogTerminal: false,
 			LogFile:     "logs",
 			Debug:       true,
 		},
-		MediaDir:       "media",
-		StandaloneMode: false,
+		MediaDir: "media",
 	}
 
 	b, err := buckt.New(opts)
@@ -52,6 +27,11 @@ func main() {
 		log.Fatalf("Failed to initialize Buckt: %v", err)
 	}
 	defer b.Close() // Ensure resources are cleaned up
+
+	err = b.InitRouterService(buckt.WebModeMount)
+	if err != nil {
+		log.Fatalf("Failed to initialize Buckt router service: %v", err)
+	}
 
 	// Get the Buckt handler
 	handler := b.GetHandler()
@@ -94,50 +74,4 @@ func main() {
 
 	// Start the server
 	r.Run(":8080")
-}
-
-type Cache struct {
-	// Cache
-	mu    sync.RWMutex
-	store map[string]any
-}
-
-func NewCache() *Cache {
-	return &Cache{
-		store: make(map[string]any),
-	}
-}
-
-func (c *Cache) GetBucktValue(key string) (any, error) {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-
-	fmt.Println("Cache get", key)
-
-	if val, ok := c.store[key]; ok {
-
-		fmt.Println("Cache hit", key)
-
-		return val, nil
-	}
-
-	return nil, nil
-}
-
-func (c *Cache) SetBucktValue(key string, value any) error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	fmt.Println("Cache set", key)
-
-	c.store[key] = value
-	return nil
-}
-
-func (c *Cache) DeleteBucktValue(key string) error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	delete(c.store, key)
-	return nil
 }

@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/Rhaqim/buckt"
+	_ "github.com/Rhaqim/buckt/web"
 )
 
 func main() {
@@ -12,8 +13,7 @@ func main() {
 		Log: buckt.LogConfig{
 			LogTerminal: true,
 		},
-		MediaDir:       "media",
-		StandaloneMode: false,
+		MediaDir: "media",
 	}
 
 	b, err := buckt.New(opts)
@@ -21,6 +21,12 @@ func main() {
 		log.Fatalf("Failed to initialize Buckt: %v", err)
 	}
 	defer b.Close() // Ensure resources are cleaned up
+
+	// Initialize router
+	err = b.InitRouterService(buckt.WebModeMount)
+	if err != nil {
+		log.Fatalf("Failed to initialize Buckt router: %v", err)
+	}
 
 	handler := b.GetHandler()
 

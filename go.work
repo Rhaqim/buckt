@@ -5,4 +5,5 @@ use (
 	./cloud/aws
 	./cloud/azure
 	./cloud/gcp
+	./web
 )

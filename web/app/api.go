@@ -9,6 +9,7 @@ import (
 	"github.com/Rhaqim/buckt/internal/domain"
 	"github.com/Rhaqim/buckt/internal/utils"
 	"github.com/Rhaqim/buckt/pkg/response"
+	webDomain "github.com/Rhaqim/buckt/web/domain"
 	"github.com/gin-gonic/gin"
 )
 
@@ -17,7 +18,7 @@ type APIService struct {
 	domain.FileService
 }
 
-func NewAPIService(fs domain.FolderService, f domain.FileService) domain.APIService {
+func NewAPIService(fs domain.FolderService, f domain.FileService) webDomain.APIService {
 	return &APIService{
 		FolderService: fs,
 		FileService:   f,
