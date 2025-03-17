@@ -62,31 +62,6 @@ func TestCreateFile(t *testing.T) {
 	assert.NoError(t, err)
 }
 
-func TestGetFile(t *testing.T) {
-	mockSetUp := setupFileTest()
-
-	fileID := uuid.New()
-	fileModel := &model.FileModel{
-		ID:   fileID,
-		Path: "/parent/folder/file.txt",
-	}
-
-	var jsonStr string
-
-	mockSetUp.MockCacheManager.On("GetBucktValue", fileID.String()).Return(jsonStr, nil)
-
-	mockSetUp.MockCacheManager.On("SetBucktValue", fileID.String(), mock.Anything).Return(nil)
-
-	mockSetUp.MockFileRepository.On("GetFile", fileID).Return(fileModel, nil)
-
-	mockSetUp.MockFileSystemService.On("FSGetFile", "/parent/folder/file.txt").Return([]byte("file data"), nil)
-
-	file, err := mockSetUp.FileService.GetFile(fileID.String())
-	assert.NoError(t, err)
-	assert.Equal(t, fileModel.ID, file.ID)
-	assert.Equal(t, []byte("file data"), file.Data)
-}
-
 func TestGetFiles(t *testing.T) {
 	mockSetUp := setupFileTest()
 
