@@ -1,6 +1,7 @@
 package main
 
 import (
+	"database/sql"
 	"flag"
 	"fmt"
 	"log"
@@ -12,7 +13,12 @@ import (
 )
 
 func main() {
-	b, err := buckt.Default(buckt.FlatNameSpaces(true), buckt.WithCache(NewCache()))
+	// Initialize the database
+	db, err := InitDB()
+	if err != nil {
+		log.Fatalf("Failed to initialize the database: %v", err)
+	}
+	b, err := buckt.Default(buckt.FlatNameSpaces(true), buckt.WithCache(NewCache()), buckt.WithDB("postgres", db))
 	if err != nil {
 		log.Fatalf("Failed to initialize Buckt: %v", err)
 	}
@@ -83,4 +89,20 @@ func (c *Cache) DeleteBucktValue(key string) error {
 
 	delete(c.store, key)
 	return nil
+}
+
+func InitDB() (*sql.DB, error) {
+	var err error
+	var db *sql.DB
+
+	// Postgres database
+	conn_string := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=disable",
+		"localhost", 5432, "postgres", "password", "postgres")
+
+	db, err = sql.Open("postgres", conn_string)
+	if err != nil {
+		return nil, fmt.Errorf("failed to connect to the database: %v", err)
+	}
+
+	return db, nil
 }

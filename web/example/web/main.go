@@ -24,7 +24,7 @@ func main() {
 	defer b.Close() // Ensure resources are cleaned up
 
 	// initialize router
-	err = b.InitRouterService(buckt.WebModeAll)
+	err = b.InitRouterService(buckt.WebModeUI)
 	if err != nil {
 		log.Fatalf("Failed to initialize Buckt router: %v", err)
 	}
