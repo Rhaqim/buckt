@@ -1,10 +1,8 @@
-package buckt
+package model
 
 import (
 	"fmt"
-
-	"github.com/Rhaqim/buckt/internal/cloud"
-	"github.com/Rhaqim/buckt/internal/domain"
+	"reflect"
 )
 
 type CloudProvider int
@@ -38,6 +36,15 @@ type NoCredentials struct{}
 
 func (n NoCredentials) Validate() error {
 	return nil
+}
+
+type CloudConfig struct {
+	Provider    CloudProvider
+	Credentials CloudCredentials
+}
+
+func (cc CloudConfig) IsEmpty() bool {
+	return cc.Provider == CloudProviderNone || cc.Credentials == nil || (reflect.ValueOf(cc.Credentials).Kind() == reflect.Ptr && reflect.ValueOf(cc.Credentials).IsNil())
 }
 
 // AWSConfig implements CloudCredentials
@@ -80,29 +87,4 @@ func (g GCPConfig) Validate() error {
 		return fmt.Errorf("GCP credentials are incomplete")
 	}
 	return nil
-}
-
-func initCloudClient(cfg CloudConfig, fileService domain.FileService, folderService domain.FolderService) (domain.CloudService, error) {
-	// Validate provider configuration
-	if err := cfg.Credentials.Validate(); err != nil {
-		return nil, err
-	}
-
-	// Use type assertion to determine provider and create cloud service
-	switch c := cfg.Credentials.(type) {
-	case AWSConfig:
-		return cloud.NewAWSCloud(c.Bucket, c.Region, fileService, folderService)
-	case AzureConfig:
-		return cloud.NewAzureCloud(c.AccountName, c.AccountKey, c.Container, fileService, folderService)
-	case GCPConfig:
-		return cloud.NewGCPCloud(c.CredentialsFile, c.Bucket, fileService, folderService)
-	case NoCredentials:
-		return NewLocalCloud(fileService, folderService)
-	default:
-		return nil, fmt.Errorf("unsupported cloud provider: %s", cfg.Provider.String())
-	}
-}
-
-func NewLocalCloud(fileService domain.FileService, folderService domain.FolderService) (domain.CloudService, error) {
-	return nil, fmt.Errorf("local cloud service not implemented")
 }

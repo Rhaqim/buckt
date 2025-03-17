@@ -13,7 +13,7 @@ type uploadFileFn func(file_name, content_type, file_path string, data []byte, m
 
 // BaseCloudStorage provides common logic for all cloud providers.
 type BaseCloudStorage struct {
-	ctx                 context.Context
+	Ctx                 context.Context
 	FileService         domain.FileService
 	FolderService       domain.FolderService
 	UploadFileFn        uploadFileFn
@@ -114,4 +114,21 @@ func (b *BaseCloudStorage) recursiveUpload(folder model.FolderModel, visited map
 		}
 	}
 	return nil
+}
+
+type CloudInitializer func(config model.CloudConfig, fileService domain.FileService, folderService domain.FolderService) (domain.CloudService, error)
+
+var cloudFactory = map[model.CloudProvider]CloudInitializer{}
+
+// RegisterCloudProvider adds a new cloud provider to the factory
+func RegisterCloudProvider(provider model.CloudProvider, initializer CloudInitializer) {
+	cloudFactory[provider] = initializer
+}
+
+// GetCloudService initializes the appropriate cloud service
+func GetCloudService(cfg model.CloudConfig, fileService domain.FileService, folderService domain.FolderService) (domain.CloudService, error) {
+	if initializer, exists := cloudFactory[cfg.Provider]; exists {
+		return initializer(cfg, fileService, folderService)
+	}
+	return nil, fmt.Errorf("unsupported cloud provider: %s", cfg.Provider.String())
 }

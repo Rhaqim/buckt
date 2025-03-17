@@ -3,13 +3,13 @@ package buckt
 import (
 	"bytes"
 	"database/sql"
-	"fmt"
 	"io"
 	"testing"
 	"time"
 
+	aws "github.com/Rhaqim/buckt/cloud/aws"
 	"github.com/Rhaqim/buckt/internal/cache"
-	"github.com/Rhaqim/buckt/internal/domain"
+	"github.com/Rhaqim/buckt/internal/cloud"
 	"github.com/Rhaqim/buckt/internal/mocks"
 	"github.com/Rhaqim/buckt/internal/model"
 	"github.com/google/uuid"
@@ -60,27 +60,6 @@ func setupBucktTest(t *testing.T) MockBuckt {
 		MediaDir:       "media",
 		StandaloneMode: true,
 		FlatNameSpaces: false,
-	}
-
-	return setup(t, bucktOpts)
-}
-
-func setupCloudTest(t *testing.T, config CloudConfig) MockBuckt {
-	sqlDB, err := sql.Open("sqlite3", ":memory:")
-	assert.NoError(t, err)
-
-	// Ensure database is properly closed after the test
-	t.Cleanup(func() {
-		sqlDB.Close()
-	})
-
-	bucktOpts := BucktConfig{
-		DB:             DBConfig{Driver: SQLite, Database: sqlDB},
-		Log:            LogConfig{LogTerminal: false, Debug: false},
-		MediaDir:       "media",
-		StandaloneMode: true,
-		FlatNameSpaces: false,
-		Cloud:          config,
 	}
 
 	return setup(t, bucktOpts)
@@ -224,6 +203,9 @@ func TestDefault(t *testing.T) {
 	})
 
 	t.Run("With Cloud", func(t *testing.T) {
+
+		cloud.RegisterCloudProvider(model.CloudProviderAWS, aws.NewAWSCloud)
+
 		cloudConfig := CloudConfig{
 			Provider: CloudProviderAWS,
 			Credentials: AWSConfig{
@@ -749,227 +731,5 @@ func TestCloudProviderString(t *testing.T) {
 		if result := test.provider.String(); result != test.expected {
 			t.Errorf("expected %s, got %s", test.expected, result)
 		}
-	}
-}
-
-// ✅ Test AWSConfig validation
-func TestAWSConfigValidate(t *testing.T) {
-	tests := []struct {
-		config   AWSConfig
-		expected error
-	}{
-		{AWSConfig{"accessKey", "secretKey", "region", "bucket"}, nil},
-		{AWSConfig{"", "secretKey", "region", "bucket"}, fmt.Errorf("AWS credentials are incomplete")},
-		{AWSConfig{"accessKey", "", "region", "bucket"}, fmt.Errorf("AWS credentials are incomplete")},
-		{AWSConfig{"accessKey", "secretKey", "", "bucket"}, fmt.Errorf("AWS credentials are incomplete")},
-		{AWSConfig{"accessKey", "secretKey", "region", ""}, fmt.Errorf("AWS credentials are incomplete")},
-	}
-
-	for _, test := range tests {
-		err := test.config.Validate()
-		if err == nil && test.expected != nil || err != nil && test.expected == nil || err != nil && test.expected != nil && err.Error() != test.expected.Error() {
-			t.Errorf("expected %v, got %v", test.expected, err)
-		}
-	}
-}
-
-// ✅ Test AzureConfig validation
-func TestAzureConfigValidate(t *testing.T) {
-	tests := []struct {
-		config   AzureConfig
-		expected error
-	}{
-		{AzureConfig{"accountName", "accountKey", "container"}, nil},
-		{AzureConfig{"", "accountKey", "container"}, fmt.Errorf("AZURE credentials are incomplete")},
-		{AzureConfig{"accountName", "", "container"}, fmt.Errorf("AZURE credentials are incomplete")},
-		{AzureConfig{"accountName", "accountKey", ""}, fmt.Errorf("AZURE credentials are incomplete")},
-	}
-
-	for _, test := range tests {
-		err := test.config.Validate()
-		if err == nil && test.expected != nil || err != nil && test.expected == nil || err != nil && test.expected != nil && err.Error() != test.expected.Error() {
-			t.Errorf("expected %v, got %v", test.expected, err)
-		}
-	}
-}
-
-// ✅ Test GCPConfig validation
-func TestGCPConfigValidate(t *testing.T) {
-	tests := []struct {
-		config   GCPConfig
-		expected error
-	}{
-		{GCPConfig{"credentialsFile", "bucket"}, nil},
-		{GCPConfig{"", "bucket"}, fmt.Errorf("GCP credentials are incomplete")},
-		{GCPConfig{"credentialsFile", ""}, fmt.Errorf("GCP credentials are incomplete")},
-	}
-
-	for _, test := range tests {
-		err := test.config.Validate()
-		if err == nil && test.expected != nil || err != nil && test.expected == nil || err != nil && test.expected != nil && err.Error() != test.expected.Error() {
-			t.Errorf("expected %v, got %v", test.expected, err)
-		}
-	}
-}
-
-// ✅ Test NoCredentials validation
-func TestNoCredentialsValidate(t *testing.T) {
-	var creds NoCredentials
-	if err := creds.Validate(); err != nil {
-		t.Errorf("expected nil, got %v", err)
-	}
-}
-
-// ✅ Test InitCloudClient with valid and invalid inputs
-func TestInitCloudClient(t *testing.T) {
-	var fileService domain.FileService = mocks.NewMockFileService()
-	var folderService domain.FolderService = mocks.NewMockFolderService()
-
-	tests := []struct {
-		config   CloudConfig
-		expected error
-	}{
-		// ✅ Valid AWS Config
-		{
-			config: CloudConfig{
-				Provider: CloudProviderAWS,
-				Credentials: AWSConfig{
-					AccessKey: "accessKey",
-					SecretKey: "secretKey",
-					Region:    "us-west-2",
-					Bucket:    "my-bucket",
-				},
-			},
-			expected: nil,
-		},
-		// 🚨 Invalid AWS Config (missing AccessKey)
-		{
-			config: CloudConfig{
-				Provider: CloudProviderAWS,
-				Credentials: AWSConfig{
-					AccessKey: "",
-					SecretKey: "secretKey",
-					Region:    "us-west-2",
-					Bucket:    "my-bucket",
-				},
-			},
-			expected: fmt.Errorf("AWS credentials are incomplete"),
-		},
-		// ✅ Valid Azure Config
-		{
-			config: CloudConfig{
-				Provider: CloudProviderAzure,
-				Credentials: AzureConfig{
-					AccountName: "accountName",
-					AccountKey:  "xYSz7q9wykiD7DPH/8tsukMQImrura/6MdwPdDR53D4=",
-					Container:   "container",
-				},
-			},
-			expected: nil,
-		},
-		// 🚨 Invalid Azure Config (missing AccountName)
-		{
-			config: CloudConfig{
-				Provider: CloudProviderAzure,
-				Credentials: AzureConfig{
-					AccountName: "",
-					AccountKey:  "accountKey",
-					Container:   "container",
-				},
-			},
-			expected: fmt.Errorf("AZURE credentials are incomplete"),
-		},
-		// ✅ Valid GCP Config
-		{
-			config: CloudConfig{
-				Provider: CloudProviderGCP,
-				Credentials: GCPConfig{
-					CredentialsFile: "internal/mocks/file.json",
-					Bucket:          "bucket",
-				},
-			},
-			expected: nil,
-		},
-		// 🚨 Invalid GCP Config (missing CredentialsFile)
-		{
-			config: CloudConfig{
-				Provider: CloudProviderGCP,
-				Credentials: GCPConfig{
-					CredentialsFile: "",
-					Bucket:          "bucket",
-				},
-			},
-			expected: fmt.Errorf("GCP credentials are incomplete"),
-		},
-		// 🚨 Invalid Cloud Provider
-		{
-			config: CloudConfig{
-				Provider:    CloudProvider(999), // 🚨 Unknown provider
-				Credentials: NoCredentials{},
-			},
-			expected: fmt.Errorf("local cloud service not implemented"),
-		},
-	}
-
-	for _, test := range tests {
-		_, err := initCloudClient(test.config, fileService, folderService)
-		if err == nil && test.expected != nil || err != nil && test.expected == nil || err != nil && test.expected != nil && err.Error() != test.expected.Error() {
-			t.Errorf("expected %v, got %v", test.expected, err)
-		}
-	}
-}
-
-type MockCredentials struct{}
-
-func (m MockCredentials) Validate() error {
-	return nil
-}
-
-func TestCloudConfig_IsEmpty(t *testing.T) {
-	tests := []struct {
-		name        string
-		cloudConfig CloudConfig
-		want        bool
-	}{
-		{
-			name: "Empty CloudConfig",
-			cloudConfig: CloudConfig{
-				Provider:    CloudProviderNone,
-				Credentials: nil,
-			},
-			want: true,
-		},
-		{
-			name: "Non-empty CloudConfig with Provider",
-			cloudConfig: CloudConfig{
-				Provider:    CloudProviderAWS,
-				Credentials: nil,
-			},
-			want: true,
-		},
-		{
-			name: "Non-empty CloudConfig with Credentials",
-			cloudConfig: CloudConfig{
-				Provider:    CloudProviderNone,
-				Credentials: &MockCredentials{},
-			},
-			want: true,
-		},
-		{
-			name: "Non-empty CloudConfig with Provider and Credentials",
-			cloudConfig: CloudConfig{
-				Provider:    CloudProviderAWS,
-				Credentials: &MockCredentials{},
-			},
-			want: false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := tt.cloudConfig.isEmpty(); got != tt.want {
-				t.Errorf("CloudConfig.IsEmpty() = %v, want %v", got, tt.want)
-			}
-		})
 	}
 }

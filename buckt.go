@@ -8,6 +8,7 @@ import (
 
 	"github.com/Rhaqim/buckt/internal/app"
 	"github.com/Rhaqim/buckt/internal/cache"
+	"github.com/Rhaqim/buckt/internal/cloud"
 	"github.com/Rhaqim/buckt/internal/database"
 	"github.com/Rhaqim/buckt/internal/domain"
 	"github.com/Rhaqim/buckt/internal/model"
@@ -87,7 +88,7 @@ func New(bucktOpts BucktConfig) (*Buckt, error) {
 	buckt.folderService = folderService
 
 	// Initialize cloud service if provided
-	if !bucktOpts.Cloud.isEmpty() {
+	if !bucktOpts.Cloud.IsEmpty() {
 		fmt.Println("🚀 Initializing cloud service")
 		err = buckt.InitCloudService(bucktOpts.Cloud)
 		if err != nil {
@@ -372,7 +373,7 @@ func (b *Buckt) DeleteFilePermanently(file_id string) error {
 func (b *Buckt) InitCloudService(cloudConfig CloudConfig) error {
 	var err error
 
-	if cloudConfig.isEmpty() {
+	if cloudConfig.IsEmpty() {
 		return fmt.Errorf("cloud configuration is empty")
 	}
 
@@ -383,7 +384,7 @@ func (b *Buckt) InitCloudService(cloudConfig CloudConfig) error {
 	fmt.Println("🚀 Initializing cloud service")
 
 	// Initialize the cloud service
-	b.cloudService, err = initCloudClient(cloudConfig, b.fileService, b.folderService)
+	b.cloudService, err = cloud.GetCloudService(cloudConfig, b.fileService, b.folderService)
 
 	return err
 }

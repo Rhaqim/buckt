@@ -5,6 +5,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/Rhaqim/buckt/internal/cloud"
 	"github.com/Rhaqim/buckt/internal/mocks"
 	"github.com/Rhaqim/buckt/internal/model"
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -26,7 +27,16 @@ func TestNewAWSCloud(t *testing.T) {
 	fileService := new(mocks.MockFileService)
 	folderService := new(mocks.MockFolderService)
 
-	awsCloud, err := NewAWSCloud("test-bucket", "us-west-2", fileService, folderService)
+	creds := model.CloudConfig{
+		Provider: model.CloudProviderAWS,
+		Credentials: model.AWSConfig{
+			Region:    "us-west-2",
+			AccessKey: "access_key",
+			SecretKey: "secret_key",
+		},
+	}
+
+	awsCloud, err := NewAWSCloud(creds, fileService, folderService)
 
 	assert.NoError(t, err)
 	assert.NotNil(t, awsCloud)
@@ -41,8 +51,8 @@ func TestAWSCloud_UploadFile(t *testing.T) {
 	awsCloud := &AWSCloud{
 		BucketName: "test-bucket",
 		Client:     mockS3Client,
-		BaseCloudStorage: BaseCloudStorage{
-			ctx:                 context.Background(),
+		BaseCloudStorage: cloud.BaseCloudStorage{
+			Ctx:                 context.Background(),
 			FileService:         fileService,
 			FolderService:       folderService,
 			UploadFileFn:        nil,
@@ -56,7 +66,7 @@ func TestAWSCloud_UploadFile(t *testing.T) {
 		ContentType: "text/plain",
 	}
 
-	mockS3Client.On("PutObject", awsCloud.ctx, &s3.PutObjectInput{
+	mockS3Client.On("PutObject", awsCloud.Ctx, &s3.PutObjectInput{
 		Bucket:      aws.String("test-bucket"),
 		Key:         aws.String(file.Path),
 		Body:        bytes.NewReader(file.Data),
@@ -76,8 +86,8 @@ func TestAWSCloud_CreateEmptyFolder(t *testing.T) {
 	awsCloud := &AWSCloud{
 		BucketName: "test-bucket",
 		Client:     mockS3Client,
-		BaseCloudStorage: BaseCloudStorage{
-			ctx:                 context.Background(),
+		BaseCloudStorage: cloud.BaseCloudStorage{
+			Ctx:                 context.Background(),
 			FileService:         fileService,
 			FolderService:       folderService,
 			UploadFileFn:        nil,
@@ -87,7 +97,7 @@ func TestAWSCloud_CreateEmptyFolder(t *testing.T) {
 
 	folderPath := "test/folder/"
 
-	mockS3Client.On("PutObject", awsCloud.ctx, &s3.PutObjectInput{
+	mockS3Client.On("PutObject", awsCloud.Ctx, &s3.PutObjectInput{
 		Bucket: aws.String("test-bucket"),
 		Key:    aws.String(folderPath),
 		Body:   bytes.NewReader([]byte{}),
