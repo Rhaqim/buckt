@@ -26,7 +26,7 @@ func TestBaseCloudStorage_UploadFileToCloud(t *testing.T) {
 	}
 
 	baseCloudStorage := &BaseCloudStorage{
-		ctx:          context.Background(),
+		Ctx:          context.Background(),
 		FileService:  mockFileService,
 		UploadFileFn: uploadFileFn,
 	}
@@ -65,7 +65,7 @@ func TestBaseCloudStorage_UploadFolderToCloud(t *testing.T) {
 	}
 
 	baseCloudStorage := &BaseCloudStorage{
-		ctx:                 context.Background(),
+		Ctx:                 context.Background(),
 		FolderService:       mockFolderService,
 		FileService:         mockFileService, // Set the mock FileService
 		UploadFileFn:        uploadFileFn,
@@ -83,7 +83,7 @@ func TestBaseCloudStorage_UploadFileToCloud_Error(t *testing.T) {
 	mockFileService := new(mocks.MockFileService)
 
 	baseCloudStorage := &BaseCloudStorage{
-		ctx:         context.Background(),
+		Ctx:         context.Background(),
 		FileService: mockFileService,
 	}
 
@@ -100,7 +100,7 @@ func TestBaseCloudStorage_UploadFolderToCloud_Error(t *testing.T) {
 	mockFolderService.On("GetFolder", "user_id", "folder_id").Return(nil, errors.New("folder not found"))
 
 	baseCloudStorage := &BaseCloudStorage{
-		ctx:           context.Background(),
+		Ctx:           context.Background(),
 		FolderService: mockFolderService,
 	}
 

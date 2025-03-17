@@ -3,7 +3,6 @@ package buckt
 import (
 	"database/sql"
 	"log"
-	"reflect"
 
 	"github.com/Rhaqim/buckt/internal/domain"
 	"github.com/Rhaqim/buckt/internal/model"
@@ -49,14 +48,20 @@ type DBConfig struct {
 //
 //	Provider: The cloud provider to use.
 //	Credentials: The credentials for the cloud provider.
-type CloudConfig struct {
-	Provider    CloudProvider
-	Credentials CloudCredentials
-}
+type CloudConfig = model.CloudConfig
 
-func (cc CloudConfig) isEmpty() bool {
-	return cc.Provider == CloudProviderNone || cc.Credentials == nil || (reflect.ValueOf(cc.Credentials).Kind() == reflect.Ptr && reflect.ValueOf(cc.Credentials).IsNil())
-}
+type AWSConfig = model.AWSConfig
+type AzureConfig = model.AzureConfig
+type GCPConfig = model.GCPConfig
+
+type CloudProvider = model.CloudProvider
+
+const (
+	CloudProviderNone  = model.CloudProviderNone
+	CloudProviderAWS   = model.CloudProviderAWS
+	CloudProviderAzure = model.CloudProviderAzure
+	CloudProviderGCP   = model.CloudProviderGCP
+)
 
 // BucktOptions represents the configuration options for the Buckt application.
 // It includes settings for logging, media directory, and standalone mode.

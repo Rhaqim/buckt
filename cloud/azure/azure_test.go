@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/blockblob"
+	"github.com/Rhaqim/buckt/internal/cloud"
 	"github.com/Rhaqim/buckt/internal/mocks"
 	"github.com/Rhaqim/buckt/internal/model"
 	"github.com/stretchr/testify/assert"
@@ -24,7 +25,16 @@ func TestNewAzureCloud(t *testing.T) {
 	mockFileService := new(mocks.MockFileService)
 	mockFolderService := new(mocks.MockFolderService)
 
-	azureCloud, err := NewAzureCloud("accountName", "accountKey", "containerName", mockFileService, mockFolderService)
+	creds := model.CloudConfig{
+		Provider: model.CloudProviderAzure,
+		Credentials: model.AzureConfig{
+			AccountName: "accountName",
+			AccountKey:  "accountKey",
+			Container:   "containerName",
+		},
+	}
+
+	azureCloud, err := NewAzureCloud(creds, mockFileService, mockFolderService)
 
 	assert.NoError(t, err)
 	assert.NotNil(t, azureCloud)
@@ -38,8 +48,8 @@ func TestAzureCloud_uploadFile(t *testing.T) {
 
 	azureCloud := &AzureCloud{
 		Client: mockClient,
-		BaseCloudStorage: BaseCloudStorage{
-			ctx: context.Background(),
+		BaseCloudStorage: cloud.BaseCloudStorage{
+			Ctx: context.Background(),
 		},
 	}
 
@@ -63,8 +73,8 @@ func TestAzureCloud_createEmptyFolder(t *testing.T) {
 
 	azureCloud := &AzureCloud{
 		Client: mockClient,
-		BaseCloudStorage: BaseCloudStorage{
-			ctx: context.Background(),
+		BaseCloudStorage: cloud.BaseCloudStorage{
+			Ctx: context.Background(),
 		},
 	}
 

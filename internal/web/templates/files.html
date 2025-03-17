@@ -20,7 +20,7 @@
 				muted
 				playsinline
 			>
-				<source src="/web/file/preview/{{ .ID }}" type="audio/mp3" />
+				<source src="/serve/{{ .ID }}" type="audio/mp3" />
 			</audio>
 		{{ else if hasPrefix .ContentType "video/" }}
 			<video
@@ -31,7 +31,7 @@
 				muted
 				playsinline
 			>
-				<source src="/web/file/preview/{{ .ID }}" type="video/mp4" />
+				<source src="/stream/{{ .ID }}" />
 			</video>
 		{{ else }}
 			<div class="w-full h-48 bg-gray-200 flex items-center justify-center">

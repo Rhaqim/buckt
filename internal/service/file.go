@@ -183,10 +183,13 @@ func (f *FileService) GetFileStream(file_id string) (*model.FileModel, io.ReadCl
 	// Check cache first
 	if f.CacheManager != nil {
 		cached, err := f.CacheManager.GetBucktValue(file_id)
-		if err == nil {
-			var cachedFile model.FileModel
-			if jsonErr := json.Unmarshal([]byte(cached.(string)), &cachedFile); jsonErr == nil {
-				file = &cachedFile
+		if err == nil && cached != nil { // Ensure cached value is not nil
+			cachedStr, ok := cached.(string)
+			if ok { // Ensure type assertion succeeds
+				var cachedFile model.FileModel
+				if jsonErr := json.Unmarshal([]byte(cachedStr), &cachedFile); jsonErr == nil {
+					file = &cachedFile
+				}
 			}
 		}
 	}

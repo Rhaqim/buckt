@@ -5,7 +5,9 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/Rhaqim/buckt/internal/cloud"
 	"github.com/Rhaqim/buckt/internal/domain"
+	"github.com/Rhaqim/buckt/internal/model"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
@@ -17,12 +19,12 @@ type S3Client interface {
 }
 
 type AWSCloud struct {
-	BaseCloudStorage
+	cloud.BaseCloudStorage
 	BucketName string
 	Client     S3Client
 }
 
-func NewAWSCloud(bucketName, region string, fileService domain.FileService, folderService domain.FolderService) (domain.CloudService, error) {
+func NewAWSCloud(cfg model.CloudConfig, fileService domain.FileService, folderService domain.FolderService) (domain.CloudService, error) {
 	// 	awsConfig := aws.Config{
 	// 		Region:      cfg.Region,
 	// 		Credentials: aws.NewCredentialsCache(credentials.NewStaticCredentialsProvider(cfg.AccessKey, cfg.SecretKey, "")),
@@ -30,19 +32,30 @@ func NewAWSCloud(bucketName, region string, fileService domain.FileService, fold
 
 	// 	client := s3.NewFromConfig(awsConfig)
 
-	cfg, err := config.LoadDefaultConfig(context.TODO(), config.WithRegion(region))
+	creds, ok := cfg.Credentials.(model.AWSConfig)
+	if !ok {
+		return nil, fmt.Errorf("invalid AWS credentials")
+	}
+
+	if err := creds.Validate(); err != nil {
+		return nil, err
+	}
+
+	region := config.WithRegion(creds.Region)
+
+	awsConfig, err := config.LoadDefaultConfig(context.TODO(), region)
 	if err != nil {
 		return nil, fmt.Errorf("unable to load SDK config, %v", err)
 	}
-	client := s3.NewFromConfig(cfg)
+	client := s3.NewFromConfig(awsConfig)
 
 	awsCloud := &AWSCloud{
-		BucketName: bucketName,
+		BucketName: creds.Bucket,
 		Client:     client,
 	}
 
-	awsCloud.BaseCloudStorage = BaseCloudStorage{
-		ctx:                 context.Background(),
+	awsCloud.BaseCloudStorage = cloud.BaseCloudStorage{
+		Ctx:                 context.Background(),
 		FileService:         fileService,
 		FolderService:       folderService,
 		UploadFileFn:        awsCloud.uploadFile,
@@ -53,7 +66,7 @@ func NewAWSCloud(bucketName, region string, fileService domain.FileService, fold
 }
 
 func (a *AWSCloud) uploadFile(file_name, content_type, file_path string, data []byte, metadata map[string]string) error {
-	_, err := a.Client.PutObject(a.ctx, &s3.PutObjectInput{
+	_, err := a.Client.PutObject(a.Ctx, &s3.PutObjectInput{
 		Bucket:      aws.String(a.BucketName),
 		Key:         aws.String(file_path),
 		Body:        bytes.NewReader(data),
@@ -65,10 +78,14 @@ func (a *AWSCloud) uploadFile(file_name, content_type, file_path string, data []
 }
 
 func (a *AWSCloud) createEmptyFolder(folderPath string) error {
-	_, err := a.Client.PutObject(a.ctx, &s3.PutObjectInput{
+	_, err := a.Client.PutObject(a.Ctx, &s3.PutObjectInput{
 		Bucket: aws.String(a.BucketName),
 		Key:    aws.String(folderPath),
 		Body:   bytes.NewReader([]byte{}),
 	})
 	return err
+}
+
+func init() {
+	cloud.RegisterCloudProvider(model.CloudProviderAWS, NewAWSCloud)
 }

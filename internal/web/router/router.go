@@ -81,6 +81,7 @@ func (r *Router) registerBaseRoutes() {
 		c.Redirect(http.StatusMovedPermanently, "/web")
 	})
 	r.GET("/serve/:file_id", r.APIService.ServeFile)
+	r.GET("/stream/:file_id", r.APIService.StreamFile)
 }
 
 // RegisterAPIRoutes sets up API endpoints

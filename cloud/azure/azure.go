@@ -6,7 +6,9 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/blockblob"
+	"github.com/Rhaqim/buckt/internal/cloud"
 	"github.com/Rhaqim/buckt/internal/domain"
+	"github.com/Rhaqim/buckt/internal/model"
 )
 
 type AzureClient interface {
@@ -14,16 +16,26 @@ type AzureClient interface {
 }
 
 type AzureCloud struct {
-	BaseCloudStorage
+	cloud.BaseCloudStorage
 	ContainerName string
 	Client        AzureClient
 }
 
-func NewAzureCloud(accountName, accountKey, containerName string, fileService domain.FileService, folderService domain.FolderService) (domain.CloudService, error) {
-	ctx := context.Background()
-	url := fmt.Sprintf("https://%s.blob.core.windows.net", accountName)
+func NewAzureCloud(cfg model.CloudConfig, fileService domain.FileService, folderService domain.FolderService) (domain.CloudService, error) {
 
-	cred, err := azblob.NewSharedKeyCredential(accountName, accountKey)
+	creds, ok := cfg.Credentials.(model.AzureConfig)
+	if !ok {
+		return nil, fmt.Errorf("invalid AWS credentials")
+	}
+
+	if err := creds.Validate(); err != nil {
+		return nil, err
+	}
+
+	Ctx := context.Background()
+	url := fmt.Sprintf("https://%s.blob.core.windows.net", creds.AccountName)
+
+	cred, err := azblob.NewSharedKeyCredential(creds.AccountName, creds.AccountKey)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create Azure credential: %v", err)
 	}
@@ -34,12 +46,12 @@ func NewAzureCloud(accountName, accountKey, containerName string, fileService do
 	}
 
 	azureCloud := &AzureCloud{
-		ContainerName: containerName,
-		Client:        client.ServiceClient().NewContainerClient(containerName),
+		ContainerName: creds.Container,
+		Client:        client.ServiceClient().NewContainerClient(creds.Container),
 	}
 
-	azureCloud.BaseCloudStorage = BaseCloudStorage{
-		ctx:                 ctx,
+	azureCloud.BaseCloudStorage = cloud.BaseCloudStorage{
+		Ctx:                 Ctx,
 		FileService:         fileService,
 		FolderService:       folderService,
 		UploadFileFn:        azureCloud.uploadFile,
@@ -56,7 +68,7 @@ func (a *AzureCloud) uploadFile(file_name, content_type, file_path string, data 
 		val := v
 		convertedMetadata[k] = &val
 	}
-	_, err := blobClient.UploadBuffer(a.ctx, data, &blockblob.UploadBufferOptions{
+	_, err := blobClient.UploadBuffer(a.Ctx, data, &blockblob.UploadBufferOptions{
 		Metadata: convertedMetadata,
 	})
 	return err
@@ -64,6 +76,10 @@ func (a *AzureCloud) uploadFile(file_name, content_type, file_path string, data 
 
 func (a *AzureCloud) createEmptyFolder(folderPath string) error {
 	blobClient := a.Client.NewBlockBlobClient(folderPath)
-	_, err := blobClient.UploadBuffer(a.ctx, []byte{}, &blockblob.UploadBufferOptions{})
+	_, err := blobClient.UploadBuffer(a.Ctx, []byte{}, &blockblob.UploadBufferOptions{})
 	return err
+}
+
+func init() {
+	cloud.RegisterCloudProvider(model.CloudProviderAzure, NewAzureCloud)
 }

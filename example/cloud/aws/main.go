@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/Rhaqim/buckt"
+	_ "github.com/Rhaqim/buckt/cloud/aws"
 )
 
 func main() {
