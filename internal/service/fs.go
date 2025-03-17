@@ -5,7 +5,6 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/Rhaqim/buckt/internal/cache"
 	"github.com/Rhaqim/buckt/internal/domain"
 	"github.com/Rhaqim/buckt/pkg/logger"
 	"golang.org/x/sync/singleflight"
@@ -20,14 +19,14 @@ type FileSystemService struct {
 	cache domain.LRUCache
 }
 
-func NewFileSystemService(bucktLogger *logger.BucktLogger, medaiDir string) domain.FileSystemService {
+func NewFileSystemService(bucktLogger *logger.BucktLogger, medaiDir string, cache domain.LRUCache) domain.FileSystemService {
 	bucktLogger.Info("🚀 Initialising file system services")
 	return &FileSystemService{
 		BucktLogger: bucktLogger,
 		MediaDir:    medaiDir,
 
 		g:     singleflight.Group{},
-		cache: cache.NewFileCache(),
+		cache: cache,
 	}
 }
 

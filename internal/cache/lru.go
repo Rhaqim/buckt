@@ -9,8 +9,8 @@ type FileCache struct {
 	cache *lru.Cache
 }
 
-func NewFileCache() domain.LRUCache {
-	cache, _ := lru.New(100)
+func NewFileCache(size int) domain.LRUCache {
+	cache, _ := lru.New(size)
 	return &FileCache{
 		cache: cache,
 	}
@@ -28,4 +28,10 @@ func (fc *FileCache) Get(key any) (value any, ok bool) {
 		return fc.cache.Get(key)
 	}
 	return nil, false
+}
+
+func (fc *FileCache) Purge() {
+	if fc.cache != nil {
+		fc.cache.Purge()
+	}
 }

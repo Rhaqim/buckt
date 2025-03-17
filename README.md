@@ -161,7 +161,6 @@ func main() {
             LogTerminal: true,
         },
         MediaDir:       "media",
-        StandaloneMode: true,
     })
     if err != nil {
         log.Fatal(err)
@@ -219,6 +218,8 @@ func main() {
 }
 ```
 
+A detailed example for direct usage can be found in the [Direct Example](/example) directory.
+
 ### Web Server Example
 
 #### With Built-in Gin Web Server
@@ -238,13 +239,17 @@ func main() {
             LogFile:     "buckt.log",
         },
         MediaDir:       "media",
-        StandaloneMode: true,
     })
     if err != nil {
         log.Fatal(err)
     }
 
     defer bucktInstance.Close() // Close the Buckt instance when done
+
+    err = bucktInstance.InitRouterService(buckt.WebModeAPI)
+    if err != nil {
+      log.Fatal(err)
+    }
 
     /// Start the router (optional, based on user choice)
     if err := b.StartServer(":8080"); err != nil {
@@ -264,6 +269,7 @@ import (
     "github.com/gofiber/fiber/v2"
     "github.com/gofiber/adaptor/v2"
     "github.com/Rhaqim/buckt"
+    _ "github.com/Rhaqim/buckt"
   )
 
 func main() {
@@ -272,7 +278,6 @@ func main() {
             LogTerminal: true,
         },
         MediaDir:       "media",
-        StandaloneMode: false,
     })
     if err != nil {
         log.Fatal(err)
@@ -282,6 +287,11 @@ func main() {
 
     // Initalise a new fiber mux
     app := fiber.New()
+
+    err = bucktInstance.InitRouterService(buckt.WebModeMount)
+    if err != nil {
+      log.Fatal(err)
+    }
 
     // Get the handler for the Buckt instance
     handler := bucktInstance.GetHandler()
@@ -301,6 +311,8 @@ func main() {
     }
 }
 ```
+
+More examples for router usage can be found in the [AWS Example](web/example) directory.
 
 ### Cloud Services Example
 
@@ -374,7 +386,7 @@ import (
   }
 ```
 
-More examples can be found in the [examples](example/) directory.
+A detailed example for cloud usage can be found in the [AWS Example](cloud/example/aws) directory.
 
 ### Postman Collection
 

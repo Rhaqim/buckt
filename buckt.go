@@ -23,6 +23,8 @@ type Buckt struct {
 	FlatnameSpaces bool
 	Debug          bool
 
+	lruCache domain.LRUCache
+
 	fileService   domain.FileService
 	folderService domain.FolderService
 
@@ -67,11 +69,15 @@ func New(bucktOpts BucktConfig) (*Buckt, error) {
 		cacheManager = cache.NewNoOpCache()
 	}
 
+	var lruCache domain.LRUCache = cache.NewFileCache(10)
+
 	// Initialize the app services
-	folderService, fileService := newAppServices(bucktLog, bucktOpts, db, cacheManager)
+	folderService, fileService := newAppServices(bucktLog, bucktOpts, db, cacheManager, lruCache)
 
 	buckt.db = db
 	buckt.logger = bucktLog
+
+	buckt.lruCache = lruCache
 
 	buckt.FlatnameSpaces = bucktOpts.FlatNameSpaces
 	buckt.Debug = bucktOpts.Log.Debug
@@ -120,52 +126,11 @@ func Default(opts ...ConfigFunc) (*Buckt, error) {
 	return New(bucktOpts)
 }
 
-func (b *Buckt) InitRouterService(mode WebMode) error {
-
-	service, err := web.GetRouterService(b.logger, mode, true, b.fileService, b.folderService)
-	if err != nil {
-		return err
-	}
-
-	b.routerService = service
-
-	return nil
-}
-
-// GetHandler returns the HTTP handler for the Buckt instance.
-// It provides access to the underlying router engine.
-func (b *Buckt) GetHandler() http.Handler {
-	// return b.routerService.Handler()
-	if b.routerService == nil {
-		return nil
-	}
-
-	return b.routerService.Handler()
-}
-
-// StartServer starts the server on the specified port using the router.
-// It takes a port string as an argument and returns an error if the server fails to start.
-//
-// Parameters:
-//
-//	port (string): The port on which the server will listen.
-//
-// Returns:
-//
-//	error: An error if the server fails to start, otherwise nil.
-func (b *Buckt) StartServer(port string) error {
-	// return b.routerService.Run(port)
-	if b.routerService == nil {
-		return fmt.Errorf("router service not initialized")
-	}
-
-	return b.routerService.Run(port)
-}
-
 // Close closes the Buckt instance.
 // It closes the database connection.
 func (b *Buckt) Close() {
 	b.db.Close()
+	b.lruCache.Purge()
 }
 
 /* Folder Methods */
@@ -373,6 +338,60 @@ func (b *Buckt) DeleteFilePermanently(file_id string) error {
 	return err
 }
 
+/* Router Methods */
+
+// InitRouterService initializes the router service with the provided WebMode.
+// It takes a WebMode as an argument and returns an error if the initialization fails.
+//
+// Depends on: github.com/Rhaqim/buckt/web
+//
+// Parameters:
+//   - mode: A WebMode representing the mode of the web service.
+//
+// Returns:
+//   - error: An error if the router service initialization fails, otherwise nil.
+func (b *Buckt) InitRouterService(mode WebMode) error {
+
+	service, err := web.GetRouterService(b.logger, mode, true, b.fileService, b.folderService)
+	if err != nil {
+		return err
+	}
+
+	b.routerService = service
+
+	return nil
+}
+
+// GetHandler returns the HTTP handler for the Buckt instance.
+// It provides access to the underlying router engine.
+func (b *Buckt) GetHandler() http.Handler {
+	// return b.routerService.Handler()
+	if b.routerService == nil {
+		return nil
+	}
+
+	return b.routerService.Handler()
+}
+
+// StartServer starts the server on the specified port using the router.
+// It takes a port string as an argument and returns an error if the server fails to start.
+//
+// Parameters:
+//
+//	port (string): The port on which the server will listen.
+//
+// Returns:
+//
+//	error: An error if the server fails to start, otherwise nil.
+func (b *Buckt) StartServer(port string) error {
+	// return b.routerService.Run(port)
+	if b.routerService == nil {
+		return fmt.Errorf("router service not initialized")
+	}
+
+	return b.routerService.Run(port)
+}
+
 /* Cloud Methods */
 
 // InitCloudService initializes the cloud service with the provided cloud configuration.
@@ -437,13 +456,13 @@ func (b *Buckt) TransferFolder(user_id, folder_id string) error {
 
 /* Helper Methods */
 
-func newAppServices(bucktLog *logger.BucktLogger, bucktOpts BucktConfig, db *database.DB, cacheManager domain.CacheManager) (domain.FolderService, domain.FileService) {
+func newAppServices(bucktLog *logger.BucktLogger, bucktOpts BucktConfig, db *database.DB, cacheManager domain.CacheManager, lruCache domain.LRUCache) (domain.FolderService, domain.FileService) {
 	// Initialize the stores
 	var folderRepository domain.FolderRepository = repository.NewFolderRepository(db, bucktLog)
 	var fileRepository domain.FileRepository = repository.NewFileRepository(db, bucktLog)
 
 	// initlize the services
-	var fileSystemService domain.FileSystemService = service.NewFileSystemService(bucktLog, bucktOpts.MediaDir)
+	var fileSystemService domain.FileSystemService = service.NewFileSystemService(bucktLog, bucktOpts.MediaDir, lruCache)
 	var folderService domain.FolderService = service.NewFolderService(bucktLog, cacheManager, folderRepository, fileSystemService)
 	var fileService domain.FileService = service.NewFileService(bucktLog, cacheManager, bucktOpts.FlatNameSpaces, fileRepository, folderService, fileSystemService)
 

@@ -14,4 +14,5 @@ type CacheManager interface {
 type LRUCache interface {
 	Add(key any, value any) (evicted bool)
 	Get(key any) (value any, ok bool)
+	Purge()
 }

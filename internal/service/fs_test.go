@@ -9,10 +9,17 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+type MockLRUCache struct{}
+
+func (m *MockLRUCache) Purge()                      {}
+func (M *MockLRUCache) Get(key any) (any, bool)     { return nil, false }
+func (M *MockLRUCache) Add(key any, value any) bool { return true }
+
 func setupFSTest() (*FileSystemService, string) {
 	log := logger.NewLogger("", true, false)
 	mediaDir := os.TempDir()
-	bfs := NewFileSystemService(log, mediaDir).(*FileSystemService)
+	cache := &MockLRUCache{}
+	bfs := NewFileSystemService(log, mediaDir, cache).(*FileSystemService)
 	return bfs, mediaDir
 }
 

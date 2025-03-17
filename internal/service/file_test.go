@@ -246,7 +246,8 @@ func TestGetFile_CacheHit_FileDataCacheHit(t *testing.T) {
 	jsonData, _ := json.Marshal(fileModel)
 
 	mockSetUp.MockCacheManager.On("GetBucktValue", fileID.String()).Return(string(jsonData), nil)
-	mockSetUp.MockCacheManager.On("GetBucktValue", fileModel.Path).Return([]byte("file data"), nil)
+
+	mockSetUp.MockFileSystemService.On("FSGetFile", fileModel.Path).Return([]byte("file data"), nil)
 
 	file, err := mockSetUp.FileService.GetFile(fileID.String())
 	assert.NoError(t, err)
