@@ -126,9 +126,13 @@ func (f *FileService) GetFile(file_id string) (*model.FileModel, error) {
 	// Check cache first
 	if f.CacheManager != nil {
 		cached, err := f.CacheManager.GetBucktValue(file_id)
-		if err == nil && cached != nil { // Ensure cached value is not nil
+		if err != nil {
+			f.BucktLogger.Warn("failed to get file metadata from cache: " + err.Error())
+		}
+
+		if cached != nil {
 			cachedStr, ok := cached.(string)
-			if ok { // Ensure type assertion succeeds
+			if ok {
 				var cachedFile model.FileModel
 				if jsonErr := json.Unmarshal([]byte(cachedStr), &cachedFile); jsonErr == nil {
 					file = &cachedFile
@@ -151,27 +155,44 @@ func (f *FileService) GetFile(file_id string) (*model.FileModel, error) {
 		}
 	}
 
+	// get fileData from cache if cache is not nil
+	var fileData []byte
 	if f.CacheManager != nil {
-		cachedFileData, _ := f.CacheManager.GetBucktValue(file.Path)
+
+		cachedFileData, err := f.CacheManager.GetBucktValue(file.Path)
+		if err != nil {
+			f.BucktLogger.Warn("failed to get file data from cache: " + err.Error())
+		}
+
 		if cachedFileData != nil {
 			if cachedBytes, ok := cachedFileData.([]byte); ok {
-				file.Data = cachedBytes
+				fileData = cachedBytes
 			} else if cachedString, ok := cachedFileData.(string); ok {
-				file.Data = []byte(cachedString) // Convert string to []byte if stored as string
+				fileData = []byte(cachedString) // Convert string to []byte if stored as string
 			} else {
-				return nil, fmt.Errorf("unexpected cache data type: %T", cachedFileData)
+				fileData = nil
 			}
-		} else {
-			fileData, err := f.FileSystemService.FSGetFile(file.Path)
-			if err != nil {
-				return nil, f.WrapError("failed to get file data", err)
-			}
-			file.Data = fileData
-
-			// Store file data in cache for future reads
-			f.CacheManager.SetBucktValue(file.Path, fileData)
 		}
 	}
+
+	if fileData == nil {
+		data, err := f.FileSystemService.FSGetFile(file.Path)
+		if err != nil {
+			return nil, f.WrapError("failed to get file data", err)
+		}
+
+		fileData = data
+
+		// Store file data in cache
+		if f.CacheManager != nil {
+			err = f.CacheManager.SetBucktValue(file.Path, fileData)
+			if err != nil {
+				f.BucktLogger.Warn("failed to set file data in cache: " + err.Error())
+			}
+		}
+	}
+
+	file.Data = fileData
 
 	return file, nil
 }
