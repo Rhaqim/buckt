@@ -455,6 +455,7 @@ func TestGetFileStream(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NotNil(t, file)
 	assert.NotNil(t, stream)
+	defer stream.Close()
 
 	// Verify expectations
 	buckt.MockFileService.AssertExpectations(t)

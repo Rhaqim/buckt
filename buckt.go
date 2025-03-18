@@ -271,8 +271,10 @@ func (b *Buckt) GetFile(file_id string) (*model.FileModel, error) {
 //
 // Returns:
 //   - *model.FileModel: The file structure containing metadata.
-//   - io.ReadCloser: An io.ReadCloser object representing the file stream.
+//   - io.ReadCloser: An io.ReadCloser object representing the file stream
 //   - error: An error object if an error occurred, otherwise nil.
+//
+// Note: The caller is responsible for closing the file stream after reading.
 func (b *Buckt) GetFileStream(file_id string) (*model.FileModel, io.ReadCloser, error) {
 	return b.fileService.GetFileStream(file_id)
 }
