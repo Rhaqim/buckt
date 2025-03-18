@@ -100,7 +100,7 @@ func NewDB(sqlDBInstance *sql.DB, driver model.DBDrivers, log *logger.BucktLogge
 	}
 
 	// Set connection pooling
-	if driver == "sqlite" {
+	if sqlDBInstance == nil {
 		sqlDB.SetMaxOpenConns(10)                  // Max open connections
 		sqlDB.SetMaxIdleConns(5)                   // Max idle connections
 		sqlDB.SetConnMaxLifetime(30 * time.Minute) // Max connection lifetime
