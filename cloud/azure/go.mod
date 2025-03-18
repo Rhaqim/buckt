@@ -4,7 +4,7 @@ go 1.24.0
 
 require (
 	github.com/Azure/azure-sdk-for-go/sdk/storage/azblob v1.6.0
-	github.com/Rhaqim/buckt v1.3.3-beta
+	github.com/Rhaqim/buckt v1.3.4-beta
 	github.com/stretchr/testify v1.10.0
 )
 

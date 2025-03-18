@@ -3,7 +3,7 @@ module github.com/Rhaqim/buckt/cloud/aws
 go 1.24.0
 
 require (
-	github.com/Rhaqim/buckt v1.3.3-beta
+	github.com/Rhaqim/buckt v1.3.4-beta
 	github.com/aws/aws-sdk-go-v2 v1.36.3
 	github.com/aws/aws-sdk-go-v2/config v1.29.9
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.78.2

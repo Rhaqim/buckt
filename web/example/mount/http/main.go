@@ -1,4 +1,4 @@
-package main
+package buckt_web_testing
 
 import (
 	"log"

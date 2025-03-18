@@ -32,6 +32,9 @@ coverage:
 	go test ./... -coverprofile=coverage.out
 	go tool cover -html=coverage.out -o coverage.html
 
+update-sub-deps:
+	go get -u ./...
+
 clean: clean-build clean-logs clean-db clean-coverage clean-media
 
 clean-build:

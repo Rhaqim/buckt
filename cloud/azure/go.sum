@@ -10,8 +10,8 @@ github.com/Azure/azure-sdk-for-go/sdk/storage/azblob v1.6.0 h1:UXT0o77lXQrikd1kg
 github.com/Azure/azure-sdk-for-go/sdk/storage/azblob v1.6.0/go.mod h1:cTvi54pg19DoT07ekoeMgE/taAwNtCShVeZqA+Iv2xI=
 github.com/AzureAD/microsoft-authentication-library-for-go v1.3.2 h1:kYRSnvJju5gYVyhkij+RTJ/VR6QIUaCfWeaFm2ycsjQ=
 github.com/AzureAD/microsoft-authentication-library-for-go v1.3.2/go.mod h1:wP83P5OoQ5p6ip3ScPr0BAq0BvuPAvacpEuSzyouqAI=
-github.com/Rhaqim/buckt v1.3.3-beta h1:x7wpNSOkkQ0xZuJl17kfCIJPwZ2BmtA1E0Qu9d7PpNc=
-github.com/Rhaqim/buckt v1.3.3-beta/go.mod h1:tWStRcLBBS/RVy2VDMgGy/N39iPYQiRrE8ap9ljY+Ng=
+github.com/Rhaqim/buckt v1.3.4-beta h1:SD8p7FZ8X1RZEO4ubJvJ+oGpN2Q9ZQCzlF9C5Asht2o=
+github.com/Rhaqim/buckt v1.3.4-beta/go.mod h1:tWStRcLBBS/RVy2VDMgGy/N39iPYQiRrE8ap9ljY+Ng=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/golang-jwt/jwt/v5 v5.2.1 h1:OuVbFODueb089Lh128TAcimifWaLhJwVflnrgM17wHk=

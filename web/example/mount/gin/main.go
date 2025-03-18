@@ -1,4 +1,4 @@
-package gin
+package buckt_web_testing
 
 import (
 	_ "github.com/Rhaqim/buckt/web" // Web package for side effects

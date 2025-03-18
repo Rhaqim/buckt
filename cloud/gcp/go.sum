@@ -28,8 +28,8 @@ github.com/GoogleCloudPlatform/opentelemetry-operations-go/internal/cloudmock v0
 github.com/GoogleCloudPlatform/opentelemetry-operations-go/internal/cloudmock v0.51.0/go.mod h1:SZiPHWGOOk3bl8tkevxkoiwPgsIl6CwrWcbwjfHZpdM=
 github.com/GoogleCloudPlatform/opentelemetry-operations-go/internal/resourcemapping v0.51.0 h1:6/0iUd0xrnX7qt+mLNRwg5c0PGv8wpE8K90ryANQwMI=
 github.com/GoogleCloudPlatform/opentelemetry-operations-go/internal/resourcemapping v0.51.0/go.mod h1:otE2jQekW/PqXk1Awf5lmfokJx4uwuqcj1ab5SpGeW0=
-github.com/Rhaqim/buckt v1.3.3-beta h1:x7wpNSOkkQ0xZuJl17kfCIJPwZ2BmtA1E0Qu9d7PpNc=
-github.com/Rhaqim/buckt v1.3.3-beta/go.mod h1:tWStRcLBBS/RVy2VDMgGy/N39iPYQiRrE8ap9ljY+Ng=
+github.com/Rhaqim/buckt v1.3.4-beta h1:SD8p7FZ8X1RZEO4ubJvJ+oGpN2Q9ZQCzlF9C5Asht2o=
+github.com/Rhaqim/buckt v1.3.4-beta/go.mod h1:tWStRcLBBS/RVy2VDMgGy/N39iPYQiRrE8ap9ljY+Ng=
 github.com/cespare/xxhash/v2 v2.3.0 h1:UL815xU9SqsFlibzuggzjXhog7bL6oX9BbNZnL2UFvs=
 github.com/cespare/xxhash/v2 v2.3.0/go.mod h1:VGX0DQ3Q6kWi7AoAeZDth3/j3BFtOZR5XLFGgcrjCOs=
 github.com/cncf/xds/go v0.0.0-20250121191232-2f005788dc42 h1:Om6kYQYDUk5wWbT0t0q6pvyM49i9XZAv9dDrkDA7gjk=

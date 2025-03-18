@@ -19,10 +19,13 @@ import (
 type DB struct {
 	*gorm.DB
 	*logger.BucktLogger
+	external bool
 }
 
 // NewSQLite creates a new SQLite database connection.
 func NewDB(sqlDBInstance *sql.DB, driver model.DBDrivers, log *logger.BucktLogger, debug bool) (*DB, error) {
+	var external bool
+
 	// Define supported database drivers
 	supportedDrivers := map[model.DBDrivers]func(*sql.DB) gorm.Dialector{
 		model.Postgres: func(db *sql.DB) gorm.Dialector {
@@ -69,6 +72,7 @@ func NewDB(sqlDBInstance *sql.DB, driver model.DBDrivers, log *logger.BucktLogge
 	// Determine the correct dialector
 	var dialector gorm.Dialector
 	if sqlDBInstance != nil {
+		external = true
 		dialector = supportedDrivers[driver](sqlDBInstance)
 	} else {
 		if driver == "sqlite" {
@@ -113,11 +117,16 @@ func NewDB(sqlDBInstance *sql.DB, driver model.DBDrivers, log *logger.BucktLogge
 
 	log.Info("🎉 Successfully connected to " + driverString + " database!")
 
-	return &DB{db, log}, nil
+	return &DB{db, log, external}, nil
 }
 
 // Close closes the database connection.
 func (db *DB) Close() error {
+	if db.external {
+		db.Info("Skipping database close: external connection")
+		return nil // Don't close external DB
+	}
+
 	sqlDB, err := db.DB.DB()
 	if err != nil {
 		return db.WrapError("Failed to get database connection: %v", err)
