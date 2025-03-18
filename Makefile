@@ -10,7 +10,7 @@ BUILD_NAME = main
 all: build run
 
 build:
-	go build -o $(BUILD_DIR)/$(BUILD_NAME) $(BUILD_NAME).go
+	go build -o $(BUILD_DIR)/$(BUILD_NAME) cmd/$(BUILD_NAME).go
 
 run: build
 	./bin/mainb -port=$(PORT)
