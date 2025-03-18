@@ -1,3 +1,11 @@
+// Description: Buckt is a simple file storage service that allows users to upload, download, and manage files and folders.
+// It provides a simple API for managing files and folders, as well as a web interface for interacting with the service.
+// Buckt supports multiple storage backends, including local storage and cloud storage providers.
+// The service can be configured to use a specific storage backend, or it can be used as a standalone service with local storage.
+// Buckt is built using Go and provides a simple and easy-to-use API for managing files and folders.
+// It is designed to be lightweight and easy to deploy, making it ideal for small projects and personal use.
+// The service is extensible and can be customized to support additional features and functionality.
+
 package buckt
 
 import (
@@ -42,57 +50,40 @@ type Buckt struct {
 // - A pointer to the initialized Buckt instance.
 // - An error if the Buckt instance could not be created.
 func New(bucktOpts BucktConfig) (*Buckt, error) {
-	buckt := &Buckt{}
+	logOpts := bucktOpts.Log
 
-	bucktLog := logger.NewLogger(bucktOpts.Log.LogFile, bucktOpts.Log.LogTerminal, bucktOpts.Log.Debug, logger.WithLogger(bucktOpts.Log.Logger))
-
+	bucktLog := logger.NewLogger(logOpts.LogFile, logOpts.LogTerminal, logOpts.Debug, logger.WithLogger(logOpts.Logger))
 	bucktLog.Info("🚀 Starting Buckt")
 
 	// Initialize database
-	db, err := database.NewDB(bucktOpts.DB.Database, bucktOpts.DB.Driver, bucktLog, bucktOpts.Log.Debug)
+	db, err := database.NewDB(bucktOpts.DB.Database, bucktOpts.DB.Driver, bucktLog, logOpts.Debug)
 	if err != nil {
-		return nil, err
+		return nil, bucktLog.WrapErrorf("failed to initialize database", err)
 	}
 
 	// Migrate the database
-	err = db.Migrate()
-	if err != nil {
-		return nil, err
+	if err = db.Migrate(); err != nil {
+		bucktLog.WrapErrorf("failed to migrate database", err)
 	}
 
-	// Cache
-	var cacheManager domain.CacheManager
-	if bucktOpts.Cache != nil {
-		bucktLog.Info("🚀 Using provided cache")
-		cacheManager = bucktOpts.Cache
-	} else {
-		cacheManager = cache.NewNoOpCache()
-	}
-
-	var lruCache domain.LRUCache = cache.NewFileCache(10)
+	// Initialize cache
+	cacheManager, lruCache := initializeCache(bucktOpts, bucktLog)
 
 	// Initialize the app services
 	folderService, fileService := newAppServices(bucktLog, bucktOpts, db, cacheManager, lruCache)
 
-	buckt.db = db
-	buckt.logger = bucktLog
-
-	buckt.lruCache = lruCache
-
-	buckt.FlatnameSpaces = bucktOpts.FlatNameSpaces
-	buckt.Debug = bucktOpts.Log.Debug
-
-	buckt.fileService = fileService
-	buckt.folderService = folderService
-
-	// Initialize cloud service if provided
-	if !bucktOpts.Cloud.IsEmpty() {
-		fmt.Println("🚀 Initializing cloud service")
-		err = buckt.InitCloudService(bucktOpts.Cloud)
-		if err != nil {
-			return nil, fmt.Errorf("failed to initialize cloud service: %w", err)
-		}
+	// Initialize the Buckt instance
+	buckt := &Buckt{
+		db:             db,
+		logger:         bucktLog,
+		lruCache:       lruCache,
+		FlatnameSpaces: bucktOpts.FlatNameSpaces,
+		Debug:          logOpts.Debug,
+		fileService:    fileService,
+		folderService:  folderService,
 	}
+
+	bucktLog.Info("✅ Buckt initialized")
 
 	return buckt, nil
 }
@@ -352,12 +343,18 @@ func (b *Buckt) DeleteFilePermanently(file_id string) error {
 //   - error: An error if the router service initialization fails, otherwise nil.
 func (b *Buckt) InitRouterService(mode WebMode) error {
 
+	if b.fileService == nil || b.folderService == nil {
+		return fmt.Errorf("❌ bucket services not initialized, please call buckt.New(yourConfig) or buckt.Default() first")
+	}
+
 	service, err := web.GetRouterService(b.logger, mode, true, b.fileService, b.folderService)
 	if err != nil {
 		return err
 	}
 
 	b.routerService = service
+
+	b.logger.Info("✅ Initialized router services")
 
 	return nil
 }
@@ -386,7 +383,7 @@ func (b *Buckt) GetHandler() http.Handler {
 func (b *Buckt) StartServer(port string) error {
 	// return b.routerService.Run(port)
 	if b.routerService == nil {
-		return fmt.Errorf("router service not initialized")
+		return b.logger.WrapErrorf("❌ run go get github.com/Rhaqim/buckt/web", fmt.Errorf("router service not initialized"))
 	}
 
 	return b.routerService.Run(port)
@@ -406,17 +403,17 @@ func (b *Buckt) InitCloudService(cloudConfig CloudConfig) error {
 	var err error
 
 	if cloudConfig.IsEmpty() {
-		return fmt.Errorf("cloud configuration is empty")
+		return b.logger.WrapErrorf("❌ please provide the credentials for the service", fmt.Errorf("cloud configuration is empty"))
 	}
 
 	if b.fileService == nil || b.folderService == nil {
-		return fmt.Errorf("bucket services not initialized, please call buckt.New(yourConfig) or buckt.Default() first")
+		return fmt.Errorf("❌ bucket services not initialized, please call buckt.New(yourConfig) or buckt.Default() first")
 	}
-
-	fmt.Println("🚀 Initializing cloud service")
 
 	// Initialize the cloud service
 	b.cloudService, err = cloud.GetCloudService(cloudConfig, b.fileService, b.folderService)
+
+	b.logger.Infof("✅ Initialized %s cloud service", cloudConfig.Provider)
 
 	return err
 }
@@ -431,7 +428,7 @@ func (b *Buckt) InitCloudService(cloudConfig CloudConfig) error {
 //   - error: An error if the transfer fails, otherwise nil.
 func (b *Buckt) TransferFile(file_id string) error {
 	if b.cloudService == nil {
-		return fmt.Errorf("cloud service not initialized")
+		return b.logger.WrapErrorf("please run go get github.com/Rhaqim/buckt/cloud/<cloud>", fmt.Errorf("cloud service not initialized"))
 	}
 
 	return b.cloudService.UploadFileToCloud(file_id)
@@ -448,13 +445,21 @@ func (b *Buckt) TransferFile(file_id string) error {
 //   - error: An error if the transfer fails, otherwise nil.
 func (b *Buckt) TransferFolder(user_id, folder_id string) error {
 	if b.cloudService == nil {
-		return fmt.Errorf("cloud service not initialized")
+		return b.logger.WrapErrorf("please run go get github.com/Rhaqim/buckt/cloud/<cloud>", fmt.Errorf("cloud service not initialized"))
 	}
 
 	return b.cloudService.UploadFolderToCloud(user_id, folder_id)
 }
 
 /* Helper Methods */
+
+func initializeCache(bucktOpts BucktConfig, bucktLog *logger.BucktLogger) (domain.CacheManager, domain.LRUCache) {
+	if bucktOpts.Cache != nil {
+		bucktLog.Info("✅ Using provided cache")
+		return bucktOpts.Cache, cache.NewFileCache(10)
+	}
+	return cache.NewNoOpCache(), cache.NewFileCache(10)
+}
 
 func newAppServices(bucktLog *logger.BucktLogger, bucktOpts BucktConfig, db *database.DB, cacheManager domain.CacheManager, lruCache domain.LRUCache) (domain.FolderService, domain.FileService) {
 	// Initialize the stores
@@ -465,6 +470,8 @@ func newAppServices(bucktLog *logger.BucktLogger, bucktOpts BucktConfig, db *dat
 	var fileSystemService domain.FileSystemService = service.NewFileSystemService(bucktLog, bucktOpts.MediaDir, lruCache)
 	var folderService domain.FolderService = service.NewFolderService(bucktLog, cacheManager, folderRepository, fileSystemService)
 	var fileService domain.FileService = service.NewFileService(bucktLog, cacheManager, bucktOpts.FlatNameSpaces, fileRepository, folderService, fileSystemService)
+
+	bucktLog.Info("✅ Initialized app services")
 
 	return folderService, fileService
 }

@@ -1,5 +1,5 @@
-github.com/Rhaqim/buckt v1.3.2-beta h1:Y4pZz+BzoOnxNOGX0jYoKocwidPUzcZkG2fCHLEhpLg=
-github.com/Rhaqim/buckt v1.3.2-beta/go.mod h1:tWStRcLBBS/RVy2VDMgGy/N39iPYQiRrE8ap9ljY+Ng=
+github.com/Rhaqim/buckt v1.3.3-beta h1:x7wpNSOkkQ0xZuJl17kfCIJPwZ2BmtA1E0Qu9d7PpNc=
+github.com/Rhaqim/buckt v1.3.3-beta/go.mod h1:tWStRcLBBS/RVy2VDMgGy/N39iPYQiRrE8ap9ljY+Ng=
 github.com/bytedance/sonic v1.12.8 h1:4xYRVRlXIgvSZ4e8iVTlMF5szgpXd4AfvuWgA8I8lgs=
 github.com/bytedance/sonic v1.12.8/go.mod h1:uVvFidNmlt9+wa31S1urfwwthTWteBgG0hWuoKAXTx8=
 github.com/bytedance/sonic/loader v0.1.1/go.mod h1:ncP89zfokxS5LZrJxl5z0UJcsk4M4yY2JpfqGeCtNLU=

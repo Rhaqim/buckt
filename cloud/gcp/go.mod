@@ -4,7 +4,7 @@ go 1.24.0
 
 require (
 	cloud.google.com/go/storage v1.51.0
-	github.com/Rhaqim/buckt v1.3.2-beta
+	github.com/Rhaqim/buckt v1.3.3-beta
 	google.golang.org/api v0.226.0
 )
 

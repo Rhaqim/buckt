@@ -79,6 +79,13 @@ func (l *BucktLogger) Info(message string) {
 	}
 }
 
+// infof logs an info message with formatting
+func (l *BucktLogger) Infof(format string, args ...any) {
+	if !l.debug {
+		l.Logger.Printf(format, args...)
+	}
+}
+
 // Warn logs a warning message
 func (l *BucktLogger) Warn(message string) {
 	if !l.debug {

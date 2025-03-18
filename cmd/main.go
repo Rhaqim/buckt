@@ -14,11 +14,11 @@ import (
 
 func main() {
 	// Initialize the database
-	db, err := InitDB()
-	if err != nil {
-		log.Fatalf("Failed to initialize the database: %v", err)
-	}
-	b, err := buckt.Default(buckt.FlatNameSpaces(true), buckt.WithCache(NewCache()), buckt.WithDB("postgres", db))
+	// db, err := InitDB()
+	// if err != nil {
+	// 	log.Fatalf("Failed to initialize the database: %v", err)
+	// }
+	b, err := buckt.Default(buckt.FlatNameSpaces(true), buckt.WithCache(NewCache()))
 	if err != nil {
 		log.Fatalf("Failed to initialize Buckt: %v", err)
 	}

@@ -146,7 +146,7 @@ func (r *Router) registerAllRoutes(mode model.WebMode) {
 	case model.WebModeUI:
 		r.registerWebRoutes()
 	default:
-		r.registerAPIRoutes()
 		r.registerWebRoutes()
+		r.registerAPIRoutes()
 	}
 }

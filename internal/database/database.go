@@ -100,14 +100,18 @@ func NewDB(sqlDBInstance *sql.DB, driver model.DBDrivers, log *logger.BucktLogge
 	}
 
 	// Set connection pooling
-	sqlDB.SetMaxOpenConns(10)                  // Max open connections
-	sqlDB.SetMaxIdleConns(5)                   // Max idle connections
-	sqlDB.SetConnMaxLifetime(30 * time.Minute) // Max connection lifetime
+	if driver == "sqlite" {
+		sqlDB.SetMaxOpenConns(10)                  // Max open connections
+		sqlDB.SetMaxIdleConns(5)                   // Max idle connections
+		sqlDB.SetConnMaxLifetime(30 * time.Minute) // Max connection lifetime
+	}
 
 	// Optionally: Ping the database to ensure it's accessible
 	if err := sqlDB.Ping(); err != nil {
 		return nil, log.WrapError("Failed to ping database:", err)
 	}
+
+	log.Info("🎉 Successfully connected to " + driverString + " database!")
 
 	return &DB{db, log}, nil
 }

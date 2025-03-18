@@ -128,7 +128,6 @@ type BucktConfig struct {
 	Log            LogConfig
 	MediaDir       string
 	FlatNameSpaces bool
-	Cloud          CloudConfig
 }
 
 type ConfigFunc func(*BucktConfig)
@@ -203,20 +202,5 @@ func WithDB(driver DBDrivers, db *sql.DB) ConfigFunc {
 func WithLog(log LogConfig) ConfigFunc {
 	return func(c *BucktConfig) {
 		c.Log = log
-	}
-}
-
-// WithCloud is a configuration function that sets the cloud provider and credentials
-// for the BucktConfig. It takes a CloudConfig instance as an argument and assigns it
-// to the Cloud field of BucktConfig.
-//
-// Parameters:
-//   - cloud: An instance of CloudConfig to be used for cloud storage.
-//
-// Returns:
-//   - A ConfigFunc that sets the Cloud field of BucktConfig.
-func WithCloud(cloud CloudConfig) ConfigFunc {
-	return func(c *BucktConfig) {
-		c.Cloud = cloud
 	}
 }

@@ -17,6 +17,7 @@ The Buckt package provides a flexible media storage service with optional integr
     - [Initialization](#initialization)
     - [Logging](#logging)
     - [Database](#database)
+    - [Caching](#caching)
   - [Services](#services)
     - [Direct Services](#direct-services)
     - [Gin Web Server](#gin-web-server)
@@ -54,12 +55,11 @@ The configuration options for the Buckt package are defined using the BucktOptio
 
 ```go
   type BucktConfig struct {
-    DB             *sql.DB
+    DB             DBConfig
     Cache          domain.CacheManager
     Log            Log
     MediaDir       string
     FlatNameSpaces bool
-    StandaloneMode bool
   }
 ```
 
@@ -73,44 +73,45 @@ The Log struct contains the following fields:
   }
 ```
 
+The DBConfig struct contains the following fields:
+
+```go
+  type DBConfig struct {
+    Driver   string
+    Database *sql.DB
+  }
+```
+
+The CacheManager interface is defined as follows:
+
+```go
+  type CacheManager interface {
+    // Set a value in the cache for a given key.
+    SetBucktValue(key string, value any) error  
+
+    // Get a value from the cache using a key.
+    GetBucktValue(key string) (any, error)  
+
+    // Delete a key-value pair from the cache.
+    DeleteBucktValue(key string) error  
+}
+```
+
 The configuration options are as follows:
 
-- **Driver** – The Database driver name.
-- **Database** – The database connection.
-- **Cache** – The cache manager.
-- **LogTerminal** – Enable or disable logging to the terminal.
-- **LogFile** – The path to the log file.
-- **Debug** – Enable or disable debug mode.
 - **MediaDir** – The path to the media directory.
 - **FlatNameSpaces** – Enable or disable flat namespaces.
-- **StandaloneMode** – Enable or disable standalone mode.
 
 ### Initialization
 
-To create a new instance of the Buckt package, use the NewBuckt function. It requires a configuration file and optional parameters for logging.
+To create a new instance of the Buckt package, use the New or Default function. It requires the BucktConfig struct as an argument. The New function returns a new instance of the Buckt package, while the Default function initializes the package with default settings.
 
 ```go
 import "github.com/Rhaqim/buckt"
 
 func main() {
-    // create a new instance of a postgre database
-    db, err := sql.Open("postgres", "host=localhost port=5432 user=postgres password=postgres dbname=buckt sslmode=disable")
-    if err != nil {
-        log.Fatal(err)
-    }
-
     // Create a new instance of the Buckt package
-    bucktInstance, err := buckt.NewBuckt(buckt.BucktOptions{
-        DB: buckt.DBConfig{
-            Driver:   "postgres",
-            Database: db,
-        },
-        Log: buckt.LogConfig{
-            LogTerminal: true,
-        },
-        MediaDir:       "media",
-        StandaloneMode: true,
-    })
+    bucktInstance, err := buckt.Default()
     if err != nil {
         log.Fatal(err)
     }
@@ -127,7 +128,11 @@ The Buckt package supports logging to files and the terminal. By default the pac
 
 ### Database
 
-The Buckt package uses an SQLite database to store metadata about the media files. It has 2 tables: `files` and `folders`. The `files` table stores information about the media files, such as the file name, size, and MIME type. The `folders` table stores information about the folders, such as the folder name and the parent folder ID.
+By default Buckt uses an SQLite database to store metadata on the media files. It has 2 tables: `files` and `folders`. The `files` table stores information about the media files, such as the file name, size, and MIME type. The `folders` table stores logical mappings of folders to put files in. You can provide a custom database connection using the DB field in the BucktOptions struct.
+
+### Caching
+
+The Buckt package supports caching using the CacheManager interface. You can provide a custom cache manager by implementing the interface and passing it to the Cache field in the BucktOptions struct. The application also uses LRUCache for file caching.
 
 ## Services
 
@@ -315,39 +320,6 @@ func main() {
 More examples for router usage can be found in the [AWS Example](web/example) directory.
 
 ### Cloud Services Example
-
-```go
-import (
-    "log"
-
-    "github.com/Rhaqim/buckt"
-  )
-
-  func main() {
-    // Create a new CloudConfig object
-    cloudConfig := buckt.CloudConfig{
-      Provider: buckt.CloudProviderAWS,
-      Credentials: buckt.AWSConfig{
-        AccessKey: "accessKey",
-        SecretKey: "secretKey",
-        Region:    "us-west-2",
-        Bucket:    "my-bucket",
-      },
-    }
-
-    bucktInstance, err := buckt.Default(buckt.WithCloud(cloudConfig))
-    if err != nil {
-      fmt.Println(err)
-      return
-    }
-
-    defer buckt.Close()
-
-    fmt.Println("File uploaded successfully")
-  }
-```
-
-Note: You can also use the InitCloud method to initialize the cloud storage service.
 
 ```go
 import (
