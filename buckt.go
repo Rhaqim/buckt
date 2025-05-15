@@ -463,6 +463,7 @@ func initializeCache(bucktOpts BucktConfig, bucktLog *logger.BucktLogger) (domai
 	lruCache, err := cache.NewFileCache(fileConf.NumCounters, fileConf.MaxCost, fileConf.BufferItems)
 	if err != nil {
 		bucktLog.WrapErrorf("failed to initialize file cache", err)
+		lruCache = cache.NewNoOpFileCache()
 	}
 	bucktLog.Info("✅ Initialized file cache")
 
