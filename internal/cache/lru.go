@@ -36,10 +36,7 @@ func (fc *FileCache) Add(key string, value []byte) (evicted bool) {
 	if fc.cache != nil {
 		cost := int64(len(value))
 
-		ok := fc.cache.Set(key, value, cost)
-		if ok {
-			fc.cache.Wait()
-		}
+		_ = fc.cache.Set(key, value, cost)
 	}
 	return false
 }
