@@ -1,6 +1,7 @@
 package service
 
 import (
+	"errors"
 	"io"
 	"os"
 	"path/filepath"
@@ -76,7 +77,7 @@ func (bfs *FileSystemService) FSGetFile(path string) ([]byte, error) {
 
 	// check what type result is
 	if _, ok := result.([]byte); !ok {
-		return nil, fmt.Errorf("failed to read file: expected []byte but got %T", result)
+		return nil, bfs.WrapError("failed to read file: expected []byte but got", errors.New("unexpected type"))
 	}
 	// bfs.cache.Add(filePath, result.([]byte))
 	bfs.cache.Add(filePath, result.([]byte))

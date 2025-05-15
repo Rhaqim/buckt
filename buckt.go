@@ -460,13 +460,17 @@ func initializeCache(bucktOpts BucktConfig, bucktLog *logger.BucktLogger) (domai
 
 	fileConf.Validate()
 
-	LRUCache := cache.NewFileCache(fileConf.NumCounters, fileConf.MaxCost, fileConf.BufferItems)
+	lruCache, err := cache.NewFileCache(fileConf.NumCounters, fileConf.MaxCost, fileConf.BufferItems)
+	if err != nil {
+		bucktLog.WrapErrorf("failed to initialize file cache", err)
+	}
+	bucktLog.Info("✅ Initialized file cache")
 
 	if bucktOpts.Cache.Manager != nil {
 		bucktLog.Info("✅ Using provided cache")
-		return bucktOpts.Cache.Manager, LRUCache
+		return bucktOpts.Cache.Manager, lruCache
 	}
-	return cache.NewNoOpCache(), LRUCache
+	return cache.NewNoOpCache(), lruCache
 }
 
 func newAppServices(bucktLog *logger.BucktLogger, bucktOpts BucktConfig, db *database.DB, cacheManager domain.CacheManager, lruCache domain.LRUCache) (domain.FolderService, domain.FileService) {
