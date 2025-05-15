@@ -14,19 +14,22 @@ type FileCache struct {
 	misses atomic.Uint64
 }
 
-func NewFileCache(numCounters, maxCost, bufferItems int64) domain.LRUCache {
-	cache, _ := ristretto.NewCache(&ristretto.Config[string, []byte]{
+func NewFileCache(numCounters, maxCost, bufferItems int64) (domain.LRUCache, error) {
+	cache, err := ristretto.NewCache(&ristretto.Config[string, []byte]{
 		NumCounters: numCounters, // number of keys to track frequency of (10M).
 		MaxCost:     maxCost,     // maximum cost of cache (1GB).
 		BufferItems: bufferItems, // number of keys per Get buffer.
 	})
+	if err != nil {
+		return nil, err
+	}
 
 	return &FileCache{
 		cache: cache,
 
 		hits:   atomic.Uint64{},
 		misses: atomic.Uint64{},
-	}
+	}, nil
 }
 
 func (fc *FileCache) Add(key string, value []byte) (evicted bool) {
