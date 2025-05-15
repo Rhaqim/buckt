@@ -63,7 +63,7 @@ func (bfs *FileSystemService) FSGetFile(path string) ([]byte, error) {
 	}
 
 	if file, ok := bfs.cache.Get(filePath); ok {
-		return file.([]byte), nil
+		return file, nil
 	}
 
 	result, err, _ := bfs.g.Do(filePath, func() (any, error) {
@@ -74,7 +74,12 @@ func (bfs *FileSystemService) FSGetFile(path string) ([]byte, error) {
 		return nil, bfs.WrapError("failed to read file", err)
 	}
 
-	bfs.cache.Add(filePath, result)
+	// check what type result is
+	if _, ok := result.([]byte); !ok {
+		return nil, bfs.WrapError("failed to read file", err)
+	}
+	// bfs.cache.Add(filePath, result.([]byte))
+	bfs.cache.Add(filePath, result.([]byte))
 
 	return result.([]byte), nil
 }
@@ -85,16 +90,16 @@ func (bfs *FileSystemService) FSGetFileStream(path string) (io.ReadCloser, error
 		return nil, err
 	}
 
-	if file, ok := bfs.cache.Get(filePath); ok {
-		return file.(*os.File), nil
-	}
+	// if file, ok := bfs.cache.Get(filePath); ok {
+	// 	return file.(*os.File), nil
+	// }
 
 	file, err := os.Open(filePath)
 	if err != nil {
 		return nil, err
 	}
 
-	bfs.cache.Add(filePath, file)
+	// bfs.cache.Add(filePath, file)
 
 	return file, nil // Caller should close the file after reading
 }

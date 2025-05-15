@@ -11,9 +11,11 @@ import (
 
 type MockLRUCache struct{}
 
-func (m *MockLRUCache) Purge()                      {}
-func (M *MockLRUCache) Get(key any) (any, bool)     { return nil, false }
-func (M *MockLRUCache) Add(key any, value any) bool { return true }
+func (m *MockLRUCache) Close()                            {}
+func (M *MockLRUCache) Get(key string) ([]byte, bool)     { return nil, false }
+func (M *MockLRUCache) Add(key string, value []byte) bool { return true }
+func (M *MockLRUCache) Hits() uint64                      { return 0 }
+func (M *MockLRUCache) Misses() uint64                    { return 0 }
 
 func setupFSTest() (*FileSystemService, string) {
 	log := logger.NewLogger("", true, false)

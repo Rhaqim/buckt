@@ -8,7 +8,18 @@ import (
 )
 
 func main() {
-	bucktInstance, err := buckt.Default(buckt.WithCache(NewCache()))
+	fileCacheConfig := buckt.FileCacheConfig{
+		NumCounters: 1e7,     // 10M
+		MaxCost:     1 << 30, // 1GB
+		BufferItems: 64,
+	}
+
+	cacheConfig := buckt.CacheConfig{
+		Manager:         NewCache(),
+		FileCacheConfig: fileCacheConfig,
+	}
+
+	bucktInstance, err := buckt.Default(buckt.WithCache(cacheConfig))
 	if err != nil {
 		panic(err)
 	}

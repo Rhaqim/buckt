@@ -154,7 +154,18 @@ func TestDefault(t *testing.T) {
 	})
 
 	t.Run("With Cache", func(t *testing.T) {
-		buckt, err := Default(WithCache(cache.NewNoOpCache()))
+		fileCacheConfig := FileCacheConfig{
+			NumCounters: 1e7,     // 10M
+			MaxCost:     1 << 30, // 1GB
+			BufferItems: 64,
+		}
+
+		cacheConfig := CacheConfig{
+			Manager:         cache.NewNoOpCache(),
+			FileCacheConfig: fileCacheConfig,
+		}
+
+		buckt, err := Default(WithCache(cacheConfig))
 		// Cleanup to ensure the server is closed after the test
 		t.Cleanup(func() {
 			buckt.Close()
@@ -192,10 +203,21 @@ func TestDefault(t *testing.T) {
 		assert.NoError(t, err)
 		defer sqlDB.Close()
 
+		fileCacheConfig := FileCacheConfig{
+			NumCounters: 1e7,     // 10M
+			MaxCost:     1 << 30, // 1GB
+			BufferItems: 64,
+		}
+
+		cacheConfig := CacheConfig{
+			Manager:         cache.NewNoOpCache(),
+			FileCacheConfig: fileCacheConfig,
+		}
+
 		buckt, err := Default(
 			FlatNameSpaces(true),
 			MediaDir("media"),
-			WithCache(cache.NewNoOpCache()),
+			WithCache(cacheConfig),
 			WithLog(LogConfig{LogTerminal: false, Debug: false}),
 			WithDB(SQLite, sqlDB),
 		)

@@ -1,4 +1,4 @@
-package buckt_web_testing
+package main
 
 import (
 	"database/sql"
