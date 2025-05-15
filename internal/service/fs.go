@@ -76,7 +76,7 @@ func (bfs *FileSystemService) FSGetFile(path string) ([]byte, error) {
 
 	// check what type result is
 	if _, ok := result.([]byte); !ok {
-		return nil, bfs.WrapError("failed to read file", err)
+		return nil, bfs.WrapError("failed to read file, type mismatch", err)
 	}
 	// bfs.cache.Add(filePath, result.([]byte))
 	bfs.cache.Add(filePath, result.([]byte))
