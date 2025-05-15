@@ -64,8 +64,10 @@ func (bfs *FileSystemService) FSGetFile(path string) ([]byte, error) {
 		return nil, err
 	}
 
-	if file, ok := bfs.cache.Get(filePath); ok {
-		return file, nil
+	if bfs.cache != nil {
+		if file, ok := bfs.cache.Get(filePath); ok {
+			return file, nil
+		}
 	}
 
 	result, err, _ := bfs.g.Do(filePath, func() (any, error) {
@@ -81,7 +83,9 @@ func (bfs *FileSystemService) FSGetFile(path string) ([]byte, error) {
 		return nil, bfs.WrapError(fmt.Sprintf("failed to read file: expected []byte but got %T", result), errors.New("unexpected type"))
 	}
 	// bfs.cache.Add(filePath, result.([]byte))
-	bfs.cache.Add(filePath, result.([]byte))
+	if bfs.cache != nil {
+		bfs.cache.Add(filePath, result.([]byte))
+	}
 
 	return result.([]byte), nil
 }
