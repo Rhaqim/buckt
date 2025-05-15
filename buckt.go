@@ -121,7 +121,7 @@ func Default(opts ...ConfigFunc) (*Buckt, error) {
 // It closes the database connection.
 func (b *Buckt) Close() {
 	b.db.Close()
-	b.lruCache.Purge()
+	b.lruCache.Close()
 }
 
 /* Folder Methods */
@@ -456,11 +456,22 @@ func (b *Buckt) TransferFolder(user_id, folder_id string) error {
 /* Helper Methods */
 
 func initializeCache(bucktOpts BucktConfig, bucktLog *logger.BucktLogger) (domain.CacheManager, domain.LRUCache) {
-	if bucktOpts.Cache != nil {
-		bucktLog.Info("✅ Using provided cache")
-		return bucktOpts.Cache, cache.NewFileCache(10)
+	fileConf := bucktOpts.Cache.FileCacheConfig
+
+	fileConf.Validate()
+
+	lruCache, err := cache.NewFileCache(fileConf.NumCounters, fileConf.MaxCost, fileConf.BufferItems)
+	if err != nil {
+		bucktLog.WrapErrorf("failed to initialize file cache", err)
+		lruCache = cache.NewNoOpFileCache()
 	}
-	return cache.NewNoOpCache(), cache.NewFileCache(10)
+	bucktLog.Info("✅ Initialized file cache")
+
+	if bucktOpts.Cache.Manager != nil {
+		bucktLog.Info("✅ Using provided cache")
+		return bucktOpts.Cache.Manager, lruCache
+	}
+	return cache.NewNoOpCache(), lruCache
 }
 
 func newAppServices(bucktLog *logger.BucktLogger, bucktOpts BucktConfig, db *database.DB, cacheManager domain.CacheManager, lruCache domain.LRUCache) (domain.FolderService, domain.FileService) {

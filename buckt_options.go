@@ -23,6 +23,56 @@ type LogConfig struct {
 	Debug       bool
 }
 
+// FileCacheConfig holds the configuration for the file cache.
+// It includes settings for the number of counters, maximum cost,
+// and buffer items.
+//
+// Fields:
+//
+//	NumCounters: The number of counters for the cache.
+//	MaxCost: The maximum cost of the cache.
+//	BufferItems: The number of items in the buffer.
+type FileCacheConfig struct {
+	NumCounters int64
+	MaxCost     int64
+	BufferItems int64
+}
+
+// Validate checks the configuration values for the file cache.
+// It sets default values if the provided values are less than or equal to zero.
+// The default values are:
+//
+//	NumCounters: 1e7 (10 million)
+//	MaxCost: 1 << 30 (1 GB)
+//	BufferItems: 64
+//
+// If the values are already set to valid values, they remain unchanged.
+// This function is useful for ensuring that the cache configuration is valid
+// before using it in the application.
+// It is typically called during the initialization of the cache manager.
+func (f *FileCacheConfig) Validate() {
+	if f.NumCounters <= 0 {
+		f.NumCounters = 1e7 // 10M
+	}
+	if f.MaxCost <= 0 {
+		f.MaxCost = 1 << 30 // 1GB
+	}
+	if f.BufferItems <= 0 {
+		f.BufferItems = 64
+	}
+}
+
+// CacheConfig holds the configuration for the cache manager.
+// It includes the cache manager instance and file cache configuration.
+// Fields:
+//
+//	Manager: The cache manager instance.
+//	FileCacheConfig: The file cache configuration.
+type CacheConfig struct {
+	Manager domain.CacheManager
+	FileCacheConfig
+}
+
 type DBDrivers = model.DBDrivers // Type alias
 
 const (
@@ -117,14 +167,14 @@ const (
 // Fields:
 //
 //	DB: Database configuration.
-//	Cache: CacheManager instance.
+//	Cache: Cache configuration.
 //	Log: Configuration for logging.
 //	MediaDir: Path to the directory where media files are stored.
 //	FlatNameSpaces: Flag indicating whether the application should use flat namespaces when storing files.
 //	StandaloneMode: Flag indicating whether the application is running in standalone mode.
 type BucktConfig struct {
 	DB             DBConfig
-	Cache          domain.CacheManager
+	Cache          CacheConfig
 	Log            LogConfig
 	MediaDir       string
 	FlatNameSpaces bool
@@ -167,7 +217,7 @@ func MediaDir(mediaDir string) ConfigFunc {
 // Returns:
 //   - A ConfigFunc that sets the Log field of BucktConfig.
 //     A ConfigFunc that sets the CacheManager in the BucktConfig.
-func WithCache(cache domain.CacheManager) ConfigFunc {
+func WithCache(cache CacheConfig) ConfigFunc {
 	return func(c *BucktConfig) {
 		c.Cache = cache
 	}

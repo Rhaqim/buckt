@@ -12,7 +12,9 @@ type CacheManager interface {
 }
 
 type LRUCache interface {
-	Add(key any, value any) (evicted bool)
-	Get(key any) (value any, ok bool)
-	Purge()
+	Add(key string, value []byte) (evicted bool)
+	Get(key string) (value []byte, ok bool)
+	Hits() uint64
+	Misses() uint64
+	Close()
 }
