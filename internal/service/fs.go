@@ -92,16 +92,10 @@ func (bfs *FileSystemService) FSGetFileStream(path string) (io.ReadCloser, error
 		return nil, err
 	}
 
-	// if file, ok := bfs.cache.Get(filePath); ok {
-	// 	return file.(*os.File), nil
-	// }
-
 	file, err := os.Open(filePath)
 	if err != nil {
 		return nil, err
 	}
-
-	// bfs.cache.Add(filePath, file)
 
 	return file, nil // Caller should close the file after reading
 }
