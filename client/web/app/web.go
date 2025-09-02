@@ -3,33 +3,31 @@ package app
 import (
 	"fmt"
 
-	"github.com/Rhaqim/buckt/internal/domain"
+	"github.com/Rhaqim/buckt"
 	"github.com/Rhaqim/buckt/internal/utils"
 	"github.com/Rhaqim/buckt/pkg/response"
-	webDomain "github.com/Rhaqim/buckt/web/domain"
+	"github.com/Rhaqim/buckt/web/domain"
 	"github.com/gin-gonic/gin"
 )
 
 type WebService struct {
-	domain.FolderService
-	domain.FileService
+	client *buckt.Client
 }
 
-func NewWebService(fs domain.FolderService, f domain.FileService) webDomain.WebService {
+func NewWebService(client *buckt.Client) domain.WebService {
 	return &WebService{
-		FolderService: fs,
-		FileService:   f,
+		client: client,
 	}
 }
 
-func (w *WebService) ViewFolder(c *gin.Context) {
+func (svc *WebService) ViewFolder(c *gin.Context) {
 	user_id := c.GetString("owner_id")
 
 	// get the folder_id from the request
 	folderID := c.Param("folder_id")
 
 	// get the folder content
-	folderContent, err := w.FolderService.GetFolder(user_id, folderID)
+	folderContent, err := svc.client.GetFolderWithContent(user_id, folderID)
 	if err != nil {
 		c.AbortWithStatusJSON(500, response.WrapError("failed to get folder content", err))
 		return
@@ -47,7 +45,7 @@ func (w *WebService) ViewFolder(c *gin.Context) {
 }
 
 // NewFolder implements domain.WebService.
-func (w *WebService) NewFolder(c *gin.Context) {
+func (svc *WebService) NewFolder(c *gin.Context) {
 	user_id := c.GetString("owner_id")
 
 	parentID := c.PostForm("parent_id")
@@ -64,7 +62,7 @@ func (w *WebService) NewFolder(c *gin.Context) {
 
 	description := c.PostForm("description")
 
-	_, err := w.FolderService.CreateFolder(user_id, parentID, name, description)
+	_, err := svc.client.NewFolder(user_id, parentID, name, description)
 	if err != nil {
 		c.AbortWithStatusJSON(500, response.WrapError("failed to create folder", err))
 		return
@@ -76,7 +74,9 @@ func (w *WebService) NewFolder(c *gin.Context) {
 
 // MoveFolder implements domain.WebService.
 // Subtle: this method shadows the method (FolderService).MoveFolder of WebService.FolderService.
-func (w *WebService) MoveFolder(c *gin.Context) {
+func (svc *WebService) MoveFolder(c *gin.Context) {
+	user_id := c.GetString("owner_id")
+
 	folder_id := c.PostForm("folder_id")
 	new_parent_id := c.PostForm("new_parent_id")
 
@@ -90,7 +90,7 @@ func (w *WebService) MoveFolder(c *gin.Context) {
 		return
 	}
 
-	err := w.FolderService.MoveFolder(folder_id, new_parent_id)
+	err := svc.client.MoveFolder(user_id, folder_id, new_parent_id)
 	if err != nil {
 		c.AbortWithStatusJSON(500, response.WrapError("failed to move folder", err))
 		return
@@ -102,7 +102,7 @@ func (w *WebService) MoveFolder(c *gin.Context) {
 
 // RenameFolder implements domain.WebService.
 // Subtle: this method shadows the method (FolderService).RenameFolder of WebService.FolderService.
-func (w *WebService) RenameFolder(c *gin.Context) {
+func (svc *WebService) RenameFolder(c *gin.Context) {
 	user_id := c.GetString("owner_id")
 
 	folder_id := c.PostForm("folder_id")
@@ -119,7 +119,7 @@ func (w *WebService) RenameFolder(c *gin.Context) {
 	}
 
 	// rename the folder
-	err := w.FolderService.RenameFolder(user_id, folder_id, new_name)
+	err := svc.client.RenameFolder(user_id, folder_id, new_name)
 	if err != nil {
 		c.AbortWithStatusJSON(500, response.WrapError("failed to rename folder", err))
 		return
@@ -130,7 +130,7 @@ func (w *WebService) RenameFolder(c *gin.Context) {
 }
 
 // DeleteFolder implements domain.WebService.
-func (w *WebService) DeleteFolder(c *gin.Context) {
+func (svc *WebService) DeleteFolder(c *gin.Context) {
 	// get the folder_id from the request
 	folderID := c.Param("folder_id")
 	if folderID == "" {
@@ -139,7 +139,7 @@ func (w *WebService) DeleteFolder(c *gin.Context) {
 	}
 
 	// ge tthe folder with content
-	parent_id, err := w.FolderService.DeleteFolder(folderID)
+	parent_id, err := svc.client.DeleteFolder(folderID)
 	if err != nil {
 		c.AbortWithStatusJSON(500, response.WrapError("failed to delete folder", err))
 		return
@@ -149,7 +149,7 @@ func (w *WebService) DeleteFolder(c *gin.Context) {
 }
 
 // DeleteFolderPermanently implements domain.WebService.
-func (w *WebService) DeleteFolderPermanently(c *gin.Context) {
+func (svc *WebService) DeleteFolderPermanently(c *gin.Context) {
 	user_id := c.GetString("owner_id")
 
 	// get the folder_id from the request
@@ -160,7 +160,7 @@ func (w *WebService) DeleteFolderPermanently(c *gin.Context) {
 	}
 
 	// ge tthe folder with content
-	parent_id, err := w.FolderService.ScrubFolder(user_id, folderID)
+	parent_id, err := svc.client.DeleteFolderPermanently(user_id, folderID)
 	if err != nil {
 		c.AbortWithStatusJSON(500, response.WrapError("failed to delete folder", err))
 		return
@@ -171,7 +171,7 @@ func (w *WebService) DeleteFolderPermanently(c *gin.Context) {
 }
 
 // UploadFile implements domain.WebService.
-func (w *WebService) UploadFile(c *gin.Context) {
+func (svc *WebService) UploadFile(c *gin.Context) {
 	user_id := c.GetString("owner_id")
 
 	folderID := c.PostForm("folder_id")
@@ -198,7 +198,7 @@ func (w *WebService) UploadFile(c *gin.Context) {
 			return
 		}
 
-		_, err = w.FileService.CreateFile(user_id, folderID, fileName, file.Header.Get("Content-Type"), fileByte)
+		_, err = svc.client.UploadFile(user_id, folderID, fileName, file.Header.Get("Content-Type"), fileByte)
 		if err != nil {
 			c.AbortWithStatusJSON(500, response.WrapError("failed to create file", err))
 			return
@@ -216,7 +216,7 @@ func (w *WebService) UploadFile(c *gin.Context) {
 }
 
 // DownloadFile implements domain.WebService.
-func (w *WebService) DownloadFile(c *gin.Context) {
+func (svc *WebService) DownloadFile(c *gin.Context) {
 	// get the file_id from the request
 	fileID := c.Param("file_id")
 	if fileID == "" {
@@ -225,7 +225,7 @@ func (w *WebService) DownloadFile(c *gin.Context) {
 	}
 
 	// get the file
-	file, err := w.FileService.GetFile(fileID)
+	file, err := svc.client.GetFile(fileID)
 	if err != nil {
 		c.AbortWithStatusJSON(500, response.WrapError("failed to get file", err))
 		return
@@ -238,13 +238,13 @@ func (w *WebService) DownloadFile(c *gin.Context) {
 }
 
 // MoveFile implements domain.WebService.
-func (w *WebService) MoveFile(c *gin.Context) {
+func (svc *WebService) MoveFile(c *gin.Context) {
 	panic("unimplemented")
 }
 
 // DeleteFile implements domain.WebService.
 // Subtle: this method shadows the method (FileService).DeleteFile of WebService.FileService.
-func (w *WebService) DeleteFile(c *gin.Context) {
+func (svc *WebService) DeleteFile(c *gin.Context) {
 	// get the file_id from the request
 	fileID := c.Param("file_id")
 	if fileID == "" {
@@ -253,7 +253,7 @@ func (w *WebService) DeleteFile(c *gin.Context) {
 	}
 
 	// delete the file
-	parent_id, err := w.FileService.DeleteFile(fileID)
+	parent_id, err := svc.client.DeleteFile(fileID)
 	if err != nil {
 		c.AbortWithStatusJSON(500, response.WrapError("failed to delete file", err))
 		return
@@ -264,7 +264,7 @@ func (w *WebService) DeleteFile(c *gin.Context) {
 	c.JSON(200, response.Success("file deleted"))
 }
 
-func (w *WebService) DeleteFilePermanently(c *gin.Context) {
+func (svc *WebService) DeleteFilePermanently(c *gin.Context) {
 	// get the file_id from the request
 	fileID := c.Param("file_id")
 	if fileID == "" {
@@ -273,7 +273,7 @@ func (w *WebService) DeleteFilePermanently(c *gin.Context) {
 	}
 
 	// delete the file
-	parent_id, err := w.FileService.ScrubFile(fileID)
+	parent_id, err := svc.client.DeleteFilePermanently(fileID)
 	if err != nil {
 		c.AbortWithStatusJSON(500, response.WrapError("failed to delete file", err))
 		return

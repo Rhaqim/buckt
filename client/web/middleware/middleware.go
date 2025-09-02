@@ -1,19 +1,18 @@
 package middleware
 
 import (
-	"fmt"
+	"log"
 
-	"github.com/Rhaqim/buckt/pkg/logger"
-	webDomain "github.com/Rhaqim/buckt/web/domain"
+	"github.com/Rhaqim/buckt/web/domain"
 	"github.com/gin-gonic/gin"
 )
 
 type bucketMiddleware struct {
-	logger  *logger.BucktLogger
+	logger  *log.Logger
 	mounted bool
 }
 
-func NewBucketMiddleware(bucktLog *logger.BucktLogger, mounted bool) webDomain.Middleware {
+func NewBucketMiddleware(bucktLog *log.Logger, mounted bool) domain.Middleware {
 	return &bucketMiddleware{
 		logger:  bucktLog,
 		mounted: mounted,
@@ -26,7 +25,8 @@ func (b *bucketMiddleware) APIGuardMiddleware() gin.HandlerFunc {
 			// Read user_id from header
 			userID := c.GetHeader("buckt-User-ID")
 			if userID == "" {
-				c.AbortWithStatusJSON(401, b.logger.WrapError("unauthorised", fmt.Errorf("user_id not found in headers")))
+				b.logger.Printf("unauthorised: user_id not found in headers")
+				c.AbortWithStatusJSON(401, gin.H{"error": "unauthorised", "message": "user_id not found in headers"})
 				return
 			}
 

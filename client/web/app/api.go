@@ -6,28 +6,26 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/Rhaqim/buckt/internal/domain"
+	"github.com/Rhaqim/buckt"
 	"github.com/Rhaqim/buckt/internal/utils"
 	"github.com/Rhaqim/buckt/pkg/response"
-	webDomain "github.com/Rhaqim/buckt/web/domain"
+	"github.com/Rhaqim/buckt/web/domain"
 	"github.com/gin-gonic/gin"
 )
 
 type APIService struct {
-	domain.FolderService
-	domain.FileService
+	client *buckt.Client
 }
 
-func NewAPIService(fs domain.FolderService, f domain.FileService) webDomain.APIService {
+func NewAPIService(client *buckt.Client) domain.APIService {
 	return &APIService{
-		FolderService: fs,
-		FileService:   f,
+		client: client,
 	}
 }
 
 // CreateFolder implements domain.APIService.
 // Subtle: this method shadows the method (FolderService).CreateFolder of APIService.FolderService.
-func (a *APIService) CreateFolder(c *gin.Context) {
+func (svc *APIService) CreateFolder(c *gin.Context) {
 	user_id := c.GetString("owner_id")
 
 	var req struct {
@@ -42,7 +40,7 @@ func (a *APIService) CreateFolder(c *gin.Context) {
 	}
 
 	// create the folder
-	new_folder_id, err := a.FolderService.CreateFolder(user_id, req.ParentID, req.FolderName, req.Description)
+	new_folder_id, err := svc.client.NewFolder(user_id, req.ParentID, req.FolderName, req.Description)
 	if err != nil {
 		c.AbortWithStatusJSON(500, response.WrapError("failed to create folder", err))
 		return
@@ -52,7 +50,7 @@ func (a *APIService) CreateFolder(c *gin.Context) {
 }
 
 // GetFolderContent implements domain.APIService.
-func (a *APIService) GetFolderContent(c *gin.Context) {
+func (svc *APIService) GetFolderContent(c *gin.Context) {
 	user_id := c.GetString("owner_id")
 
 	// get the folder_id from the request
@@ -63,7 +61,7 @@ func (a *APIService) GetFolderContent(c *gin.Context) {
 	}
 
 	// get the folder content
-	folderContent, err := a.FolderService.GetFolder(user_id, folderID)
+	folderContent, err := svc.client.GetFolderWithContent(user_id, folderID)
 	if err != nil {
 		c.AbortWithStatusJSON(500, response.WrapError("failed to get folder content", err))
 		return
@@ -73,7 +71,7 @@ func (a *APIService) GetFolderContent(c *gin.Context) {
 }
 
 // GetFilesInFolder implements domain.APIService.
-func (a *APIService) GetFilesInFolder(c *gin.Context) {
+func (svc *APIService) GetFilesInFolder(c *gin.Context) {
 	// get the parent_id from the request
 	parentID := c.Param("parent_id")
 	if parentID == "" {
@@ -82,7 +80,7 @@ func (a *APIService) GetFilesInFolder(c *gin.Context) {
 	}
 
 	// get the files in the folder
-	files, err := a.FileService.GetFiles(parentID)
+	files, err := svc.client.ListFiles(parentID)
 	if err != nil {
 		c.AbortWithStatusJSON(500, response.WrapError("failed to get files", err))
 		return
@@ -92,17 +90,17 @@ func (a *APIService) GetFilesInFolder(c *gin.Context) {
 }
 
 // GetSubFolders implements domain.APIService.
-func (a *APIService) GetSubFolders(c *gin.Context) {
+func (svc *APIService) GetSubFolders(c *gin.Context) {
 	panic("unimplemented")
 }
 
 // GetDescendants implements domain.APIService.
-func (a *APIService) GetDescendants(c *gin.Context) {
+func (svc *APIService) GetDescendants(c *gin.Context) {
 	panic("unimplemented")
 }
 
 // DeleteFolder implements domain.APIService.
-func (a *APIService) DeleteFolder(c *gin.Context) {
+func (svc *APIService) DeleteFolder(c *gin.Context) {
 	// get the folder_id from the request
 	folderID := c.Param("folder_id")
 	if folderID == "" {
@@ -111,7 +109,7 @@ func (a *APIService) DeleteFolder(c *gin.Context) {
 	}
 
 	// ge tthe folder with content
-	_, err := a.FolderService.DeleteFolder(folderID)
+	_, err := svc.client.DeleteFolder(folderID)
 	if err != nil {
 		c.AbortWithStatusJSON(500, response.WrapError("failed to delete folder", err))
 		return
@@ -121,7 +119,7 @@ func (a *APIService) DeleteFolder(c *gin.Context) {
 }
 
 // DeleteFolderPermanently implements domain.APIService.
-func (a *APIService) DeleteFolderPermanently(c *gin.Context) {
+func (svc *APIService) DeleteFolderPermanently(c *gin.Context) {
 	user_id := c.GetString("owner_id")
 
 	// get the folder_id from the request
@@ -132,7 +130,7 @@ func (a *APIService) DeleteFolderPermanently(c *gin.Context) {
 	}
 
 	// ge tthe folder with content
-	_, err := a.FolderService.ScrubFolder(user_id, folderID)
+	_, err := svc.client.DeleteFolderPermanently(user_id, folderID)
 	if err != nil {
 		c.AbortWithStatusJSON(500, response.WrapError("failed to delete folder", err))
 		return
@@ -143,7 +141,8 @@ func (a *APIService) DeleteFolderPermanently(c *gin.Context) {
 
 // MoveFolder implements domain.APIService.
 // Subtle: this method shadows the method (FolderService).MoveFolder of APIService.FolderService.
-func (a *APIService) MoveFolder(c *gin.Context) {
+func (svc *APIService) MoveFolder(c *gin.Context) {
+	user_id := c.GetString("owner_id")
 	var req struct {
 		FolderID    string `json:"folder_id"`
 		NewParentID string `json:"new_parent_id"`
@@ -155,7 +154,7 @@ func (a *APIService) MoveFolder(c *gin.Context) {
 	}
 
 	// move the folder
-	if err := a.FolderService.MoveFolder(req.FolderID, req.NewParentID); err != nil {
+	if err := svc.client.MoveFolder(user_id, req.FolderID, req.NewParentID); err != nil {
 		c.AbortWithStatusJSON(500, response.WrapError("failed to move folder", err))
 		return
 	}
@@ -165,7 +164,7 @@ func (a *APIService) MoveFolder(c *gin.Context) {
 
 // RenameFolder implements domain.APIService.
 // Subtle: this method shadows the method (FolderService).RenameFolder of APIService.FolderService.
-func (a *APIService) RenameFolder(c *gin.Context) {
+func (svc *APIService) RenameFolder(c *gin.Context) {
 	user_id := c.GetString("owner_id")
 
 	var req struct {
@@ -179,7 +178,7 @@ func (a *APIService) RenameFolder(c *gin.Context) {
 	}
 
 	// rename the folder
-	if err := a.FolderService.RenameFolder(user_id, req.FolderID, req.Name); err != nil {
+	if err := svc.client.RenameFolder(user_id, req.FolderID, req.Name); err != nil {
 		c.AbortWithStatusJSON(500, response.WrapError("failed to rename folder", err))
 		return
 	}
@@ -188,7 +187,7 @@ func (a *APIService) RenameFolder(c *gin.Context) {
 }
 
 // UploadFile implements domain.APIService.
-func (a *APIService) UploadFile(c *gin.Context) {
+func (svc *APIService) UploadFile(c *gin.Context) {
 	// get the user_id from the context
 	user_id := c.GetString("owner_id")
 
@@ -212,19 +211,19 @@ func (a *APIService) UploadFile(c *gin.Context) {
 		return
 	}
 
-	fileID, err := a.FileService.CreateFile(user_id, parentID, fileName, file.Header.Get("Content-Type"), fileByte)
+	fileID, err := svc.client.UploadFile(user_id, parentID, fileName, file.Header.Get("Content-Type"), fileByte)
 	if err != nil {
 		c.AbortWithStatusJSON(500, response.WrapError("failed to create file", err))
 		return
 	}
 
-	url := a.constructURL(fileID)
+	url := svc.constructURL(fileID)
 
 	c.JSON(200, response.Success(url))
 }
 
 // DownloadFile implements domain.APIService.
-func (a *APIService) DownloadFile(c *gin.Context) {
+func (svc *APIService) DownloadFile(c *gin.Context) {
 	// get the file_id from the request
 	fileID := c.Param("file_id")
 	if fileID == "" {
@@ -232,7 +231,7 @@ func (a *APIService) DownloadFile(c *gin.Context) {
 		return
 	}
 
-	file, err := a.FileService.GetFile(fileID)
+	file, err := svc.client.GetFile(fileID)
 	if err != nil {
 		c.AbortWithStatusJSON(500, response.WrapError("failed to get file", err))
 		return
@@ -255,7 +254,7 @@ func (a *APIService) DownloadFile(c *gin.Context) {
 }
 
 // ServeFile implements domain.APIService.
-func (a *APIService) ServeFile(c *gin.Context) {
+func (svc *APIService) ServeFile(c *gin.Context) {
 	// get the file_id from the request
 	fileID := c.Param("file_id")
 	if fileID == "" {
@@ -263,7 +262,7 @@ func (a *APIService) ServeFile(c *gin.Context) {
 		return
 	}
 
-	file, err := a.FileService.GetFile(fileID)
+	file, err := svc.client.GetFile(fileID)
 	if err != nil {
 		c.AbortWithStatusJSON(500, response.WrapError("failed to get file", err))
 		return
@@ -285,7 +284,7 @@ func (a *APIService) ServeFile(c *gin.Context) {
 	c.Data(200, file.ContentType, file.Data)
 }
 
-func (a *APIService) StreamFile(c *gin.Context) {
+func (svc *APIService) StreamFile(c *gin.Context) {
 	// get the file_id from the request
 	fileID := c.Param("file_id")
 	if fileID == "" {
@@ -293,7 +292,7 @@ func (a *APIService) StreamFile(c *gin.Context) {
 		return
 	}
 
-	file, stream, err := a.FileService.GetFileStream(fileID)
+	file, stream, err := svc.client.GetFileStream(fileID)
 	if err != nil {
 		c.AbortWithStatusJSON(500, response.WrapError("failed to get file", err))
 		return
@@ -370,7 +369,7 @@ func (a *APIService) StreamFile(c *gin.Context) {
 
 // DeleteFile implements domain.APIService.
 // Subtle: this method shadows the method (FileService).DeleteFile of APIService.FileService.
-func (a *APIService) DeleteFile(c *gin.Context) {
+func (svc *APIService) DeleteFile(c *gin.Context) {
 	// get the file_id from the request
 	fileID := c.Param("file_id")
 	if fileID == "" {
@@ -379,7 +378,7 @@ func (a *APIService) DeleteFile(c *gin.Context) {
 	}
 
 	// delete the file
-	_, err := a.FileService.DeleteFile(fileID)
+	_, err := svc.client.DeleteFile(fileID)
 	if err != nil {
 		c.AbortWithStatusJSON(500, response.WrapError("failed to delete file", err))
 		return
@@ -388,7 +387,7 @@ func (a *APIService) DeleteFile(c *gin.Context) {
 	c.JSON(200, response.Success("file deleted"))
 }
 
-func (a *APIService) DeleteFilePermanently(c *gin.Context) {
+func (svc *APIService) DeleteFilePermanently(c *gin.Context) {
 	// get the file_id from the request
 	fileID := c.Param("file_id")
 	if fileID == "" {
@@ -397,7 +396,7 @@ func (a *APIService) DeleteFilePermanently(c *gin.Context) {
 	}
 
 	// delete the file
-	_, err := a.FileService.ScrubFile(fileID)
+	_, err := svc.client.DeleteFilePermanently(fileID)
 	if err != nil {
 		c.AbortWithStatusJSON(500, response.WrapError("failed to delete file", err))
 		return

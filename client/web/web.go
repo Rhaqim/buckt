@@ -2,42 +2,52 @@ package web
 
 import (
 	"fmt"
+	"log"
+	"os"
 
-	mainDomain "github.com/Rhaqim/buckt/internal/domain"
-	"github.com/Rhaqim/buckt/internal/model"
-	mainWeb "github.com/Rhaqim/buckt/internal/web"
-	"github.com/Rhaqim/buckt/pkg/logger"
+	"github.com/Rhaqim/buckt"
 	"github.com/Rhaqim/buckt/web/app"
 	"github.com/Rhaqim/buckt/web/domain"
 	"github.com/Rhaqim/buckt/web/middleware"
 	"github.com/Rhaqim/buckt/web/router"
 )
 
-func NewRouterService(bucktLog *logger.BucktLogger, mode model.WebMode, debug bool, fileService mainDomain.FileService, folderService mainDomain.FolderService) (mainDomain.RouterService, error) {
-	// Load templates
-	bucktLog.Info("🚀 Loading templates")
+type ClientConfig struct {
+	mode  WebMode
+	debug bool
+}
+
+func NewClient(bucktClient *buckt.Client, conf ...ClientConfig) (domain.RouterService, error) {
+	var logger *log.Logger = log.New(os.Stdout, "client: ", log.LstdFlags)
+
 	tmpl, err := loadTemplates()
 	if err != nil {
 		return nil, fmt.Errorf("failed to load templates: %w", err)
 	}
 
-	// Initialize the app services
-	var apiService domain.APIService = app.NewAPIService(folderService, fileService)
-	var webService domain.WebService = app.NewWebService(folderService, fileService)
+	var apiService domain.APIService = app.NewAPIService(bucktClient)
+	var webService domain.WebService = app.NewWebService(bucktClient)
 
-	// middleware server
-	var middleware domain.Middleware = middleware.NewBucketMiddleware(bucktLog, mode == model.WebModeMount)
+	mode := WebModeAll
+	debug := false
 
-	// Run the router
+	// Apply any provided configuration options
+	for _, c := range conf {
+		mode = c.mode
+		debug = c.debug
+	}
+
+	// 	// middleware server
+	var middleware domain.Middleware = middleware.NewBucketMiddleware(logger, mode == WebModeMount)
+
 	router := router.NewRouter(
-		bucktLog, tmpl,
+		logger,
+		tmpl,
 		debug,
 		mode,
-		apiService, webService, middleware)
+		apiService,
+		webService,
+		middleware)
 
 	return router, nil
-}
-
-func init() {
-	mainWeb.RegisterRouterInitialiser(NewRouterService)
 }

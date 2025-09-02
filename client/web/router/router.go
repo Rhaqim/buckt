@@ -2,12 +2,11 @@ package router
 
 import (
 	"html/template"
+	"log"
 	"net/http"
 
-	mainDomain "github.com/Rhaqim/buckt/internal/domain"
-	"github.com/Rhaqim/buckt/internal/model"
-	"github.com/Rhaqim/buckt/pkg/logger"
 	"github.com/Rhaqim/buckt/web/domain"
+	"github.com/Rhaqim/buckt/web/model"
 	"github.com/gin-gonic/gin"
 )
 
@@ -23,7 +22,7 @@ type Router struct {
 
 // NewRouter creates a new router with the given logger and config.
 func NewRouter(
-	log *logger.BucktLogger,
+	log *log.Logger,
 	tmpl *template.Template,
 
 	Debug bool,
@@ -32,7 +31,7 @@ func NewRouter(
 	apiService domain.APIService,
 	webService domain.WebService,
 	middleware domain.Middleware,
-) mainDomain.RouterService {
+) domain.RouterService {
 	r := gin.New()
 
 	// Set logger
