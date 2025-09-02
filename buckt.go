@@ -13,6 +13,7 @@ import (
 	"io"
 	"net/http"
 
+	"github.com/Rhaqim/buckt/internal/backend"
 	"github.com/Rhaqim/buckt/internal/cache"
 	"github.com/Rhaqim/buckt/internal/cloud"
 	"github.com/Rhaqim/buckt/internal/database"
@@ -480,7 +481,7 @@ func newAppServices(bucktLog *logger.BucktLogger, bucktOpts BucktConfig, db *dat
 	var fileRepository domain.FileRepository = repository.NewFileRepository(db, bucktLog)
 
 	// initlize the services
-	var fileSystemService domain.FileSystemService = service.NewFileSystemService(bucktLog, bucktOpts.MediaDir, lruCache)
+	var fileSystemService domain.FileSystemService = backend.NewFileSystemService(bucktLog, bucktOpts.MediaDir, lruCache)
 	var folderService domain.FolderService = service.NewFolderService(bucktLog, cacheManager, folderRepository, fileSystemService)
 	var fileService domain.FileService = service.NewFileService(bucktLog, cacheManager, bucktOpts.FlatNameSpaces, fileRepository, folderService, fileSystemService)
 

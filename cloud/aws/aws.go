@@ -1,4 +1,4 @@
-package cloud
+package aws
 
 import (
 	"bytes"
@@ -78,10 +78,16 @@ func (a *AWSCloud) uploadFile(file_name, content_type, file_path string, data []
 }
 
 func (a *AWSCloud) createEmptyFolder(folderPath string) error {
+	// Ensure folderPath ends with a slash to represent a folder in S3
+	if folderPath[len(folderPath)-1] != '/' {
+		folderPath += "/"
+	}
 	_, err := a.Client.PutObject(a.Ctx, &s3.PutObjectInput{
-		Bucket: aws.String(a.BucketName),
-		Key:    aws.String(folderPath),
-		Body:   bytes.NewReader([]byte{}),
+		Bucket:      aws.String(a.BucketName),
+		Key:         aws.String(folderPath),
+		Body:        bytes.NewReader([]byte{}),
+		ContentType: aws.String("application/x-directory"),
+		Metadata:    map[string]string{},
 	})
 	return err
 }
