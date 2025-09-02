@@ -12,9 +12,7 @@ type FileService struct {
 	mock.Mock
 }
 
-func NewFileService() domain.FileService {
-	return &FileService{}
-}
+var _ domain.FileService = (*FileService)(nil)
 
 // CreateFile implements domain.FileService.
 func (m *FileService) CreateFile(user_id, parent_id, file_name, content_type string, file_data []byte) (string, error) {

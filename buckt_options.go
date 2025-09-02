@@ -93,6 +93,38 @@ type DBConfig struct {
 	Database *sql.DB
 }
 
+// Backend represents the file backend interface.
+//
+// It defines methods for interacting with the file storage backend.
+type Backend = domain.FileBackend
+
+// FileInfo represents information about a file.
+type FileInfo = model.FileInfo
+
+type BackendProvider = model.BackendProvider
+
+const (
+	// BackendProviderLocal represents the local backend provider.
+	BackendProviderLocal BackendProvider = iota
+
+	// BackendProviderAWS represents the AWS backend provider.
+	BackendProviderAWS
+
+	// BackendProviderAzure represents the Azure backend provider.
+	BackendProviderAzure
+
+	// BackendProviderGCP represents the GCP backend provider.
+	BackendProviderGCP
+)
+
+type BackendRegistry map[BackendProvider]Backend
+
+// Get returns the backend for a provider
+func (r *BackendRegistry) Get(provider BackendProvider) (Backend, bool) {
+	backend, ok := (*r)[provider]
+	return backend, ok
+}
+
 // CloudConfig stores configurations for different providers
 // and their respective credentials.
 //
@@ -178,6 +210,10 @@ type BucktConfig struct {
 	Log            LogConfig
 	MediaDir       string
 	FlatNameSpaces bool
+
+	// private
+	registry       BackendRegistry
+	activeProvider BackendProvider
 }
 
 type ConfigFunc func(*BucktConfig)
@@ -252,5 +288,19 @@ func WithDB(driver DBDrivers, db *sql.DB) ConfigFunc {
 func WithLog(log LogConfig) ConfigFunc {
 	return func(c *BucktConfig) {
 		c.Log = log
+	}
+}
+
+func RegisterBackend(provider BackendProvider, backend Backend) ConfigFunc {
+	if !provider.IsValidProvider() || backend == nil {
+		return func(c *BucktConfig) {}
+	}
+
+	return func(c *BucktConfig) {
+		if c.registry == nil {
+			c.registry = make(BackendRegistry)
+		}
+		c.registry[provider] = backend
+		c.activeProvider = provider
 	}
 }

@@ -11,9 +11,7 @@ type MockFileSystemService struct {
 	mock.Mock
 }
 
-func NewMockFileSystemService() domain.FileSystemService {
-	return &MockFileSystemService{}
-}
+var _ domain.FileSystemService = (*MockFileSystemService)(nil)
 
 // FSUpdateFile implements domain.FileSystemService.
 func (m *MockFileSystemService) FSUpdateFile(oldPath string, newPath string) error {

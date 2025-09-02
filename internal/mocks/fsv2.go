@@ -12,9 +12,7 @@ type LocalFileSystemService struct {
 	mock.Mock
 }
 
-func NewLocalFileSystemService() domain.FileBackend {
-	return &LocalFileSystemService{}
-}
+var _ domain.FileBackend = (*LocalFileSystemService)(nil)
 
 // FSUpdateFile implements domain.FileSystemService.
 func (m *LocalFileSystemService) Move(oldPath string, newPath string) error {

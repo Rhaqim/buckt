@@ -9,9 +9,7 @@ type CloudService struct {
 	mock.Mock
 }
 
-func NewCloudService() domain.CloudService {
-	return &CloudService{}
-}
+var _ domain.CloudService = (*CloudService)(nil)
 
 // UploadFile implements domain.CloudService.
 func (m *CloudService) UploadFileToCloud(file_id string) error {

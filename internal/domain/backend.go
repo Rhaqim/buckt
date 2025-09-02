@@ -2,8 +2,6 @@ package domain
 
 import (
 	"io"
-
-	"github.com/Rhaqim/buckt/internal/model"
 )
 
 type FileBackend interface {
@@ -23,7 +21,7 @@ type FileBackend interface {
 	Exists(path string) (bool, error)
 
 	// Stat returns metadata like size, modified time, etag, etc.
-	Stat(path string) (*model.FileInfo, error)
+	// Stat(path string) (*model.FileInfo, error)
 
 	// DeleteFolder removes all objects with the given prefix.
 	// For local backend, this will simply remove the directory.

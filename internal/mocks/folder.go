@@ -10,9 +10,8 @@ type FolderService struct {
 	mock.Mock
 }
 
-func NewFolderService() domain.FolderService {
-	return &FolderService{}
-}
+// Compile-time check
+var _ domain.FolderService = (*FolderService)(nil)
 
 // GetRootFolder implements domain.FolderService.
 func (m *FolderService) GetRootFolder(user_id string) (*model.FolderModel, error) {

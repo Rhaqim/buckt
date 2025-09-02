@@ -54,6 +54,6 @@ require (
 )
 
 // add module from src folder
-replace github.com/Rhaqim/buckt => ../../
+replace github.com/Rhaqim/buckt => ../../../
 
-replace github.com/Rhaqim/buckt/web => ../../web
+replace github.com/Rhaqim/buckt/web => ../../client/web

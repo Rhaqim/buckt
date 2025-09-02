@@ -8,8 +8,6 @@ import (
 	"io"
 	"time"
 
-	"github.com/Rhaqim/buckt/internal/domain"
-	"github.com/Rhaqim/buckt/internal/model"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
@@ -21,20 +19,31 @@ type S3Backend struct {
 	bucketName string
 }
 
-func NewS3Backend(bucketName string, region string) (domain.FileBackend, error) {
+func NewBackend(conf AWSConfig) (*S3Backend, error) {
+	if err := conf.Validate(); err != nil {
+		return nil, err
+	}
+
 	// Load AWS configuration (credentials, region, etc.)
 	cfg, err := config.LoadDefaultConfig(context.TODO(),
-		config.WithRegion(region),
+		config.WithRegion(conf.Region),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load AWS config: %w", err)
 	}
 
+	// 	awsConfig := aws.Config{
+	// 		Region:      cfg.Region,
+	// 		Credentials: aws.NewCredentialsCache(credentials.NewStaticCredentialsProvider(cfg.AccessKey, cfg.SecretKey, "")),
+	// 	}
+
+	// 	client := s3.NewFromConfig(awsConfig)
+
 	client := s3.NewFromConfig(cfg)
 
 	return &S3Backend{
 		client:     client,
-		bucketName: bucketName,
+		bucketName: conf.Bucket,
 	}, nil
 }
 
@@ -99,7 +108,7 @@ func (s *S3Backend) Exists(path string) (bool, error) {
 	return true, nil
 }
 
-func (s *S3Backend) Stat(path string) (*model.FileInfo, error) {
+func (s *S3Backend) Stat(path string) (*FileInfo, error) {
 	resp, err := s.client.HeadObject(context.TODO(), &s3.HeadObjectInput{
 		Bucket: aws.String(s.bucketName),
 		Key:    aws.String(path),
@@ -112,7 +121,7 @@ func (s *S3Backend) Stat(path string) (*model.FileInfo, error) {
 	if resp.ContentLength != nil {
 		size = *resp.ContentLength
 	}
-	return &model.FileInfo{
+	return &FileInfo{
 		Size:         size,
 		LastModified: *resp.LastModified,
 		ETag:         *resp.ETag,

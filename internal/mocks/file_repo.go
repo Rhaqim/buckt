@@ -11,9 +11,7 @@ type FileRepository struct {
 	mock.Mock
 }
 
-func NewFileRepository() domain.FileRepository {
-	return &FileRepository{}
-}
+var _ domain.FileRepository = (*FileRepository)(nil)
 
 // MoveFile implements domain.FileRepository.
 func (m *FileRepository) MoveFile(file_id uuid.UUID, new_parent_id uuid.UUID) (string, string, error) {
