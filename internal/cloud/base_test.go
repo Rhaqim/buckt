@@ -12,7 +12,7 @@ import (
 )
 
 func TestBaseCloudStorage_UploadFileToCloud(t *testing.T) {
-	mockFileService := new(mocks.MockFileService)
+	mockFileService := new(mocks.FileService)
 	mockFile := &model.FileModel{
 		Name:        "test.txt",
 		ContentType: "text/plain",
@@ -37,8 +37,8 @@ func TestBaseCloudStorage_UploadFileToCloud(t *testing.T) {
 }
 
 func TestBaseCloudStorage_UploadFolderToCloud(t *testing.T) {
-	mockFolderService := new(mocks.MockFolderService)
-	mockFileService := new(mocks.MockFileService) // Add mock file service
+	mockFolderService := new(mocks.FolderService)
+	mockFileService := new(mocks.FileService) // Add mock file service
 
 	mockFolder := &model.FolderModel{
 		ID:   uuid.New(),
@@ -80,7 +80,7 @@ func TestBaseCloudStorage_UploadFolderToCloud(t *testing.T) {
 }
 
 func TestBaseCloudStorage_UploadFileToCloud_Error(t *testing.T) {
-	mockFileService := new(mocks.MockFileService)
+	mockFileService := new(mocks.FileService)
 
 	baseCloudStorage := &BaseCloudStorage{
 		Ctx:         context.Background(),
@@ -96,7 +96,7 @@ func TestBaseCloudStorage_UploadFileToCloud_Error(t *testing.T) {
 }
 
 func TestBaseCloudStorage_UploadFolderToCloud_Error(t *testing.T) {
-	mockFolderService := new(mocks.MockFolderService)
+	mockFolderService := new(mocks.FolderService)
 	mockFolderService.On("GetFolder", "user_id", "folder_id").Return(nil, errors.New("folder not found"))
 
 	baseCloudStorage := &BaseCloudStorage{

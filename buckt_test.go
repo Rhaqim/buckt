@@ -20,9 +20,9 @@ func UUIDFromString(name string) uuid.UUID {
 
 type MockBuckt struct {
 	*Buckt
-	*mocks.MockFileService
-	*mocks.MockFolderService
-	*mocks.MockCloudService
+	MockFileService   *mocks.FileService
+	MockFolderService *mocks.FolderService
+	MockCloudService  *mocks.CloudService
 }
 
 func setup(t *testing.T, bucktOpts BucktConfig) MockBuckt {
@@ -30,9 +30,9 @@ func setup(t *testing.T, bucktOpts BucktConfig) MockBuckt {
 	assert.NoError(t, err)
 	assert.NotNil(t, buckt)
 
-	mockFileService := new(mocks.MockFileService)
-	mockFolderService := new(mocks.MockFolderService)
-	mockCloudService := new(mocks.MockCloudService)
+	mockFileService := new(mocks.FileService)
+	mockFolderService := new(mocks.FolderService)
+	mockCloudService := new(mocks.CloudService)
 
 	buckt.fileService = mockFileService
 	buckt.folderService = mockFolderService

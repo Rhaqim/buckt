@@ -22,8 +22,8 @@ func (m *MockAzureClient) NewBlockBlobClient(blobName string) *blockblob.Client 
 }
 
 func TestNewAzureCloud(t *testing.T) {
-	mockFileService := new(mocks.MockFileService)
-	mockFolderService := new(mocks.MockFolderService)
+	mockFileService := new(mocks.FileService)
+	mockFolderService := new(mocks.FolderService)
 
 	creds := model.CloudConfig{
 		Provider: model.CloudProviderAzure,

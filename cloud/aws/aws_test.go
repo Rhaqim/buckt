@@ -24,8 +24,8 @@ func (m *MockS3Client) PutObject(ctx context.Context, input *s3.PutObjectInput, 
 }
 
 func TestNewAWSCloud(t *testing.T) {
-	fileService := new(mocks.MockFileService)
-	folderService := new(mocks.MockFolderService)
+	fileService := new(mocks.FileService)
+	folderService := new(mocks.FolderService)
 
 	creds := model.CloudConfig{
 		Provider: model.CloudProviderAWS,
@@ -45,8 +45,8 @@ func TestNewAWSCloud(t *testing.T) {
 
 func TestAWSCloud_UploadFile(t *testing.T) {
 	mockS3Client := new(MockS3Client)
-	fileService := new(mocks.MockFileService)
-	folderService := new(mocks.MockFolderService)
+	fileService := new(mocks.FileService)
+	folderService := new(mocks.FolderService)
 
 	awsCloud := &AWSCloud{
 		BucketName: "test-bucket",
@@ -80,8 +80,8 @@ func TestAWSCloud_UploadFile(t *testing.T) {
 
 func TestAWSCloud_CreateEmptyFolder(t *testing.T) {
 	mockS3Client := new(MockS3Client)
-	fileService := new(mocks.MockFileService)
-	folderService := new(mocks.MockFolderService)
+	fileService := new(mocks.FileService)
+	folderService := new(mocks.FolderService)
 
 	awsCloud := &AWSCloud{
 		BucketName: "test-bucket",
