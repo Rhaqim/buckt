@@ -16,7 +16,7 @@ type GCPBackend struct {
 	bucketName string
 }
 
-func NewBackend(conf GCPConfig) (*GCPBackend, error) {
+func NewBackend(conf Config) (*GCPBackend, error) {
 	err := conf.Validate()
 	if err != nil {
 		return nil, err

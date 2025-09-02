@@ -19,7 +19,7 @@ type AzureBackend struct {
 	containerName string
 }
 
-func NewAzureBackend(conf AzureConfig) (*AzureBackend, error) {
+func NewAzureBackend(conf Config) (*AzureBackend, error) {
 	if err := conf.Validate(); err != nil {
 		return nil, err
 	}

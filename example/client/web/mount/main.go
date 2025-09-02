@@ -5,7 +5,7 @@ import (
 	"net/http"
 
 	"github.com/Rhaqim/buckt"
-	_ "github.com/Rhaqim/buckt/web"
+	"github.com/Rhaqim/buckt/client/web"
 )
 
 func main() {
@@ -22,19 +22,21 @@ func main() {
 	}
 	defer b.Close() // Ensure resources are cleaned up
 
-	// Initialize router
-	err = b.InitRouterService(buckt.WebModeMount)
-	if err != nil {
-		log.Fatalf("Failed to initialize Buckt router: %v", err)
+	config := web.ClientConfig{
+		Mode:  web.WebModeMount,
+		Debug: true,
 	}
 
-	handler := b.GetHandler()
+	webClient, err := web.NewClient(b, config)
+	if err != nil {
+		log.Fatalf("Failed to create web client: %v", err)
+	}
 
 	// Create a custom multiplexer
 	mux := http.NewServeMux()
 
 	// Mount the Buckt router under /buckt
-	mux.Handle("/buckt/", http.StripPrefix("/buckt", handler))
+	mux.Handle("/buckt/", http.StripPrefix("/buckt", webClient.Handler()))
 
 	// Add additional routes
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {

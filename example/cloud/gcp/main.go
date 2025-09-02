@@ -4,16 +4,14 @@ import (
 	"fmt"
 
 	"github.com/Rhaqim/buckt"
-	"github.com/Rhaqim/buckt/cloud/aws"
+	"github.com/Rhaqim/buckt/cloud/gcp"
 )
 
 func main() {
 
-	cloudConfig := aws.Config{
-		AccessKey: "accessKey",
-		SecretKey: "secretKey",
-		Region:    "us-west-2",
-		Bucket:    "my-bucket",
+	cloudConfig := gcp.Config{
+		CredentialsFile: "path/to/credentials.json",
+		Bucket:          "my-bucket",
 	}
 
 	buckt, err := buckt.Default(buckt.WithLog(buckt.LogConfig{}))

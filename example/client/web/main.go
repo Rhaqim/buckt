@@ -8,7 +8,7 @@ import (
 	"os"
 
 	"github.com/Rhaqim/buckt"
-	_ "github.com/Rhaqim/buckt/web"
+	"github.com/Rhaqim/buckt/web"
 )
 
 func main() {
@@ -32,6 +32,11 @@ func main() {
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8080"
+	}
+
+	_, err = web.NewClient(b)
+	if err != nil {
+		log.Fatalf("Failed to create web client: %v", err)
 	}
 
 	// Allow overriding via command-line flag

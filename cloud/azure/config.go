@@ -5,14 +5,13 @@ import (
 	"time"
 )
 
-// AzureConfig implements CloudCredentials
-type AzureConfig struct {
+type Config struct {
 	AccountName string
 	AccountKey  string
 	Container   string
 }
 
-func (a AzureConfig) Validate() error {
+func (a Config) Validate() error {
 	if a.AccountName == "" || a.AccountKey == "" || a.Container == "" {
 		return fmt.Errorf("AZURE credentials are incomplete")
 	}

@@ -5,15 +5,14 @@ import (
 	"time"
 )
 
-// AWSConfig implements CloudCredentials
-type AWSConfig struct {
+type Config struct {
 	AccessKey string
 	SecretKey string
 	Region    string
 	Bucket    string
 }
 
-func (a AWSConfig) Validate() error {
+func (a Config) Validate() error {
 	if a.AccessKey == "" || a.SecretKey == "" || a.Region == "" || a.Bucket == "" {
 		return fmt.Errorf("AWS credentials are incomplete")
 	}

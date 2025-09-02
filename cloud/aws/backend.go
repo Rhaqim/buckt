@@ -19,7 +19,7 @@ type S3Backend struct {
 	bucketName string
 }
 
-func NewBackend(conf AWSConfig) (*S3Backend, error) {
+func NewBackend(conf Config) (*S3Backend, error) {
 	if err := conf.Validate(); err != nil {
 		return nil, err
 	}

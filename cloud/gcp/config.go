@@ -5,13 +5,12 @@ import (
 	"time"
 )
 
-// GCPConfig implements CloudCredentials
-type GCPConfig struct {
+type Config struct {
 	CredentialsFile string
 	Bucket          string
 }
 
-func (g GCPConfig) Validate() error {
+func (g Config) Validate() error {
 	if g.CredentialsFile == "" || g.Bucket == "" {
 		return fmt.Errorf("GCP credentials are incomplete")
 	}

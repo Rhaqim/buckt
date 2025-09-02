@@ -4,16 +4,15 @@ import (
 	"fmt"
 
 	"github.com/Rhaqim/buckt"
-	"github.com/Rhaqim/buckt/cloud/aws"
+	"github.com/Rhaqim/buckt/cloud/azure"
 )
 
 func main() {
 
-	cloudConfig := aws.Config{
-		AccessKey: "accessKey",
-		SecretKey: "secretKey",
-		Region:    "us-west-2",
-		Bucket:    "my-bucket",
+	cloudConfig := azure.Config{
+		AccountName: "accountName",
+		AccountKey:  "accountKey",
+		Container:   "container",
 	}
 
 	buckt, err := buckt.Default(buckt.WithLog(buckt.LogConfig{}))

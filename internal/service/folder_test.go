@@ -153,7 +153,7 @@ func TestScrubFolder(t *testing.T) {
 
 	mockSetUp.folderRepository.On("GetFolder", folderID).Return(mockFolder, nil)
 
-	mockSetUp.backend.On("FSDeleteFolder", mockFolder.Path).Return(nil)
+	mockSetUp.backend.On("DeleteFolder", mockFolder.Path).Return(nil)
 
 	mockSetUp.folderRepository.On("ScrubFolder", "user1", folderID).Return(parentID.String(), nil)
 
