@@ -12,11 +12,6 @@ import (
 	"github.com/Rhaqim/buckt/web/router"
 )
 
-type ClientConfig struct {
-	mode  WebMode
-	debug bool
-}
-
 func NewClient(bucktClient *buckt.Client, conf ...ClientConfig) (domain.RouterService, error) {
 	var logger *log.Logger = log.New(os.Stdout, "client: ", log.LstdFlags)
 
@@ -33,8 +28,8 @@ func NewClient(bucktClient *buckt.Client, conf ...ClientConfig) (domain.RouterSe
 
 	// Apply any provided configuration options
 	for _, c := range conf {
-		mode = c.mode
-		debug = c.debug
+		mode = c.Mode
+		debug = c.Debug
 	}
 
 	// 	// middleware server

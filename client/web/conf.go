@@ -17,3 +17,8 @@ const (
 	// WebModeMount registers only the API routes for the mount point.
 	WebModeMount = model.WebModeMount
 )
+
+type ClientConfig struct {
+	Mode  WebMode
+	Debug bool
+}
