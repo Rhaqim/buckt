@@ -9,23 +9,19 @@
 package buckt
 
 import (
-	"fmt"
 	"io"
-	"net/http"
 
 	"github.com/Rhaqim/buckt/internal/backend"
 	"github.com/Rhaqim/buckt/internal/cache"
-	"github.com/Rhaqim/buckt/internal/cloud"
 	"github.com/Rhaqim/buckt/internal/database"
 	"github.com/Rhaqim/buckt/internal/domain"
 	"github.com/Rhaqim/buckt/internal/model"
 	"github.com/Rhaqim/buckt/internal/repository"
 	"github.com/Rhaqim/buckt/internal/service"
-	"github.com/Rhaqim/buckt/internal/web"
 	"github.com/Rhaqim/buckt/pkg/logger"
 )
 
-type Buckt struct {
+type Client struct {
 	db     *database.DB
 	logger *logger.BucktLogger
 
@@ -36,9 +32,6 @@ type Buckt struct {
 
 	fileService   domain.FileService
 	folderService domain.FolderService
-
-	routerService domain.RouterService
-	cloudService  domain.CloudService
 }
 
 // New initializes a new Buckt instance with the provided configuration options.
@@ -50,7 +43,7 @@ type Buckt struct {
 // Returns:
 // - A pointer to the initialized Buckt instance.
 // - An error if the Buckt instance could not be created.
-func New(conf BucktConfig, opts ...ConfigFunc) (*Buckt, error) {
+func New(conf BucktConfig, opts ...ConfigFunc) (*Client, error) {
 	for _, opt := range opts {
 		opt(&conf)
 	}
@@ -89,7 +82,7 @@ func New(conf BucktConfig, opts ...ConfigFunc) (*Buckt, error) {
 	)
 
 	// Initialize the Buckt instance
-	buckt := &Buckt{
+	buckt := &Client{
 		db:             db,
 		logger:         bucktLog,
 		lruCache:       lruCache,
@@ -119,7 +112,7 @@ func New(conf BucktConfig, opts ...ConfigFunc) (*Buckt, error) {
 // Returns:
 // - A pointer to the initialized Buckt instance.
 // - An error if the Buckt instance could not be created.
-func Default(opts ...ConfigFunc) (*Buckt, error) {
+func Default(opts ...ConfigFunc) (*Client, error) {
 	bucktOpts := BucktConfig{
 		Log:            LogConfig{LogTerminal: true, Debug: true},
 		MediaDir:       "media",
@@ -135,7 +128,7 @@ func Default(opts ...ConfigFunc) (*Buckt, error) {
 
 // Close closes the Buckt instance.
 // It closes the database connection.
-func (b *Buckt) Close() {
+func (b *Client) Close() {
 	b.db.Close()
 	b.lruCache.Close()
 }
@@ -149,7 +142,7 @@ func (b *Buckt) Close() {
 // - folder_name: The name of the new folder.
 // - description: A description of the new folder.
 // It returns the ID of the newly created folder and an error if the operation fails.
-func (b *Buckt) NewFolder(user_id string, parent_id string, folder_name string, description string) (new_folder_id string, err error) {
+func (b *Client) NewFolder(user_id string, parent_id string, folder_name string, description string) (new_folder_id string, err error) {
 	return b.folderService.CreateFolder(user_id, parent_id, folder_name, description)
 }
 
@@ -163,7 +156,7 @@ func (b *Buckt) NewFolder(user_id string, parent_id string, folder_name string, 
 //
 //	[]model.FolderModel - A list of folders.
 //	error - An error if the folder could not be retrieved.
-func (b *Buckt) ListFolders(folder_id string) ([]model.FolderModel, error) {
+func (b *Client) ListFolders(folder_id string) ([]model.FolderModel, error) {
 	return b.folderService.GetFolders(folder_id)
 }
 
@@ -178,7 +171,7 @@ func (b *Buckt) ListFolders(folder_id string) ([]model.FolderModel, error) {
 //
 //	*model.FolderModel - The folder model containing the folder content.
 //	error - An error if the folder content could not be retrieved.
-func (b *Buckt) GetFolderWithContent(user_id, folder_id string) (*model.FolderModel, error) {
+func (b *Client) GetFolderWithContent(user_id, folder_id string) (*model.FolderModel, error) {
 	return b.folderService.GetFolder(user_id, folder_id)
 }
 
@@ -193,7 +186,7 @@ func (b *Buckt) GetFolderWithContent(user_id, folder_id string) (*model.FolderMo
 // Returns:
 //
 //	error: An error if the operation fails, otherwise nil.
-func (b *Buckt) MoveFolder(user_id, folder_id string, new_parent_id string) error {
+func (b *Client) MoveFolder(user_id, folder_id string, new_parent_id string) error {
 	return b.folderService.MoveFolder(folder_id, new_parent_id)
 }
 
@@ -208,7 +201,7 @@ func (b *Buckt) MoveFolder(user_id, folder_id string, new_parent_id string) erro
 // Returns:
 //
 //	error: An error if the operation fails, otherwise nil.
-func (b *Buckt) RenameFolder(user_id, folder_id string, new_name string) error {
+func (b *Client) RenameFolder(user_id, folder_id string, new_name string) error {
 	return b.folderService.RenameFolder(user_id, folder_id, new_name)
 }
 
@@ -220,9 +213,8 @@ func (b *Buckt) RenameFolder(user_id, folder_id string, new_name string) error {
 //
 // Returns:
 //   - error: An error if the deletion fails, otherwise nil.
-func (b *Buckt) DeleteFolder(folder_id string) error {
-	_, err := b.folderService.DeleteFolder(folder_id)
-	return err
+func (b *Client) DeleteFolder(folder_id string) (string, error) {
+	return b.folderService.DeleteFolder(folder_id)
 }
 
 // DeleteFolderPermanently deletes a folder permanently for a given user.
@@ -234,18 +226,14 @@ func (b *Buckt) DeleteFolder(folder_id string) error {
 //
 // Returns:
 //   - error: An error object if the deletion fails, otherwise nil.
-func (b *Buckt) DeleteFolderPermanently(user_id, folder_id string) error {
+func (b *Client) DeleteFolderPermanently(user_id, folder_id string) (string, error) {
 
 	// If flatnameSpaces is enabled, we soft delete the folder
 	if b.FlatnameSpaces {
-		_, err := b.folderService.DeleteFolder(folder_id)
-
-		return err
+		return b.folderService.DeleteFolder(folder_id)
 	}
 
-	_, err := b.folderService.ScrubFolder(user_id, folder_id)
-
-	return err
+	return b.folderService.ScrubFolder(user_id, folder_id)
 }
 
 /* File Methods */
@@ -262,7 +250,7 @@ func (b *Buckt) DeleteFolderPermanently(user_id, folder_id string) error {
 // Returns:
 //   - string: The ID of the newly created file.
 //   - error: An error if the file upload fails, otherwise nil.
-func (b *Buckt) UploadFile(user_id string, parent_id string, file_name string, content_type string, file_data []byte) (string, error) {
+func (b *Client) UploadFile(user_id string, parent_id string, file_name string, content_type string, file_data []byte) (string, error) {
 	return b.fileService.CreateFile(user_id, parent_id, file_name, content_type, file_data)
 }
 
@@ -275,7 +263,7 @@ func (b *Buckt) UploadFile(user_id string, parent_id string, file_name string, c
 // Returns:
 //   - *model.FileModel: The file data.
 //   - error: An error object if an error occurred, otherwise nil.
-func (b *Buckt) GetFile(file_id string) (*model.FileModel, error) {
+func (b *Client) GetFile(file_id string) (*model.FileModel, error) {
 	return b.fileService.GetFile(file_id)
 }
 
@@ -291,7 +279,7 @@ func (b *Buckt) GetFile(file_id string) (*model.FileModel, error) {
 //   - error: An error object if an error occurred, otherwise nil.
 //
 // Note: The caller is responsible for closing the file stream after reading.
-func (b *Buckt) GetFileStream(file_id string) (*model.FileModel, io.ReadCloser, error) {
+func (b *Client) GetFileStream(file_id string) (*model.FileModel, io.ReadCloser, error) {
 	return b.fileService.GetFileStream(file_id)
 }
 
@@ -305,7 +293,7 @@ func (b *Buckt) GetFileStream(file_id string) (*model.FileModel, io.ReadCloser, 
 //
 //	[]model.FileModel - A list of files.
 //	error - An error if the folder could not be retrieved.
-func (b *Buckt) ListFiles(folder_id string) ([]model.FileModel, error) {
+func (b *Client) ListFiles(folder_id string) ([]model.FileModel, error) {
 	return b.fileService.GetFiles(folder_id)
 }
 
@@ -317,7 +305,7 @@ func (b *Buckt) ListFiles(folder_id string) ([]model.FileModel, error) {
 //
 // Returns:
 //   - error: An error if the update operation fails, otherwise nil.
-func (b *Buckt) MoveFile(file_id string, new_parent_id string) error {
+func (b *Client) MoveFile(file_id string, new_parent_id string) error {
 	return b.fileService.MoveFile(file_id, new_parent_id)
 }
 
@@ -329,9 +317,8 @@ func (b *Buckt) MoveFile(file_id string, new_parent_id string) error {
 //
 // Returns:
 //   - error: An error if the file deletion fails, otherwise nil.
-func (b *Buckt) DeleteFile(file_id string) error {
-	_, err := b.fileService.DeleteFile(file_id)
-	return err
+func (b *Client) DeleteFile(file_id string) (string, error) {
+	return b.fileService.DeleteFile(file_id)
 }
 
 // DeleteFilePermanently deletes a file associated with the given user ID and file ID.
@@ -342,132 +329,11 @@ func (b *Buckt) DeleteFile(file_id string) error {
 //
 // Returns:
 //   - error: An error if the file deletion fails, otherwise nil.
-func (b *Buckt) DeleteFilePermanently(file_id string) error {
-	_, err := b.fileService.ScrubFile(file_id)
-	return err
+func (b *Client) DeleteFilePermanently(file_id string) (string, error) {
+	return b.fileService.ScrubFile(file_id)
 }
 
-/* Router Methods */
-
-// InitRouterService initializes the router service with the provided WebMode.
-// It takes a WebMode as an argument and returns an error if the initialization fails.
-//
-// Depends on: github.com/Rhaqim/buckt/web
-//
-// Parameters:
-//   - mode: A WebMode representing the mode of the web service.
-//
-// Returns:
-//   - error: An error if the router service initialization fails, otherwise nil.
-func (b *Buckt) InitRouterService(mode WebMode) error {
-
-	if b.fileService == nil || b.folderService == nil {
-		return fmt.Errorf("❌ bucket services not initialized, please call buckt.New(yourConfig) or buckt.Default() first")
-	}
-
-	service, err := web.GetRouterService(b.logger, mode, true, b.fileService, b.folderService)
-	if err != nil {
-		return err
-	}
-
-	b.routerService = service
-
-	b.logger.Info("✅ Initialized router services")
-
-	return nil
-}
-
-// GetHandler returns the HTTP handler for the Buckt instance.
-// It provides access to the underlying router engine.
-func (b *Buckt) GetHandler() http.Handler {
-	// return b.routerService.Handler()
-	if b.routerService == nil {
-		return nil
-	}
-
-	return b.routerService.Handler()
-}
-
-// StartServer starts the server on the specified port using the router.
-// It takes a port string as an argument and returns an error if the server fails to start.
-//
-// Parameters:
-//
-//	port (string): The port on which the server will listen.
-//
-// Returns:
-//
-//	error: An error if the server fails to start, otherwise nil.
-func (b *Buckt) StartServer(port string) error {
-	// return b.routerService.Run(port)
-	if b.routerService == nil {
-		return b.logger.WrapErrorf("❌ run go get github.com/Rhaqim/buckt/web", fmt.Errorf("router service not initialized"))
-	}
-
-	return b.routerService.Run(port)
-}
-
-/* Cloud Methods */
-
-// InitCloudService initializes the cloud service with the provided cloud configuration.
-// It takes a CloudConfig struct as an argument and returns an error if the initialization fails.
-//
-// Parameters:
-//   - cloudConfig: A CloudConfig struct containing the configuration options for the cloud service.
-//
-// Returns:
-//   - error: An error if the cloud service initialization fails, otherwise nil.
-func (b *Buckt) InitCloudService(cloudConfig CloudConfig) error {
-	var err error
-
-	if cloudConfig.IsEmpty() {
-		return b.logger.WrapErrorf("❌ please provide the credentials for the service", fmt.Errorf("cloud configuration is empty"))
-	}
-
-	if b.fileService == nil || b.folderService == nil {
-		return fmt.Errorf("❌ bucket services not initialized, please call buckt.New(yourConfig) or buckt.Default() first")
-	}
-
-	// Initialize the cloud service
-	b.cloudService, err = cloud.GetCloudService(cloudConfig, b.fileService, b.folderService)
-
-	b.logger.Infof("✅ Initialized %s cloud service", cloudConfig.Provider)
-
-	return err
-}
-
-// TransferFile transfers a file from the local storage to the cloud storage.
-// It takes the file ID as a parameter and returns an error if the transfer fails.
-//
-// Parameters:
-//   - file_id: The ID of the file to be transferred.
-//
-// Returns:
-//   - error: An error if the transfer fails, otherwise nil.
-func (b *Buckt) TransferFile(file_id string) error {
-	if b.cloudService == nil {
-		return b.logger.WrapErrorf("please run go get github.com/Rhaqim/buckt/cloud/<cloud>", fmt.Errorf("cloud service not initialized"))
-	}
-
-	return b.cloudService.UploadFileToCloud(file_id)
-}
-
-// TransferFolder transfers a folder from the local storage to the cloud storage.
-// It takes the user_id and folder ID as a parameter and returns an error if the transfer fails.
-//
-// Parameters:
-//   - user_id: The ID of the user who owns the folder.
-//   - folder_id: The ID of the folder to be transferred.
-//
-// Returns:
-//   - error: An error if the transfer fails, otherwise nil.
-func (b *Buckt) TransferFolder(user_id, folder_id string) error {
-	if b.cloudService == nil {
-		return b.logger.WrapErrorf("please run go get github.com/Rhaqim/buckt/cloud/<cloud>", fmt.Errorf("cloud service not initialized"))
-	}
-
-	return b.cloudService.UploadFolderToCloud(user_id, folder_id)
-}
+/* Migration */
 
 /* Helper Methods */
 

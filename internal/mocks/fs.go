@@ -4,49 +4,56 @@ import (
 	"io"
 
 	"github.com/Rhaqim/buckt/internal/domain"
+	"github.com/Rhaqim/buckt/internal/model"
 	"github.com/stretchr/testify/mock"
 )
 
-type MockFileSystemService struct {
+type LocalFileSystemService struct {
 	mock.Mock
 }
 
-var _ domain.FileSystemService = (*MockFileSystemService)(nil)
+var _ domain.FileBackend = (*LocalFileSystemService)(nil)
 
 // FSUpdateFile implements domain.FileSystemService.
-func (m *MockFileSystemService) FSUpdateFile(oldPath string, newPath string) error {
+func (m *LocalFileSystemService) Move(oldPath string, newPath string) error {
 	args := m.Called(oldPath, newPath)
 	return args.Error(0)
 }
 
-// FSValidatePath implements domain.FileSystemService.
-func (m *MockFileSystemService) FSValidatePath(path string) (string, error) {
-	args := m.Called(path)
-	return args.String(0), args.Error(1)
-}
-
-func (m *MockFileSystemService) FSWriteFile(path string, data []byte) error {
+func (m *LocalFileSystemService) Put(path string, data []byte) error {
 	args := m.Called(path, data)
 	return args.Error(0)
 }
 
-func (m *MockFileSystemService) FSGetFile(path string) ([]byte, error) {
+func (m *LocalFileSystemService) Get(path string) ([]byte, error) {
 	args := m.Called(path)
 	return args.Get(0).([]byte), args.Error(1)
 }
 
-func (m *MockFileSystemService) FSGetFileStream(path string) (io.ReadCloser, error) {
+func (m *LocalFileSystemService) Stream(path string) (io.ReadCloser, error) {
 	args := m.Called(path)
 	return args.Get(0).(io.ReadCloser), args.Error(1)
 }
 
-func (m *MockFileSystemService) FSDeleteFile(path string) error {
+func (m *LocalFileSystemService) Delete(path string) error {
 	args := m.Called(path)
 	return args.Error(0)
 }
 
 // FSDeleteFolder implements domain.FileSystemService.
-func (m *MockFileSystemService) FSDeleteFolder(folderPath string) error {
+func (m *LocalFileSystemService) DeleteFolder(folderPath string) error {
 	args := m.Called(folderPath)
 	return args.Error(0)
+}
+
+// Exists implements domain.FileBackend.
+func (m *LocalFileSystemService) Exists(path string) (bool, error) {
+	args := m.Called(path)
+	return args.Bool(0), args.Error(1)
+}
+
+// Stat implements domain.FileBackend.
+func (m *LocalFileSystemService) Stat(path string) (*model.FileInfo, error) {
+	args := m.Called(path)
+	return args.Get(0).(*model.FileInfo), args.Error(1)
 }

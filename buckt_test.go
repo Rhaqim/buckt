@@ -19,10 +19,9 @@ func UUIDFromString(name string) uuid.UUID {
 }
 
 type MockBuckt struct {
-	*Buckt
+	*Client
 	MockFileService   *mocks.FileService
 	MockFolderService *mocks.FolderService
-	MockCloudService  *mocks.CloudService
 }
 
 func setup(t *testing.T, bucktOpts BucktConfig) MockBuckt {
@@ -32,17 +31,14 @@ func setup(t *testing.T, bucktOpts BucktConfig) MockBuckt {
 
 	mockFileService := new(mocks.FileService)
 	mockFolderService := new(mocks.FolderService)
-	mockCloudService := new(mocks.CloudService)
 
 	buckt.fileService = mockFileService
 	buckt.folderService = mockFolderService
-	buckt.cloudService = mockCloudService
 
 	return MockBuckt{
-		Buckt:             buckt,
+		Client:            buckt,
 		MockFileService:   mockFileService,
 		MockFolderService: mockFolderService,
-		MockCloudService:  mockCloudService,
 	}
 }
 
@@ -356,7 +352,7 @@ func TestMoveFolder(t *testing.T) {
 		Return(nil)
 
 	// Call the method
-	err := buckt.Buckt.MoveFolder("user1", "550e8400-e29b-41d4-a716-446655440000", "550e8400-e29b-41d4-a716-446655440001")
+	err := buckt.Client.MoveFolder("user1", "550e8400-e29b-41d4-a716-446655440000", "550e8400-e29b-41d4-a716-446655440001")
 	assert.NoError(t, err)
 
 	// Verify expectations
@@ -377,7 +373,7 @@ func TestDeleteFolder(t *testing.T) {
 		Return("550e8400-e29b-41d4-a716-446655440001", nil)
 
 	// Call the method
-	err := buckt.Buckt.DeleteFolder("550e8400-e29b-41d4-a716-446655440000")
+	_, err := buckt.Client.DeleteFolder("550e8400-e29b-41d4-a716-446655440000")
 	assert.NoError(t, err)
 
 	// Verify expectations
@@ -397,7 +393,7 @@ func TestDeleteFolderPermanently(t *testing.T) {
 		Return("parent1", nil)
 
 	// Call the method
-	err := buckt.DeleteFolderPermanently("user1", "550e8400-e29b-41d4-a716-446655440000")
+	_, err := buckt.DeleteFolderPermanently("user1", "550e8400-e29b-41d4-a716-446655440000")
 	assert.NoError(t, err)
 
 	// Verify expectations
@@ -444,7 +440,7 @@ func TestGetFile(t *testing.T) {
 		Return(&expectedFile, nil)
 
 	// Call the method
-	file, err := buckt.Buckt.GetFile("550e8400-e29b-41d4-a716-446655440000")
+	file, err := buckt.Client.GetFile("550e8400-e29b-41d4-a716-446655440000")
 	assert.NoError(t, err)
 	assert.NotNil(t, file)
 
@@ -473,7 +469,7 @@ func TestGetFileStream(t *testing.T) {
 		Return(&expectedFile, expectedStream, nil)
 
 	// Call the method
-	file, stream, err := buckt.Buckt.GetFileStream("550e8400-e29b-41d4-a716-446655440000")
+	file, stream, err := buckt.Client.GetFileStream("550e8400-e29b-41d4-a716-446655440000")
 	assert.NoError(t, err)
 	assert.NotNil(t, file)
 	assert.NotNil(t, stream)
@@ -522,7 +518,7 @@ func TestMoveFile(t *testing.T) {
 		Return(nil)
 
 	// Call the method
-	err := buckt.Buckt.MoveFile("550e8400-e29b-41d4-a716-446655440000", "550e8400-e29b-41d4-a716-446655440001")
+	err := buckt.Client.MoveFile("550e8400-e29b-41d4-a716-446655440000", "550e8400-e29b-41d4-a716-446655440001")
 	assert.NoError(t, err)
 
 	// Verify expectations
@@ -542,7 +538,7 @@ func TestDeleteFile(t *testing.T) {
 		Return("parent1", nil)
 
 	// Call the method
-	err := buckt.Buckt.DeleteFile("550e8400-e29b-41d4-a716-446655440000")
+	_, err := buckt.Client.DeleteFile("550e8400-e29b-41d4-a716-446655440000")
 	assert.NoError(t, err)
 
 	// Verify expectations
@@ -562,159 +558,9 @@ func TestDeleteFilePermanently(t *testing.T) {
 		Return("parent1", nil)
 
 	// Call the method
-	err := buckt.DeleteFilePermanently("550e8400-e29b-41d4-a716-446655440000")
+	_, err := buckt.DeleteFilePermanently("550e8400-e29b-41d4-a716-446655440000")
 	assert.NoError(t, err)
 
 	// Verify expectations
 	buckt.MockFileService.AssertExpectations(t)
-}
-
-// func TestTransferFile(t *testing.T) {
-// 	t.Run("With CloudProviderNone", func(t *testing.T) {
-// 		config := CloudConfig{Provider: CloudProviderNone}
-
-// 		buckt := setupBucktTest(t)
-
-// 		// set cloudService to nil to simulate an error
-// 		buckt.cloudService = nil
-
-// 		err := buckt.InitCloudService(config)
-// 		assert.Error(t, err)
-// 		assert.Nil(t, buckt.cloudService)
-
-// 		buckt.MockCloudService.On("UploadFileToCloud", "550e8400-e29b-41d4-a716-446655440000").
-// 			Return(nil)
-
-// 		// Call the method
-// 		err = buckt.Buckt.TransferFile("550e8400-e29b-41d4-a716-446655440000")
-// 		assert.Error(t, err)
-
-// 		// Verify expectations
-// 		buckt.MockFileService.AssertExpectations(t)
-// 	})
-
-// 	t.Run("With CloudProviderAWS", func(t *testing.T) {
-// 		config := CloudConfig{
-// 			Provider: CloudProviderAWS,
-// 			Credentials: AWSConfig{
-// 				AccessKey: "accessKey",
-// 				SecretKey: "secretKey",
-// 				Region:    "region",
-// 				Bucket:    "bucket",
-// 			},
-// 		}
-
-// 		buckt := setupBucktTest(t)
-
-// 		// Cleanup to ensure the server is closed after the test
-// 		t.Cleanup(func() {
-// 			buckt.Close()
-// 		})
-
-// 		// set cloudService to nil to simulate an error
-// 		buckt.cloudService = nil
-
-// 		err := buckt.InitCloudService(config)
-// 		assert.NoError(t, err)
-// 		assert.NotNil(t, buckt.cloudService)
-
-// 		// Add mock cloud service]
-// 		buckt.cloudService = buckt.MockCloudService
-
-// 		// Mock the expected behavior
-// 		buckt.MockCloudService.On("UploadFileToCloud", "550e8400-e29b-41d4-a716-446655440000").
-// 			Return(nil)
-
-// 		// Call the method
-// 		err = buckt.Buckt.TransferFile("550e8400-e29b-41d4-a716-446655440000")
-// 		assert.NoError(t, err)
-
-// 		// Verify expectations
-// 		buckt.MockFileService.AssertExpectations(t)
-// 	})
-// }
-
-// func TestTransferFolder(t *testing.T) {
-// 	t.Run("With CloudProviderNone", func(t *testing.T) {
-// 		config := CloudConfig{Provider: CloudProviderNone}
-
-// 		buckt := setupBucktTest(t)
-
-// 		// set cloudService to nil to simulate an error
-// 		buckt.cloudService = nil
-
-// 		err := buckt.InitCloudService(config)
-// 		assert.Error(t, err)
-// 		assert.Nil(t, buckt.cloudService)
-
-// 		buckt.MockCloudService.On("UploadFolderToCloud", "user_1", "550e8400-e29b-41d4-a716-446655440000").
-// 			Return(nil)
-
-// 		// Call the method
-// 		err = buckt.Buckt.TransferFolder("user_1", "550e8400-e29b-41d4-a716-446655440000")
-// 		assert.Error(t, err)
-
-// 		// Verify expectations
-// 		buckt.MockFolderService.AssertExpectations(t)
-// 	})
-
-// 	t.Run("With CloudProviderAWS", func(t *testing.T) {
-// 		config := CloudConfig{
-// 			Provider: CloudProviderAWS,
-// 			Credentials: AWSConfig{
-// 				AccessKey: "accessKey",
-// 				SecretKey: "secretKey",
-// 				Region:    "region",
-// 				Bucket:    "bucket",
-// 			},
-// 		}
-
-// 		buckt := setupBucktTest(t)
-
-// 		// Cleanup to ensure the server is closed after the test
-// 		t.Cleanup(func() {
-// 			buckt.Close()
-// 		})
-
-// 		// set cloudService to nil to simulate an error
-// 		buckt.cloudService = nil
-
-// 		err := buckt.InitCloudService(config)
-// 		assert.NoError(t, err)
-// 		assert.NotNil(t, buckt.cloudService)
-
-// 		// Add mock cloud service]
-// 		buckt.cloudService = buckt.MockCloudService
-
-// 		// Mock the expected behavior
-// 		buckt.MockCloudService.On("UploadFolderToCloud", "user_1", "550e8400-e29b-41d4-a716-446655440000").
-// 			Return(nil)
-
-// 		// Call the method
-// 		err = buckt.Buckt.TransferFolder("user_1", "550e8400-e29b-41d4-a716-446655440000")
-// 		assert.NoError(t, err)
-
-// 		// Verify expectations
-// 		buckt.MockFolderService.AssertExpectations(t)
-// 	})
-// }
-
-// ✅ Test CloudProvider String() method
-func TestCloudProviderString(t *testing.T) {
-	tests := []struct {
-		provider CloudProvider
-		expected string
-	}{
-		{CloudProviderNone, "None"},
-		{CloudProviderAWS, "AWS"},
-		{CloudProviderAzure, "Azure"},
-		{CloudProviderGCP, "GCP"},
-		{CloudProvider(999), "None"}, // 🚨 Invalid provider
-	}
-
-	for _, test := range tests {
-		if result := test.provider.String(); result != test.expected {
-			t.Errorf("expected %s, got %s", test.expected, result)
-		}
-	}
 }
