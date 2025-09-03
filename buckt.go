@@ -25,8 +25,8 @@ import (
 type Client struct {
 	db *database.DB
 
-	FlatnameSpaces bool
-	Debug          bool
+	flatnameSpaces bool
+	silence        bool
 
 	logger   domain.BucktLogger
 	lruCache domain.LRUCache
@@ -53,12 +53,12 @@ func New(conf Config, opts ...ConfigFunc) (*Client, error) {
 	}
 
 	logConf := conf.Log
-	bucktLog := logger.NewLogger(logConf.LogFile, logConf.LogTerminal, logConf.Debug, logger.WithLogger(logConf.Logger))
+	bucktLog := logger.NewLogger(logConf.LogFile, logConf.LogTerminal, logConf.Silence, logger.WithLogger(logConf.Logger))
 	bucktLog.Info("🚀 Starting Buckt")
 
 	// Initialize database
 	dbConf := conf.DB
-	db, err := database.NewDB(dbConf.Database, dbConf.Driver, bucktLog, logConf.Debug)
+	db, err := database.NewDB(dbConf.Database, dbConf.Driver, bucktLog, logConf.Silence)
 	if err != nil {
 		return nil, bucktLog.WrapErrorf("failed to initialize database", err)
 	}
@@ -88,8 +88,8 @@ func New(conf Config, opts ...ConfigFunc) (*Client, error) {
 		db:             db,
 		logger:         bucktLog,
 		lruCache:       lruCache,
-		FlatnameSpaces: conf.FlatNameSpaces,
-		Debug:          logConf.Debug,
+		flatnameSpaces: conf.FlatNameSpaces,
+		silence:        logConf.Silence,
 		fileService:    fileService,
 		folderService:  folderService,
 	}
@@ -115,7 +115,7 @@ func New(conf Config, opts ...ConfigFunc) (*Client, error) {
 // - An error if the Buckt Client could not be created.
 func Default(opts ...ConfigFunc) (*Client, error) {
 	bucktOpts := Config{
-		Log:            LogConfig{LogTerminal: true, Debug: true},
+		Log:            LogConfig{LogTerminal: true, Silence: true},
 		MediaDir:       "media",
 		FlatNameSpaces: true,
 	}
@@ -228,7 +228,7 @@ func (b *Client) DeleteFolder(folder_id string) (string, error) {
 func (b *Client) DeleteFolderPermanently(user_id, folder_id string) (string, error) {
 
 	// If flatnameSpaces is enabled, we soft delete the folder
-	if b.FlatnameSpaces {
+	if b.flatnameSpaces {
 		return b.folderService.DeleteFolder(folder_id)
 	}
 

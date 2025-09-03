@@ -11,14 +11,14 @@ import (
 )
 
 type BucktLogger struct {
-	Logger *log.Logger
-	debug  bool
+	Logger  *log.Logger
+	silence bool
 }
 
 type LogFunc func(domain.BucktLogger)
 
-func NewLogger(logFile string, logTerminal, debug bool, opts ...LogFunc) domain.BucktLogger {
-	bucktLogger := &BucktLogger{debug: debug}
+func NewLogger(logFile string, logTerminal, silence bool, opts ...LogFunc) domain.BucktLogger {
+	bucktLogger := &BucktLogger{silence: silence}
 
 	for _, opt := range opts {
 		opt(bucktLogger)
@@ -42,14 +42,14 @@ func NewLogger(logFile string, logTerminal, debug bool, opts ...LogFunc) domain.
 			log.Fatal("Failed to open info log file:", err)
 		}
 
-		if logTerminal && !debug {
+		if logTerminal && !silence {
 			logWriter = io.MultiWriter(os.Stdout, infoLogFile)
 		} else {
 			logWriter = infoLogFile
 		}
 	} else {
-		// If no log file and debugging, silence logs; otherwise, use stdout
-		if logTerminal && !debug {
+		// If no log file and silenceging, silence logs; otherwise, use stdout
+		if logTerminal && !silence {
 			logWriter = io.Discard // Silence terminal logs
 		} else {
 			logWriter = os.Stdout
@@ -84,35 +84,39 @@ func (l *BucktLogger) Writer() io.Writer {
 
 // Info logs an info message
 func (l *BucktLogger) Info(message string) {
-	if l.debug {
-		l.Logger.Println(message)
+	if l.silence {
+		return
 	}
+	l.Logger.Println(message)
 }
 
 // infof logs an info message with formatting
 func (l *BucktLogger) Infof(format string, args ...any) {
-	if l.debug {
-		l.Logger.Printf(format, args...)
+	if l.silence {
+		return
 	}
+	l.Logger.Printf(format, args...)
 }
 
 // Warn logs a warning message
 func (l *BucktLogger) Warn(message string) {
-	if l.debug {
-		l.Logger.Println("WARN:", message)
+	if l.silence {
+		return
 	}
+	l.Logger.Println("WARN:", message)
 }
 
 // Error logs an error message
 func (l *BucktLogger) Errorf(format string, args ...any) {
-	if l.debug {
-		l.Logger.Printf("ERROR: "+format, args...)
+	if l.silence {
+		return
 	}
+	l.Logger.Printf("ERROR: "+format, args...)
 }
 
 // WrapError logs an error message and returns an error
 func (l *BucktLogger) WrapError(message string, err error) error {
-	if l.debug {
+	if !l.silence {
 		l.Logger.Println("ERROR:", message, err)
 	}
 	return err
@@ -120,7 +124,7 @@ func (l *BucktLogger) WrapError(message string, err error) error {
 
 // WrapErrorf logs an error message with formatting
 func (l *BucktLogger) WrapErrorf(message string, err error, args ...any) error {
-	if l.debug {
+	if !l.silence {
 		l.Logger.Printf("ERROR: %s %v\n", message+" "+err.Error(), args)
 	}
 	return err

@@ -51,7 +51,7 @@ func setupBucktTest(t *testing.T) MockBuckt {
 
 	bucktOpts := Config{
 		DB:             DBConfig{Driver: SQLite, Database: sqlDB},
-		Log:            LogConfig{LogTerminal: false, Debug: false},
+		Log:            LogConfig{LogTerminal: false, Silence: false},
 		MediaDir:       "media",
 		FlatNameSpaces: false,
 	}
@@ -73,7 +73,7 @@ func TestNew(t *testing.T) {
 
 		bucktOpts := Config{
 			DB:             DBConfig{Driver: SQLite, Database: sqlDB},
-			Log:            LogConfig{LogTerminal: false, Debug: false},
+			Log:            LogConfig{LogTerminal: false, Silence: false},
 			MediaDir:       "media",
 			FlatNameSpaces: false,
 		}
@@ -90,7 +90,7 @@ func TestNew(t *testing.T) {
 
 	// 	bucktOpts := Config{
 	// 		DB:             DBConfig{Driver: Postgres, Database: sqlDB},
-	// 		Log:            LogConfig{LogTerminal: false, Debug: false},
+	// 		Log:            LogConfig{LogTerminal: false, Silence: false},
 	// 		MediaDir:       "media",
 	//
 	// 		FlatNameSpaces: false,
@@ -106,7 +106,7 @@ func TestNew(t *testing.T) {
 	t.Run("Postgres without provided instance", func(t *testing.T) {
 		bucktOpts := Config{
 			DB:       DBConfig{Driver: Postgres, Database: nil},
-			Log:      LogConfig{LogTerminal: false, Debug: false},
+			Log:      LogConfig{LogTerminal: false, Silence: false},
 			MediaDir: "media",
 
 			FlatNameSpaces: false,
@@ -173,7 +173,7 @@ func TestDefault(t *testing.T) {
 	})
 
 	t.Run("With Log", func(t *testing.T) {
-		buckt, err := Default(WithLog(LogConfig{LogTerminal: false, Debug: false}))
+		buckt, err := Default(WithLog(LogConfig{LogTerminal: false, Silence: false}))
 		// Cleanup to ensure the server is closed after the test
 		t.Cleanup(func() {
 			buckt.Close()
@@ -216,7 +216,7 @@ func TestDefault(t *testing.T) {
 			FlatNameSpaces(true),
 			MediaDir("media"),
 			WithCache(cacheConfig),
-			WithLog(LogConfig{LogTerminal: false, Debug: false}),
+			WithLog(LogConfig{LogTerminal: false, Silence: false}),
 			WithDB(SQLite, sqlDB),
 		)
 		assert.NoError(t, err)

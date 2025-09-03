@@ -23,7 +23,7 @@ type DB struct {
 }
 
 // NewSQLite creates a new SQLite database connection.
-func NewDB(sqlDBInstance *sql.DB, driver model.DBDrivers, log domain.BucktLogger, debug bool) (*DB, error) {
+func NewDB(sqlDBInstance *sql.DB, driver model.DBDrivers, log domain.BucktLogger, silence bool) (*DB, error) {
 	var external bool
 
 	// Define supported database drivers
@@ -51,9 +51,9 @@ func NewDB(sqlDBInstance *sql.DB, driver model.DBDrivers, log domain.BucktLogger
 		driver = "sqlite"
 	}
 
-	// if debug is true, set log level to Info otherwise set to Silent
+	// if silence is true, set log level to Info otherwise set to Silent
 	var logLevel gormLogger.LogLevel = gormLogger.Silent
-	if debug {
+	if silence {
 		logLevel = gormLogger.Info
 	}
 

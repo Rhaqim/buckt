@@ -83,12 +83,12 @@ type CacheConfig struct {
 // Fields:
 //
 //	LogFile: A string representing the log file path.
-//	Debug: A boolean flag indicating whether to enable debug mode.
+//	Silence: A boolean flag indicating whether to silence logs.
 //	LogTerminal: A boolean flag indicating whether to log to the terminal.
 //	Logger: A pointer to a log.Logger instance. If nil, a new logger will be created.
 type LogConfig struct {
 	LogFile     string
-	Debug       bool
+	Silence     bool
 	LogTerminal bool
 	Logger      *log.Logger
 }
