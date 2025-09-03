@@ -1,6 +1,7 @@
 package buckt_web_testing
 
 import (
+	"flag"
 	"log"
 	"net/http"
 	"os"
@@ -15,11 +16,6 @@ func main() {
 		log.Fatalf("Failed to initialize Buckt: %v", err)
 	}
 	defer client.Close() // Ensure resources are cleaned up
-
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = "8080"
-	}
 
 	config := web.Config{
 		Mode:  web.WebModeMount,
@@ -42,9 +38,18 @@ func main() {
 		w.Write([]byte("Welcome to the main application!"))
 	})
 
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
+	}
+
+	// Allow overriding via command-line flag
+	flagPort := flag.String("port", port, "Port to run the server on")
+	flag.Parse()
+
 	// Start the server
 	server := &http.Server{
-		Addr:    ":8080",
+		Addr:    ":" + *flagPort,
 		Handler: mux,
 	}
 

@@ -42,12 +42,12 @@ func NewFileService(
 
 		cache: cache,
 
-		flatNameSpaces: flatNameSpaces,
-
 		repo: fileRepository,
 
 		folderService: folderService,
 		fileBackend:   fileBackend,
+
+		flatNameSpaces: flatNameSpaces,
 	}
 }
 

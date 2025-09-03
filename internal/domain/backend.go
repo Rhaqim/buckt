@@ -87,3 +87,34 @@ func (p *PlaceholderBackend) Move(oldPath string, newPath string) error {
 func (p *PlaceholderBackend) Stream(path string) (io.ReadCloser, error) {
 	return nil, fmt.Errorf("placeholder backend (%s) cannot be used directly", p.Title)
 }
+
+// BucktFileSystemService defines the interface for file system operations within the Buckt domain.
+// It provides methods to validate paths, write, retrieve, update, and delete files.
+type FileSystemService interface {
+	// FSValidatePath validates the given file path and returns the validated path or an error.
+	FSValidatePath(path string) (string, error)
+
+	// FSWriteFile writes the given file data to the specified path.
+	// Returns an error if the operation fails.
+	FSWriteFile(path string, file []byte) error
+
+	// FSGetFile retrieves the file data from the specified path.
+	// Returns the file data or an error if the operation fails.
+	FSGetFile(path string) ([]byte, error)
+
+	// FSGetFileStream retrieves the file data from the specified path.
+	// Returns an io.ReadCloser or an error if the operation fails.
+	FSGetFileStream(path string) (io.ReadCloser, error)
+
+	// FSUpdateFile updates the file from the old path to the new path.
+	// Returns an error if the operation fails.
+	FSUpdateFile(oldPath, newPath string) error
+
+	// FSDeleteFile deletes the file or folder at the specified path.
+	// Returns an error if the operation fails.
+	FSDeleteFile(folderPath string) error
+
+	// FSDeleteFolder deletes the folder at the specified path.
+	// Returns an error if the operation fails.
+	FSDeleteFolder(folderPath string) error
+}

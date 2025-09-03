@@ -82,15 +82,15 @@ type CacheConfig struct {
 //
 // Fields:
 //
-//	Logger: A pointer to a log.Logger instance. If nil, a new logger will be created.
-//	LogTerminal: A boolean flag indicating whether to log to the terminal.
 //	LogFile: A string representing the log file path.
 //	Debug: A boolean flag indicating whether to enable debug mode.
+//	LogTerminal: A boolean flag indicating whether to log to the terminal.
+//	Logger: A pointer to a log.Logger instance. If nil, a new logger will be created.
 type LogConfig struct {
-	Logger      *log.Logger
-	LogTerminal bool
 	LogFile     string
 	Debug       bool
+	LogTerminal bool
+	Logger      *log.Logger
 }
 
 // Backend represents the file backend interface.
@@ -101,16 +101,21 @@ type Backend = domain.FileBackend
 // FileInfo represents information about a file.
 type FileInfo = model.FileInfo
 
+// BackendConfig holds the configuration for the file backend.
+//
+// It includes the source and target backends for migration.
+//
+// If only one backend is specified, it is used as the primary backend.
 type BackendConfig struct {
-	// MigrationEnabled enables dual-write migration mode.
-	MigrationEnabled bool
-
 	// Source is the current backend in use (e.g., local, S3).
 	Source Backend
 
 	// Target is the backend to migrate to (e.g., S3, Azure).
 	// If MigrationEnabled is false, this is ignored.
 	Target Backend
+
+	// MigrationEnabled enables dual-write migration mode.
+	MigrationEnabled bool
 }
 
 // LocalBackend is a placeholder and is replaced with the actual local backend implementation.

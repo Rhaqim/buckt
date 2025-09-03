@@ -1,29 +1,18 @@
-.PHONY: all build run start docker-build docker-run test coverage clean
+.PHONY: all build test coverage clean
 
 PORT ?= 8080
 
 PKG_NAME = buckt
 PKG = github.com/Rhaqim/${PKG_NAME}
 BUILD_DIR = bin
-BUILD_NAME = main
 
 all: build run
 
 build:
-	go build -o $(BUILD_DIR)/$(BUILD_NAME) cmd/$(BUILD_NAME).go
+	go build -o $(BUILD_DIR)/$(PKG_NAME) cmd/$(PKG_NAME).go
 
 run: build
-	./bin/mainb -port=$(PORT)
-
-start:
-	go run cmd/main.go -port=$(PORT)
-
-docker-build:
-	docker build -t $(PKG_NAME) -f Dockerfile .
-
-docker-run:
-	docker run -p $(PORT):$(PORT) $(PKG_NAME)
-	# docker run -e PORT=$(PORT) -p $(PORT):$(PORT) $(PKG_NAME)
+	./bin/$(PKG_NAME)
 
 test:
 	go test ./... -v

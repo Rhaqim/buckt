@@ -7,25 +7,23 @@ import (
 	"github.com/Rhaqim/buckt/internal/database"
 	"github.com/Rhaqim/buckt/internal/domain"
 	"github.com/Rhaqim/buckt/internal/model"
-	"github.com/Rhaqim/buckt/pkg/logger"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
 
 type FolderRepository struct {
-	*database.DB
-	*logger.BucktLogger
+	db *database.DB
 }
 
-func NewFolderRepository(db *database.DB, logger *logger.BucktLogger) domain.FolderRepository {
-	return &FolderRepository{db, logger}
+func NewFolderRepository(db *database.DB) domain.FolderRepository {
+	return &FolderRepository{db: db}
 }
 
 // Create implements domain.FolderRepository.
 // Subtle: this method shadows the method (*DB).Create of FolderRepository.DB.
 func (f *FolderRepository) Create(folder *model.FolderModel) (string, error) {
-	// return f.DB.Create(folder).Error
-	if err := f.DB.Create(folder).Error; err != nil {
+	// return f.db.DB.Create(folder).Error
+	if err := f.db.DB.Create(folder).Error; err != nil {
 		return "", err
 	}
 	return folder.ID.String(), nil
@@ -34,7 +32,7 @@ func (f *FolderRepository) Create(folder *model.FolderModel) (string, error) {
 // GetFolder implements domain.FolderRepository.
 func (f *FolderRepository) GetFolder(folder_id uuid.UUID) (*model.FolderModel, error) {
 	var folder model.FolderModel
-	err := f.DB.Preload("Folders").Preload("Files").Where("id = ?", folder_id).First(&folder).Error
+	err := f.db.DB.Preload("Folders").Preload("Files").Where("id = ?", folder_id).First(&folder).Error
 	return &folder, err
 }
 
@@ -45,7 +43,7 @@ func (f *FolderRepository) GetRootFolder(user_id string) (*model.FolderModel, er
 
 	root_folder := "root_folder"
 
-	err := f.DB.Preload("Folders").Preload("Files").Where("name = ? AND user_id = ?", root_folder, user_id).First(&root).Error
+	err := f.db.DB.Preload("Folders").Preload("Files").Where("name = ? AND user_id = ?", root_folder, user_id).First(&root).Error
 	if err != nil {
 		if err.Error() != "record not found" {
 			return nil, err
@@ -53,7 +51,7 @@ func (f *FolderRepository) GetRootFolder(user_id string) (*model.FolderModel, er
 
 		path := "/" + user_id + "/" + root_folder
 
-		if err := f.DB.Create(&model.FolderModel{
+		if err := f.db.DB.Create(&model.FolderModel{
 			UserID:      user_id,
 			Name:        root_folder,
 			Description: "Root folder",
@@ -71,7 +69,7 @@ func (f *FolderRepository) GetRootFolder(user_id string) (*model.FolderModel, er
 // GetFolders implements domain.FolderRepository.
 func (f *FolderRepository) GetFolders(parent_id uuid.UUID) ([]model.FolderModel, error) {
 	var folders []model.FolderModel
-	err := f.DB.Where("parent_id = ?", parent_id).Find(&folders).Error
+	err := f.db.DB.Where("parent_id = ?", parent_id).Find(&folders).Error
 	return folders, err
 }
 
@@ -79,7 +77,7 @@ func (f *FolderRepository) GetFolders(parent_id uuid.UUID) ([]model.FolderModel,
 func (f *FolderRepository) MoveFolder(folder_id uuid.UUID, new_parent_id uuid.UUID) error {
 	var newParentFolder model.FolderModel
 
-	if err := f.DB.Where("id = ?", new_parent_id).First(&newParentFolder).Error; err != nil {
+	if err := f.db.DB.Where("id = ?", new_parent_id).First(&newParentFolder).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return fmt.Errorf("parent folder not found")
 		}
@@ -87,7 +85,7 @@ func (f *FolderRepository) MoveFolder(folder_id uuid.UUID, new_parent_id uuid.UU
 	}
 
 	var folder model.FolderModel
-	if err := f.DB.Where("id = ?", folder_id).First(&folder).Error; err != nil {
+	if err := f.db.DB.Where("id = ?", folder_id).First(&folder).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return fmt.Errorf("folder not found")
 		}
@@ -108,7 +106,7 @@ func (f *FolderRepository) MoveFolder(folder_id uuid.UUID, new_parent_id uuid.UU
 	}
 
 	// Update both `path` and `parent_id`
-	return f.DB.Model(&folder).Updates(map[string]interface{}{
+	return f.db.DB.Model(&folder).Updates(map[string]interface{}{
 		"path":      newPath,
 		"parent_id": newParentFolder.ID,
 	}).Error
@@ -119,7 +117,7 @@ func (f *FolderRepository) MoveFolder(folder_id uuid.UUID, new_parent_id uuid.UU
 func (f *FolderRepository) RenameFolder(user_id string, folder_id uuid.UUID, new_name string) error {
 	// get the folder to rename
 	var folder model.FolderModel
-	if err := f.DB.Where("id = ? AND user_id = ?", folder_id, user_id).First(&folder).Error; err != nil {
+	if err := f.db.DB.Where("id = ? AND user_id = ?", folder_id, user_id).First(&folder).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return fmt.Errorf("folder not found")
 		}
@@ -128,7 +126,7 @@ func (f *FolderRepository) RenameFolder(user_id string, folder_id uuid.UUID, new
 
 	// update the folder name and path
 	newPath := strings.TrimSuffix(folder.Path, "/"+folder.Name) + "/" + new_name
-	return f.DB.Model(&folder).Updates(map[string]interface{}{
+	return f.db.DB.Model(&folder).Updates(map[string]interface{}{
 		"name": new_name,
 		"path": newPath,
 	}).Error
@@ -142,7 +140,7 @@ func (f *FolderRepository) DeleteFolder(folder_id uuid.UUID) (parent_id string, 
 	}
 
 	// delete the folder
-	if err := f.DB.Delete(&folder).Error; err != nil {
+	if err := f.db.DB.Delete(&folder).Error; err != nil {
 		return "", err
 	}
 
@@ -152,7 +150,7 @@ func (f *FolderRepository) DeleteFolder(folder_id uuid.UUID) (parent_id string, 
 // ScrubFolder implements domain.FolderRepository.
 func (f *FolderRepository) ScrubFolder(user_id string, folder_id uuid.UUID) (parent_id string, err error) {
 	var folder model.FolderModel
-	if err := f.DB.Where("id = ? AND user_id = ?", folder_id, user_id).First(&folder).Error; err != nil {
+	if err := f.db.DB.Where("id = ? AND user_id = ?", folder_id, user_id).First(&folder).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return "", fmt.Errorf("folder not found")
 		}
@@ -160,7 +158,7 @@ func (f *FolderRepository) ScrubFolder(user_id string, folder_id uuid.UUID) (par
 	}
 
 	// delete the folder
-	if err := f.DB.Unscoped().Delete(&folder).Error; err != nil {
+	if err := f.db.DB.Unscoped().Delete(&folder).Error; err != nil {
 		return "", err
 	}
 

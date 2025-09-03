@@ -24,14 +24,14 @@ func main() {
 	}
 	defer client.Close() // Ensure resources are cleaned up
 
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = "8080"
-	}
-
 	webClient, err := web.NewClient(client)
 	if err != nil {
 		log.Fatalf("Failed to create web client: %v", err)
+	}
+
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
 	}
 
 	// Allow overriding via command-line flag

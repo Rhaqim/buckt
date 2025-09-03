@@ -1,19 +1,20 @@
-.PHONY: direct aws gcp azure web mount
+.PHONY: build $(TARGETS)
 
-direct:
-	go run direct/main.go
+# Port defaults
+PORT ?= 8080
 
-aws:
-	go run cloud/aws/main.go
+# Find all subprojects with a main.go
+DIRECTORIES := $(shell find direct cloud client/web -type f -name main.go -exec dirname {} \;)
+TARGETS := $(notdir $(DIRECTORIES))
 
-gcp:
-	go run cloud/gcp/main.go
+# Run target: go run <dir>
+$(TARGETS):
+	go run ./$@ $(if $(filter $@,ui api mount),-port=$(PORT))
 
-azure:
-	go run cloud/azure/main.go
-
-web:
-	go run client/web/main.go
-
-mount:
-	go run client/web/mount/main.go
+# Build everything into ./bin
+build:
+	@for dir in $(DIRECTORIES); do \
+		name=$$(basename $$dir); \
+		echo "Building $$name..."; \
+		go build -o bin/$$name ./$$dir; \
+	done
