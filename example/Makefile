@@ -1,20 +1,29 @@
-.PHONY: build $(TARGETS)
+.PHONY: direct aws gcp azure ui api mount
 
-# Port defaults
+CMD = go run
+MAIN = main.go
+CLOUD_ROOT = cloud
+WEB_ROOT = client/web
 PORT ?= 8080
+PORT_FLAG = -port=$(PORT)
 
-# Find all subprojects with a main.go
-DIRECTORIES := $(shell find direct cloud client/web -type f -name main.go -exec dirname {} \;)
-TARGETS := $(notdir $(DIRECTORIES))
+direct:
+	$(CMD) direct/$(MAIN)
 
-# Run target: go run <dir>
-$(TARGETS):
-	go run ./$@ $(if $(filter $@,ui api mount),-port=$(PORT))
+aws:
+	$(CMD) $(CLOUD_ROOT)/aws/$(MAIN)
 
-# Build everything into ./bin
-build:
-	@for dir in $(DIRECTORIES); do \
-		name=$$(basename $$dir); \
-		echo "Building $$name..."; \
-		go build -o bin/$$name ./$$dir; \
-	done
+gcp:
+	$(CMD) $(CLOUD_ROOT)/gcp/$(MAIN)
+
+azure:
+	$(CMD) $(CLOUD_ROOT)/azure/$(MAIN)
+
+ui:
+	$(CMD) $(WEB_ROOT)/UI/$(MAIN) $(PORT_FLAG)
+
+api:
+	$(CMD) $(WEB_ROOT)/api/$(MAIN) $(PORT_FLAG)
+
+mount:
+	$(CMD) $(WEB_ROOT)/mount/$(MAIN) $(PORT_FLAG)

@@ -46,7 +46,9 @@ type Client struct {
 // - An error if the Buckt instance could not be created.
 func New(conf Config, opts ...ConfigFunc) (*Client, error) {
 	for _, opt := range opts {
-		opt(&conf)
+		if opt != nil {
+			opt(&conf)
+		}
 	}
 
 	logConf := conf.Log
@@ -119,7 +121,9 @@ func Default(opts ...ConfigFunc) (*Client, error) {
 	}
 
 	for _, opt := range opts {
-		opt(&bucktOpts)
+		if opt != nil {
+			opt(&bucktOpts)
+		}
 	}
 
 	return New(bucktOpts)

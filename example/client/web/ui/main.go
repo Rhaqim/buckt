@@ -12,13 +12,30 @@ import (
 )
 
 func main() {
-	// Initialize the database
-	db, err := InitDB()
-	if err != nil {
-		log.Fatalf("Failed to initialize the database: %v", err)
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
 	}
 
-	client, err := buckt.Default(buckt.FlatNameSpaces(true), buckt.WithDB(buckt.Postgres, db))
+	withDB := false
+
+	// Allow overriding via command-line flag
+	flagPort := flag.String("port", port, "Port to run the server on")
+	flag.BoolVar(&withDB, "db", withDB, "Use external database")
+	flag.Parse()
+
+	// Initialize the database
+	var config buckt.ConfigFunc
+	if withDB {
+		db, err := InitDB()
+		if err != nil {
+			log.Fatalf("Failed to initialize the database: %v", err)
+		}
+
+		config = buckt.WithDB(buckt.Postgres, db)
+	}
+
+	client, err := buckt.Default(buckt.FlatNameSpaces(true), config)
 	if err != nil {
 		log.Fatalf("Failed to initialize Buckt: %v", err)
 	}
@@ -28,15 +45,6 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to create web client: %v", err)
 	}
-
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = "8080"
-	}
-
-	// Allow overriding via command-line flag
-	flagPort := flag.String("port", port, "Port to run the server on")
-	flag.Parse()
 
 	// Start the router (optional, based on user choice)
 	if err := webClient.Run(":" + *flagPort); err != nil {
