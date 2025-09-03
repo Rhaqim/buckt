@@ -1,6 +1,7 @@
 package backend
 
 import (
+	"context"
 	"io"
 	"sync/atomic"
 
@@ -18,7 +19,7 @@ type MigrationBackendService struct {
 	// stats     migrationStats
 }
 
-func NewMigrationBackend(bucktLogger *logger.BucktLogger, primary domain.FileBackend, secondary domain.FileBackend) domain.FileBackend {
+func NewMigrationBackend(bucktLogger *logger.BucktLogger, primary domain.FileBackend, secondary domain.FileBackend) domain.MigratableBackend {
 	bucktLogger.Info("🚀 Initialising local file system backend")
 	return &MigrationBackendService{
 		logger:           bucktLogger,
@@ -134,4 +135,19 @@ func (d *MigrationBackendService) DeleteFolder(prefix string) error {
 		}
 	}
 	return nil
+}
+
+// MigrateAll implements domain.MigratableBackend.
+func (d *MigrationBackendService) MigrateAll(ctx context.Context) error {
+	panic("unimplemented")
+}
+
+// MigrateFile implements domain.MigratableBackend.
+func (d *MigrationBackendService) MigrateFile(ctx context.Context, path string) error {
+	panic("unimplemented")
+}
+
+// MigrationStatus implements domain.MigratableBackend.
+func (d *MigrationBackendService) MigrationStatus() (completed int64, total int64) {
+	panic("unimplemented")
 }
