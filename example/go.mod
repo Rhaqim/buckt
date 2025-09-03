@@ -3,11 +3,11 @@ module example
 go 1.24.0
 
 require (
-	github.com/Rhaqim/buckt v1.3.4-beta
-	github.com/Rhaqim/buckt/client/web v1.0.2
-	github.com/Rhaqim/buckt/cloud/aws v1.0.2
-	github.com/Rhaqim/buckt/cloud/azure v1.0.2
-	github.com/Rhaqim/buckt/cloud/gcp v1.0.2
+	github.com/Rhaqim/buckt v1.2.0
+	github.com/Rhaqim/buckt/client/web v1.2.0
+	github.com/Rhaqim/buckt/cloud/aws v1.2.0
+	github.com/Rhaqim/buckt/cloud/azure v1.2.0
+	github.com/Rhaqim/buckt/cloud/gcp v1.2.0
 )
 
 require (
