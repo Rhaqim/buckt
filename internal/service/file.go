@@ -26,8 +26,6 @@ type FileService struct {
 }
 
 func NewFileService(
-	flatNameSpaces bool,
-
 	bucktLogger *logger.BucktLogger,
 
 	cache domain.CacheManager,
@@ -35,6 +33,8 @@ func NewFileService(
 
 	folderService domain.FolderService,
 	fileBackend domain.FileBackend,
+
+	flatNameSpaces bool,
 ) domain.FileService {
 	bucktLogger.Info("🚀 Initialising file services")
 	return &FileService{

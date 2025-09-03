@@ -368,7 +368,7 @@ func newAppServices(
 
 	// initialize the services
 	var folderService domain.FolderService = service.NewFolderService(logger, cacheManager, folderRepository, activeBackend)
-	var fileService domain.FileService = service.NewFileService(flatNameSpaces, logger, cacheManager, fileRepository, folderService, activeBackend)
+	var fileService domain.FileService = service.NewFileService(logger, cacheManager, fileRepository, folderService, activeBackend, flatNameSpaces)
 
 	logger.Info("✅ Initialized app services")
 

@@ -29,8 +29,7 @@ func setupFileTest() MockFileServices {
 	mockFolderService := new(mocks.FolderService)
 	mockLocalFileSystemService := new(mocks.LocalFileSystemService)
 
-	// fileService := NewFileServiceV2(mockLogger, mockCache, false, mockFileRepo, mockFolderService, mockFileSystemService).(*FileService)
-	fileService := NewFileService(false, mockLogger, mockCache, mockFileRepo, mockFolderService, mockLocalFileSystemService)
+	fileService := NewFileService(mockLogger, mockCache, mockFileRepo, mockFolderService, mockLocalFileSystemService, false)
 
 	return MockFileServices{
 		fileService:    fileService,
