@@ -3,31 +3,30 @@ package buckt_web_testing
 import (
 	"log"
 	"net/http"
+	"os"
 
 	"github.com/Rhaqim/buckt"
 	"github.com/Rhaqim/buckt/client/web"
 )
 
 func main() {
-	opts := buckt.BucktConfig{
-		Log: buckt.LogConfig{
-			LogTerminal: true,
-		},
-		MediaDir: "media",
-	}
-
-	b, err := buckt.New(opts)
+	client, err := buckt.Default(buckt.FlatNameSpaces(true))
 	if err != nil {
 		log.Fatalf("Failed to initialize Buckt: %v", err)
 	}
-	defer b.Close() // Ensure resources are cleaned up
+	defer client.Close() // Ensure resources are cleaned up
 
-	config := web.ClientConfig{
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
+	}
+
+	config := web.Config{
 		Mode:  web.WebModeMount,
 		Debug: true,
 	}
 
-	webClient, err := web.NewClient(b, config)
+	webClient, err := web.NewClient(client, config)
 	if err != nil {
 		log.Fatalf("Failed to create web client: %v", err)
 	}

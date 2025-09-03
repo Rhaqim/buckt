@@ -11,7 +11,6 @@ package buckt
 import (
 	"io"
 
-	"github.com/Rhaqim/buckt/internal/backend"
 	"github.com/Rhaqim/buckt/internal/cache"
 	"github.com/Rhaqim/buckt/internal/database"
 	"github.com/Rhaqim/buckt/internal/domain"
@@ -43,7 +42,7 @@ type Client struct {
 // Returns:
 // - A pointer to the initialized Buckt instance.
 // - An error if the Buckt instance could not be created.
-func New(conf BucktConfig, opts ...ConfigFunc) (*Client, error) {
+func New(conf Config, opts ...ConfigFunc) (*Client, error) {
 	for _, opt := range opts {
 		opt(&conf)
 	}
@@ -69,16 +68,17 @@ func New(conf BucktConfig, opts ...ConfigFunc) (*Client, error) {
 	// Initialize cache
 	cacheManager, lruCache := initializeCache(conf.Cache, bucktLog)
 
+	// Initialise Backend
+	var backend domain.FileBackend = resolveBackend(conf.MediaDir, conf.Backend, bucktLog, lruCache)
+
 	// Initialize the app services
 	folderService, fileService := newAppServices(
-		conf.MediaDir,
+
 		conf.FlatNameSpaces,
 		bucktLog,
 		db,
 		cacheManager,
-		lruCache,
-		conf.registry,
-		conf.activeProvider,
+		backend,
 	)
 
 	// Initialize the Buckt instance
@@ -113,7 +113,7 @@ func New(conf BucktConfig, opts ...ConfigFunc) (*Client, error) {
 // - A pointer to the initialized Buckt instance.
 // - An error if the Buckt instance could not be created.
 func Default(opts ...ConfigFunc) (*Client, error) {
-	bucktOpts := BucktConfig{
+	bucktOpts := Config{
 		Log:            LogConfig{LogTerminal: true, Debug: true},
 		MediaDir:       "media",
 		FlatNameSpaces: true,
@@ -356,34 +356,21 @@ func initializeCache(conf CacheConfig, bucktLog *logger.BucktLogger) (domain.Cac
 }
 
 func newAppServices(
-	mediaDir string,
 	flatNameSpaces bool,
-	bucktLog *logger.BucktLogger,
+	logger *logger.BucktLogger,
 	db *database.DB,
 	cacheManager domain.CacheManager,
-	lruCache domain.LRUCache,
-	registry BackendRegistry,
-	activeProvider BackendProvider,
+	activeBackend domain.FileBackend,
 ) (domain.FolderService, domain.FileService) {
 	// Initialize the stores
-	var folderRepository domain.FolderRepository = repository.NewFolderRepository(db, bucktLog)
-	var fileRepository domain.FileRepository = repository.NewFileRepository(db, bucktLog)
-
-	// Select backend
-	var activeBackend domain.FileBackend
-	if mainBackend, ok := registry.Get(activeProvider); ok {
-		activeBackend = mainBackend
-	} else {
-		// fallback to local
-		bucktLog.Warn("⚠️ No backend found, falling back to local")
-		activeBackend = backend.NewLocalFileSystemService(bucktLog, mediaDir, lruCache) // Default backend
-	}
+	var folderRepository domain.FolderRepository = repository.NewFolderRepository(db, logger)
+	var fileRepository domain.FileRepository = repository.NewFileRepository(db, logger)
 
 	// initialize the services
-	var folderService domain.FolderService = service.NewFolderService(bucktLog, cacheManager, folderRepository, activeBackend)
-	var fileService domain.FileService = service.NewFileService(flatNameSpaces, bucktLog, cacheManager, fileRepository, folderService, activeBackend)
+	var folderService domain.FolderService = service.NewFolderService(logger, cacheManager, folderRepository, activeBackend)
+	var fileService domain.FileService = service.NewFileService(flatNameSpaces, logger, cacheManager, fileRepository, folderService, activeBackend)
 
-	bucktLog.Info("✅ Initialized app services")
+	logger.Info("✅ Initialized app services")
 
 	return folderService, fileService
 }

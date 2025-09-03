@@ -12,7 +12,7 @@ import (
 	"github.com/Rhaqim/buckt/web/router"
 )
 
-func NewClient(bucktClient *buckt.Client, conf ...ClientConfig) (domain.RouterService, error) {
+func NewClient(bucktClient *buckt.Client, conf ...Config) (domain.RouterService, error) {
 	var logger *log.Logger = log.New(os.Stdout, "client: ", log.LstdFlags)
 
 	tmpl, err := loadTemplates()

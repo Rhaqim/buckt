@@ -16,11 +16,11 @@ func main() {
 		MediaDir: "media",
 	}
 
-	b, err := buckt.New(opts)
+	client, err := buckt.New(opts)
 	if err != nil {
 		log.Fatalf("Failed to initialize Buckt: %v", err)
 	}
-	defer b.Close() // Ensure resources are cleaned up
+	defer client.Close() // Ensure resources are cleaned up
 
 	// Use the Buckt services directly
 
@@ -32,7 +32,7 @@ func main() {
 	var constentType string = "application/octet-stream"
 
 	// Upload a file
-	id, err := b.UploadFile("user123", "", fileName, constentType, file)
+	id, err := client.UploadFile("user123", "", fileName, constentType, file)
 	if err != nil {
 		log.Fatalf("Failed to upload file: %v", err)
 	}

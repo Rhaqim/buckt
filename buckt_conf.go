@@ -8,19 +8,24 @@ import (
 	"github.com/Rhaqim/buckt/internal/model"
 )
 
-// LogConfig holds the configuration for logging in the application.
+type DBDrivers = model.DBDrivers // Type alias
+
+const (
+	// Posstgres represents the Postgres database driver.
+	Postgres = model.Postgres
+	// SQLite represents the SQLite database driver.
+	SQLite = model.SQLite
+)
+
+// DBConfig holds the configuration for the database connection.
 //
 // Fields:
 //
-//	Logger: A pointer to a log.Logger instance. If nil, a new logger will be created.
-//	LogTerminal: A boolean flag indicating whether to log to the terminal.
-//	LogFile: A string representing the log file path.
-//	Debug: A boolean flag indicating whether to enable debug mode.
-type LogConfig struct {
-	Logger      *log.Logger
-	LogTerminal bool
-	LogFile     string
-	Debug       bool
+//	Driver: A string representing the database driver name.
+//	Database: A pointer to an sql.DB instance representing the database connection.
+type DBConfig struct {
+	Driver   DBDrivers
+	Database *sql.DB
 }
 
 // FileCacheConfig holds the configuration for the file cache.
@@ -73,24 +78,19 @@ type CacheConfig struct {
 	FileCacheConfig
 }
 
-type DBDrivers = model.DBDrivers // Type alias
-
-const (
-	// Posstgres represents the Postgres database driver.
-	Postgres = model.Postgres
-	// SQLite represents the SQLite database driver.
-	SQLite = model.SQLite
-)
-
-// DBConfig holds the configuration for the database connection.
+// LogConfig holds the configuration for logging in the application.
 //
 // Fields:
 //
-//	Driver: A string representing the database driver name.
-//	Database: A pointer to an sql.DB instance representing the database connection.
-type DBConfig struct {
-	Driver   DBDrivers
-	Database *sql.DB
+//	Logger: A pointer to a log.Logger instance. If nil, a new logger will be created.
+//	LogTerminal: A boolean flag indicating whether to log to the terminal.
+//	LogFile: A string representing the log file path.
+//	Debug: A boolean flag indicating whether to enable debug mode.
+type LogConfig struct {
+	Logger      *log.Logger
+	LogTerminal bool
+	LogFile     string
+	Debug       bool
 }
 
 // Backend represents the file backend interface.
@@ -101,28 +101,16 @@ type Backend = domain.FileBackend
 // FileInfo represents information about a file.
 type FileInfo = model.FileInfo
 
-type BackendProvider = model.BackendProvider
+type BackendConfig struct {
+	// MigrationEnabled enables dual-write migration mode.
+	MigrationEnabled bool
 
-const (
-	// BackendProviderLocal represents the local backend provider.
-	BackendProviderLocal BackendProvider = iota
+	// Source is the current backend in use (e.g., local, S3).
+	Source Backend
 
-	// BackendProviderAWS represents the AWS backend provider.
-	BackendProviderAWS
-
-	// BackendProviderAzure represents the Azure backend provider.
-	BackendProviderAzure
-
-	// BackendProviderGCP represents the GCP backend provider.
-	BackendProviderGCP
-)
-
-type BackendRegistry map[BackendProvider]Backend
-
-// Get returns the backend for a provider
-func (r *BackendRegistry) Get(provider BackendProvider) (Backend, bool) {
-	backend, ok := (*r)[provider]
-	return backend, ok
+	// Target is the backend to migrate to (e.g., S3, Azure).
+	// If MigrationEnabled is false, this is ignored.
+	Target Backend
 }
 
 // BucktOptions represents the configuration options for the Buckt application.
@@ -135,23 +123,76 @@ func (r *BackendRegistry) Get(provider BackendProvider) (Backend, bool) {
 //	Log: Configuration for logging.
 //	MediaDir: Path to the directory where media files are stored.
 //	FlatNameSpaces: Flag indicating whether the application should use flat namespaces when storing files.
-//	StandaloneMode: Flag indicating whether the application is running in standalone mode.
-type BucktConfig struct {
-	DB             DBConfig
-	Cache          CacheConfig
-	Log            LogConfig
+type Config struct {
 	MediaDir       string
 	FlatNameSpaces bool
 
-	// private
-	registry       BackendRegistry
-	activeProvider BackendProvider
+	DB      DBConfig
+	Cache   CacheConfig
+	Log     LogConfig
+	Backend BackendConfig
 }
 
-type ConfigFunc func(*BucktConfig)
+type ConfigFunc func(*Config)
+
+// WithDB is a configuration function that sets the database connection
+// for the Config. It takes a *sql.DB as an argument and returns
+// a ConfigFunc that assigns the provided database connection to the
+// Config.
+//
+// Parameters:
+//   - driver: A string representing the database driver name.
+//   - db: A pointer to an sql.DB instance representing the database connection.
+//
+// Returns:
+//   - ConfigFunc: A function that takes a pointer to Config and sets its DB field.
+func WithDB(driver DBDrivers, db *sql.DB) ConfigFunc {
+	return func(c *Config) {
+		c.DB.Driver = DBDrivers(driver)
+		c.DB.Database = db
+	}
+}
+
+// WithLogger is a configuration function that sets the logger for the Config.
+// It takes a Log instance as an argument and assigns it to the Log field of Config.
+//
+// Parameters:
+//   - log: An instance of Log to be used for logging.
+//
+// Returns:
+//   - A ConfigFunc that sets the Log field of Config.
+//     A ConfigFunc that sets the CacheManager in the Config.
+func WithCache(cache CacheConfig) ConfigFunc {
+	return func(c *Config) {
+		c.Cache = cache
+	}
+}
+
+// WithLog is a configuration function that sets the logger for the Config.
+// It takes a Log instance as an argument and assigns it to the Log field of Config.
+//
+// Parameters:
+//   - log: An instance of Log to be used for logging.
+//
+// Returns:
+//   - A ConfigFunc that sets the Log field of Config.
+func WithLog(log LogConfig) ConfigFunc {
+	return func(c *Config) {
+		c.Log = log
+	}
+}
+
+// MediaDir sets the directory path for media files in the Config.
+// It takes a string parameter mediaDir which specifies the path to the media directory.
+// It returns a ConfigFunc that updates the MediaDir field of Config.
+func MediaDir(mediaDir string) ConfigFunc {
+	return func(c *Config) {
+		c.MediaDir = mediaDir
+	}
+}
 
 // FlatNameSpaces is a configuration function that sets the FlatNameSpaces
-// option in the BucktConfig. When the flat parameter is true, it enables
+// option in the Config. When the flat parameter is true, it enables
 // flat namespaces; otherwise, it disables them.
 //
 // Parameters:
@@ -160,79 +201,23 @@ type ConfigFunc func(*BucktConfig)
 //
 // Returns:
 //
-//	A ConfigFunc that applies the flat namespaces setting to a BucktConfig.
+//	A ConfigFunc that applies the flat namespaces setting to a Config.
 func FlatNameSpaces(flat bool) ConfigFunc {
-	return func(c *BucktConfig) {
+	return func(c *Config) {
 		c.FlatNameSpaces = flat
 	}
 }
 
-// MediaDir sets the directory path for media files in the BucktConfig.
-// It takes a string parameter mediaDir which specifies the path to the media directory.
-// It returns a ConfigFunc that updates the MediaDir field of BucktConfig.
-func MediaDir(mediaDir string) ConfigFunc {
-	return func(c *BucktConfig) {
-		c.MediaDir = mediaDir
+// RegisterPrimaryBackend registers the primary backend for the Buckt application.
+func RegisterPrimaryBackend(backend Backend) ConfigFunc {
+	return func(c *Config) {
+		c.Backend.Source = backend
 	}
 }
 
-// WithLogger is a configuration function that sets the logger for the BucktConfig.
-// It takes a Log instance as an argument and assigns it to the Log field of BucktConfig.
-//
-// Parameters:
-//   - log: An instance of Log to be used for logging.
-//
-// Returns:
-//   - A ConfigFunc that sets the Log field of BucktConfig.
-//     A ConfigFunc that sets the CacheManager in the BucktConfig.
-func WithCache(cache CacheConfig) ConfigFunc {
-	return func(c *BucktConfig) {
-		c.Cache = cache
-	}
-}
-
-// WithDB is a configuration function that sets the database connection
-// for the BucktConfig. It takes a *sql.DB as an argument and returns
-// a ConfigFunc that assigns the provided database connection to the
-// BucktConfig.
-//
-// Parameters:
-//   - driver: A string representing the database driver name.
-//   - db: A pointer to an sql.DB instance representing the database connection.
-//
-// Returns:
-//   - ConfigFunc: A function that takes a pointer to BucktConfig and sets its DB field.
-func WithDB(driver DBDrivers, db *sql.DB) ConfigFunc {
-	return func(c *BucktConfig) {
-		c.DB.Driver = DBDrivers(driver)
-		c.DB.Database = db
-	}
-}
-
-// WithLog is a configuration function that sets the logger for the BucktConfig.
-// It takes a Log instance as an argument and assigns it to the Log field of BucktConfig.
-//
-// Parameters:
-//   - log: An instance of Log to be used for logging.
-//
-// Returns:
-//   - A ConfigFunc that sets the Log field of BucktConfig.
-func WithLog(log LogConfig) ConfigFunc {
-	return func(c *BucktConfig) {
-		c.Log = log
-	}
-}
-
-func RegisterBackend(provider BackendProvider, backend Backend) ConfigFunc {
-	if !provider.IsValidProvider() || backend == nil {
-		return func(c *BucktConfig) {}
-	}
-
-	return func(c *BucktConfig) {
-		if c.registry == nil {
-			c.registry = make(BackendRegistry)
-		}
-		c.registry[provider] = backend
-		c.activeProvider = provider
+// RegisterSecondaryBackend registers the secondary backend for the Buckt application.
+func RegisterSecondaryBackend(backend Backend) ConfigFunc {
+	return func(c *Config) {
+		c.Backend.Target = backend
 	}
 }

@@ -13,17 +13,19 @@ type BackendProvider int
 
 const (
 	BackendProviderLocal BackendProvider = iota
-	BackendProviderAWS
+	BackendProviderS3
 	BackendProviderAzure
 	BackendProviderGCP
+	BackendProviderCustom
 )
 
 func (bp BackendProvider) IsValidProvider() bool {
 	switch bp {
 	case BackendProviderLocal,
-		BackendProviderAWS,
+		BackendProviderS3,
 		BackendProviderAzure,
-		BackendProviderGCP:
+		BackendProviderGCP,
+		BackendProviderCustom:
 		return true
 	default:
 		return false
@@ -32,12 +34,14 @@ func (bp BackendProvider) IsValidProvider() bool {
 
 func (bp BackendProvider) String() string {
 	switch bp {
-	case BackendProviderAWS:
-		return "AWS"
+	case BackendProviderS3:
+		return "S3"
 	case BackendProviderAzure:
 		return "Azure"
 	case BackendProviderGCP:
 		return "GCP"
+	case BackendProviderCustom:
+		return "Custom"
 	default:
 		return "Local"
 	}

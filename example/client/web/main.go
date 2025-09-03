@@ -13,28 +13,23 @@ import (
 
 func main() {
 	// Initialize the database
-	// db, err := InitDB()
-	// if err != nil {
-	// 	log.Fatalf("Failed to initialize the database: %v", err)
-	// }
-	b, err := buckt.Default(buckt.FlatNameSpaces(true))
+	db, err := InitDB()
+	if err != nil {
+		log.Fatalf("Failed to initialize the database: %v", err)
+	}
+
+	client, err := buckt.Default(buckt.FlatNameSpaces(true), buckt.WithDB(db))
 	if err != nil {
 		log.Fatalf("Failed to initialize Buckt: %v", err)
 	}
-	defer b.Close() // Ensure resources are cleaned up
-
-	// initialize router
-	err = b.InitRouterService(buckt.WebModeAll)
-	if err != nil {
-		log.Fatalf("Failed to initialize Buckt router: %v", err)
-	}
+	defer client.Close() // Ensure resources are cleaned up
 
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8080"
 	}
 
-	_, err = web.NewClient(b)
+	webClient, err := web.NewClient(client)
 	if err != nil {
 		log.Fatalf("Failed to create web client: %v", err)
 	}
@@ -44,7 +39,7 @@ func main() {
 	flag.Parse()
 
 	// Start the router (optional, based on user choice)
-	if err := b.StartServer(":" + *flagPort); err != nil {
+	if err := webClient.Run(":" + *flagPort); err != nil {
 		log.Fatalf("Failed to start Buckt: %v", err)
 	}
 }

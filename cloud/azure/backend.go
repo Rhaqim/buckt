@@ -42,6 +42,10 @@ func NewAzureBackend(conf Config) (*AzureBackend, error) {
 	}, nil
 }
 
+func (a *AzureBackend) Name() string {
+	return "azure"
+}
+
 func (a *AzureBackend) Put(path string, data []byte) error {
 	blobClient := a.client.NewBlockBlobClient(path)
 	_, err := blobClient.UploadBuffer(context.TODO(), data, &blockblob.UploadBufferOptions{})

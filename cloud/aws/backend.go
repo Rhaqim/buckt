@@ -47,6 +47,10 @@ func NewBackend(conf Config) (*S3Backend, error) {
 	}, nil
 }
 
+func (s *S3Backend) Name() string {
+	return "s3"
+}
+
 func (s *S3Backend) Put(path string, data []byte) error {
 	_, err := s.client.PutObject(context.TODO(), &s3.PutObjectInput{
 		Bucket: aws.String(s.bucketName),

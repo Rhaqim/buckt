@@ -24,7 +24,7 @@ type MockBuckt struct {
 	MockFolderService *mocks.FolderService
 }
 
-func setup(t *testing.T, bucktOpts BucktConfig) MockBuckt {
+func setup(t *testing.T, bucktOpts Config) MockBuckt {
 	buckt, err := New(bucktOpts)
 	assert.NoError(t, err)
 	assert.NotNil(t, buckt)
@@ -47,7 +47,7 @@ func setupBucktTest(t *testing.T) MockBuckt {
 	assert.NoError(t, err)
 	defer sqlDB.Close()
 
-	bucktOpts := BucktConfig{
+	bucktOpts := Config{
 		DB:             DBConfig{Driver: SQLite, Database: sqlDB},
 		Log:            LogConfig{LogTerminal: false, Debug: false},
 		MediaDir:       "media",
@@ -69,7 +69,7 @@ func TestNew(t *testing.T) {
 		assert.NoError(t, err)
 		defer sqlDB.Close()
 
-		bucktOpts := BucktConfig{
+		bucktOpts := Config{
 			DB:             DBConfig{Driver: SQLite, Database: sqlDB},
 			Log:            LogConfig{LogTerminal: false, Debug: false},
 			MediaDir:       "media",
@@ -86,7 +86,7 @@ func TestNew(t *testing.T) {
 	// 	assert.NoError(t, err)
 	// 	defer sqlDB.Close()
 
-	// 	bucktOpts := BucktConfig{
+	// 	bucktOpts := Config{
 	// 		DB:             DBConfig{Driver: Postgres, Database: sqlDB},
 	// 		Log:            LogConfig{LogTerminal: false, Debug: false},
 	// 		MediaDir:       "media",
@@ -102,7 +102,7 @@ func TestNew(t *testing.T) {
 	// })
 
 	t.Run("Postgres without provided instance", func(t *testing.T) {
-		bucktOpts := BucktConfig{
+		bucktOpts := Config{
 			DB:       DBConfig{Driver: Postgres, Database: nil},
 			Log:      LogConfig{LogTerminal: false, Debug: false},
 			MediaDir: "media",

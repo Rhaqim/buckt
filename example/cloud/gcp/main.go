@@ -14,19 +14,15 @@ func main() {
 		Bucket:          "my-bucket",
 	}
 
-	buckt, err := buckt.Default(buckt.WithLog(buckt.LogConfig{}))
+	backend := buckt.RegisterPrimaryBackend(gcp.NewBackend(cloudConfig))
+
+	client, err := buckt.Default(buckt.WithLog(buckt.LogConfig{}), backend)
 	if err != nil {
 		fmt.Println(err)
 		return
 	}
 
-	err = buckt.InitCloudService(cloudConfig)
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
+	defer client.Close()
 
-	defer buckt.Close()
-
-	fmt.Println("File uploaded successfully")
+	fmt.Println("Buckt Client initialized successfully")
 }

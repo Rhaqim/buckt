@@ -14,6 +14,10 @@ type LocalFileSystemService struct {
 
 var _ domain.FileBackend = (*LocalFileSystemService)(nil)
 
+func (m *LocalFileSystemService) Name() string {
+	return "LocalFileSystem"
+}
+
 // FSUpdateFile implements domain.FileSystemService.
 func (m *LocalFileSystemService) Move(oldPath string, newPath string) error {
 	args := m.Called(oldPath, newPath)

@@ -12,31 +12,35 @@ import (
 )
 
 type LocalFileSystemService struct {
-	*logger.BucktLogger
-	MediaDir string
+	logger   *logger.BucktLogger
+	mediaDir string
 	g        singleflight.Group
 	cache    domain.LRUCache
 }
 
-func NewLocalFileSystemService(bucktLogger *logger.BucktLogger, mediaDir string, cache domain.LRUCache) domain.FileBackend {
-	bucktLogger.Info("🚀 Initialising local file system backend")
+func NewLocalFileSystemService(logger *logger.BucktLogger, mediaDir string, cache domain.LRUCache) domain.FileBackend {
+	logger.Info("🚀 Initialising local file system backend")
 	return &LocalFileSystemService{
-		BucktLogger: bucktLogger,
-		MediaDir:    mediaDir,
-		g:           singleflight.Group{},
-		cache:       cache,
+		logger:   logger,
+		mediaDir: mediaDir,
+		g:        singleflight.Group{},
+		cache:    cache,
 	}
 }
 
+func (bfs *LocalFileSystemService) Name() string {
+	return "local"
+}
+
 func (bfs *LocalFileSystemService) resolve(path string) string {
-	return filepath.Join(bfs.MediaDir, path)
+	return filepath.Join(bfs.mediaDir, path)
 }
 
 // Put writes/overwrites a file.
 func (bfs *LocalFileSystemService) Put(path string, data []byte) error {
 	filePath := bfs.resolve(path)
 	if err := os.MkdirAll(filepath.Dir(filePath), 0755); err != nil {
-		return bfs.WrapError("failed to create directory", err)
+		return bfs.logger.WrapError("failed to create directory", err)
 	}
 	return os.WriteFile(filePath, data, 0644)
 }
@@ -54,7 +58,7 @@ func (bfs *LocalFileSystemService) Get(path string) ([]byte, error) {
 		return os.ReadFile(filePath)
 	})
 	if err != nil {
-		return nil, bfs.WrapError("failed to read file", err)
+		return nil, bfs.logger.WrapError("failed to read file", err)
 	}
 
 	bytes := result.([]byte)
@@ -72,7 +76,7 @@ func (bfs *LocalFileSystemService) Stream(path string) (io.ReadCloser, error) {
 func (bfs *LocalFileSystemService) Delete(path string) error {
 	filePath := bfs.resolve(path)
 	if err := os.Remove(filePath); err != nil {
-		return bfs.WrapError("failed to delete file", err)
+		return bfs.logger.WrapError("failed to delete file", err)
 	}
 	return nil
 }
@@ -87,7 +91,7 @@ func (bfs *LocalFileSystemService) Exists(path string) (bool, error) {
 	if os.IsNotExist(err) {
 		return false, nil
 	}
-	return false, bfs.WrapError("failed to stat file", err)
+	return false, bfs.logger.WrapError("failed to stat file", err)
 }
 
 // Stat returns metadata.
@@ -95,7 +99,7 @@ func (bfs *LocalFileSystemService) Stat(path string) (*model.FileInfo, error) {
 	filePath := bfs.resolve(path)
 	info, err := os.Stat(filePath)
 	if err != nil {
-		return nil, bfs.WrapError("failed to stat file", err)
+		return nil, bfs.logger.WrapError("failed to stat file", err)
 	}
 	return &model.FileInfo{
 		Size:         info.Size(),
@@ -111,15 +115,15 @@ func (bfs *LocalFileSystemService) DeleteFolder(path string) error {
 }
 
 func (bfs *LocalFileSystemService) Move(oldPath, newPath string) error {
-	oldFilePath := filepath.Join(bfs.MediaDir, oldPath)
-	newFilePath := filepath.Join(bfs.MediaDir, newPath)
+	oldFilePath := filepath.Join(bfs.mediaDir, oldPath)
+	newFilePath := filepath.Join(bfs.mediaDir, newPath)
 
 	if err := os.MkdirAll(filepath.Dir(newFilePath), 0755); err != nil {
-		return bfs.WrapError("failed to create directory", err)
+		return bfs.logger.WrapError("failed to create directory", err)
 	}
 
 	if err := os.Rename(oldFilePath, newFilePath); err != nil {
-		return bfs.WrapError("failed to move file", err)
+		return bfs.logger.WrapError("failed to move file", err)
 	}
 	return nil
 }

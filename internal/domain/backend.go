@@ -1,10 +1,13 @@
 package domain
 
 import (
+	"context"
 	"io"
 )
 
 type FileBackend interface {
+	Name() string
+
 	// Put writes/overwrites a file.
 	Put(path string, data []byte) error
 
@@ -28,4 +31,17 @@ type FileBackend interface {
 	DeleteFolder(prefix string) error
 
 	Move(oldPath, newPath string) error
+}
+
+type MigratableBackend interface {
+	FileBackend
+
+	// Kicks off a background migration of all existing files
+	MigrateAll(ctx context.Context) error
+
+	// Migrate a specific file (used for lazy migration on access)
+	MigrateFile(ctx context.Context, path string) error
+
+	// Progress info for observability
+	MigrationStatus() (completed int64, total int64)
 }

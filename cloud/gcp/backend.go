@@ -35,6 +35,10 @@ func NewBackend(conf Config) (*GCPBackend, error) {
 	}, nil
 }
 
+func (g *GCPBackend) Name() string {
+	return "gcp"
+}
+
 func (g *GCPBackend) Put(path string, data []byte) error {
 	ctx := context.TODO()
 	w := g.client.Bucket(g.bucketName).Object(path).NewWriter(ctx)

@@ -18,7 +18,7 @@ const (
 	WebModeMount = model.WebModeMount
 )
 
-type ClientConfig struct {
+type Config struct {
 	Mode  WebMode
 	Debug bool
 }
