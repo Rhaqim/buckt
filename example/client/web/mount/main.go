@@ -11,6 +11,15 @@ import (
 )
 
 func main() {
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
+	}
+
+	// Allow overriding via command-line flag
+	flagPort := flag.String("port", port, "Port to run the server on")
+	flag.Parse()
+
 	client, err := buckt.Default(buckt.FlatNameSpaces(true))
 	if err != nil {
 		log.Fatalf("Failed to initialize Buckt: %v", err)
@@ -37,15 +46,6 @@ func main() {
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("Welcome to the main application!"))
 	})
-
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = "8080"
-	}
-
-	// Allow overriding via command-line flag
-	flagPort := flag.String("port", port, "Port to run the server on")
-	flag.Parse()
 
 	// Start the server
 	server := &http.Server{

@@ -20,7 +20,7 @@ The Buckt package provides a flexible media storage service with optional integr
   - [Initialization](#initialization)
   - [Services](#services)
     - [Direct Services](#direct-services)
-    - [Web Server](#web-server)
+    - [Client](#client)
     - [Cloud Backend](#cloud-backend)
   - [License](#license)
 
@@ -142,21 +142,25 @@ The Buckt package exposes the services directly via the Buckt interface. You can
 
 A detailed example for direct usage can be found in the [Direct Example](example/direct/main.go) directory.
 
-### Web Server
+### Client
 
-The Buckt package includes an HTTP server that exposes its services via HTTP endpoints. You can configure the server settings in the configuration file. The host and port fields should contain the address and port for the HTTP server. Alternatively you can use the **GetHandler** method to get the handler and use it with your own router.
+The Buckt package includes an HTTP client that exposes its services via HTTP endpoints or a web interface. If the `WebMode` is set to API, the client can be used to interact with the Buckt services over HTTP. If set to UI, the client provides a web interface for users to interact with the services.Additionally the HTTP handler can be mounted to a parent server when mode is set to Mount.
 
-The Buckt package can be integrated with other routers, such as Fiber, Echo, Chi or Go's HTTP package . You can use the GetHandler method to get the handler and mount it under a specific route.
+You can try out the [UI Example](example/client/web/ui/main.go).
 
-You can find a Postman collection with the API endpoints at [<img src="https://run.pstmn.io/button.svg" alt="Run In Postman" style="width: 128px; height: 32px;">](https://app.getpostman.com/run-collection/17061476-00806d0d-9584-4889-ade7-f8407932dba2?action=collection%2Ffork&source=rip_markdown&collection-url=entityId%3D17061476-00806d0d-9584-4889-ade7-f8407932dba2%26entityType%3Dcollection%26workspaceId%3D28697276-d953-482a-bd39-c4695366a55a)
+Or the [API Example](example/client/web/api/main.go).
 
-More examples for router usage can be found in the [AWS Example](example/client/web/main.go) directory.
+[<img src="https://run.pstmn.io/button.svg" alt="Run In Postman" style="width: 128px; height: 32px;">](https://app.getpostman.com/run-collection/17061476-00806d0d-9584-4889-ade7-f8407932dba2?action=collection%2Ffork&source=rip_markdown&collection-url=entityId%3D17061476-00806d0d-9584-4889-ade7-f8407932dba2%26entityType%3Dcollection%26workspaceId%3D28697276-d953-482a-bd39-c4695366a55a)
 
 ### Cloud Backend
 
 The Buckt package can be integrated with cloud services like `Amazon S3`, `Google Cloud Storage`, or `Azure Blob Storage` as the backend storage solution. If you want to use a cloud service as the backend, you need to import the submodule for the specific cloud provider. If no backend is specified, Buckt will use the local file system as the default storage.
 
-A detailed example for cloud usage can be found in the [AWS Example](example/cloud/aws/main.go) directory.
+Explore detailed cloud integration examples:
+
+- [<img src="https://img.shields.io/badge/AWS%20S3-Cloud-orange?logo=amazon-aws&logoColor=white" alt="AWS S3" style="height: 20px;"> AWS Example](example/cloud/aws/main.go)
+- [<img src="https://img.shields.io/badge/Azure%20Blob-Cloud-blue?logo=microsoft-azure&logoColor=white" alt="Azure Blob" style="height: 20px;"> Azure Example](example/cloud/azure/main.go)
+- [<img src="https://img.shields.io/badge/GCP%20Storage-Cloud-yellow?logo=google-cloud&logoColor=white" alt="GCP Storage" style="height: 20px;"> GCP Example](example/cloud/gcp/main.go)
 
 ## License
 
