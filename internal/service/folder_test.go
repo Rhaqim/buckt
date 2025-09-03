@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"testing"
 
+	"github.com/Rhaqim/buckt/internal/domain"
 	"github.com/Rhaqim/buckt/internal/mocks"
 	"github.com/Rhaqim/buckt/internal/model"
 	"github.com/Rhaqim/buckt/pkg/logger"
@@ -13,25 +14,25 @@ import (
 )
 
 type MockFolderServices struct {
-	*FolderService
-	*mocks.MockCacheManager
-	*mocks.MockFolderRepository
-	*mocks.MockFileSystemService
+	folderService    domain.FolderService
+	cacheManager     *mocks.CacheManager
+	folderRepository *mocks.FolderRepository
+	backend          *mocks.LocalFileSystemService
 }
 
 func setupFolderTest() MockFolderServices {
 	mockLogger := logger.NewLogger("", true, false)
-	mockCache := new(mocks.MockCacheManager)
-	mockFolderRepo := new(mocks.MockFolderRepository)
-	mockFileSystemService := new(mocks.MockFileSystemService)
+	mockCache := new(mocks.CacheManager)
+	mockFolderRepo := new(mocks.FolderRepository)
+	mockFileSystemService := new(mocks.LocalFileSystemService)
 
-	folderService := NewFolderService(mockLogger, mockCache, mockFolderRepo, mockFileSystemService).(*FolderService)
+	folderService := NewFolderService(mockLogger, mockCache, mockFolderRepo, mockFileSystemService)
 
 	return MockFolderServices{
-		FolderService:         folderService,
-		MockCacheManager:      mockCache,
-		MockFolderRepository:  mockFolderRepo,
-		MockFileSystemService: mockFileSystemService,
+		folderService:    folderService,
+		cacheManager:     mockCache,
+		folderRepository: mockFolderRepo,
+		backend:          mockFileSystemService,
 	}
 }
 
@@ -43,18 +44,18 @@ func TestCreateFolder(t *testing.T) {
 	mockFolder := &model.FolderModel{ID: folderID, Name: "folder"}
 
 	// Mock GetFolder to return a valid folder
-	mockSetUp.MockFolderRepository.On("GetFolder", folderID).Return(mockFolder, nil)
+	mockSetUp.folderRepository.On("GetFolder", folderID).Return(mockFolder, nil)
 
 	// Mock Create method
-	mockSetUp.MockFolderRepository.On("Create", mock.Anything).Return(folderID.String(), nil)
+	mockSetUp.folderRepository.On("Create", mock.Anything).Return(folderID.String(), nil)
 
-	new_folder_id, err := mockSetUp.FolderService.CreateFolder("user1", folderID.String(), "folder", "description")
+	new_folder_id, err := mockSetUp.folderService.CreateFolder("user1", folderID.String(), "folder", "description")
 
 	assert.Len(t, new_folder_id, 36)
 
 	assert.NoError(t, err)
 
-	mockSetUp.MockFolderRepository.AssertExpectations(t)
+	mockSetUp.folderRepository.AssertExpectations(t)
 }
 
 func TestGetFolder(t *testing.T) {
@@ -68,20 +69,20 @@ func TestGetFolder(t *testing.T) {
 	jsonStr := string(jsonBytes)
 
 	// Mock cache get (simulate cache miss)
-	mockSetUp.MockCacheManager.On("GetBucktValue", "folder:"+folderID.String()).Return("", nil)
+	mockSetUp.cacheManager.On("GetBucktValue", "folder:"+folderID.String()).Return("", nil)
 
 	// Mock repo get
-	mockSetUp.MockFolderRepository.On("GetFolder", folderID).Return(mockFolder, nil)
+	mockSetUp.folderRepository.On("GetFolder", folderID).Return(mockFolder, nil)
 
 	// Mock cache set with correct JSON string
-	mockSetUp.MockCacheManager.On("SetBucktValue", "folder:"+folderID.String(), jsonStr).Return(nil)
+	mockSetUp.cacheManager.On("SetBucktValue", "folder:"+folderID.String(), jsonStr).Return(nil)
 
-	folder, err := mockSetUp.FolderService.GetFolder("user1", folderID.String())
+	folder, err := mockSetUp.folderService.GetFolder("user1", folderID.String())
 	assert.NoError(t, err)
 	assert.Equal(t, mockFolder, folder)
 
-	mockSetUp.MockFolderRepository.AssertExpectations(t)
-	mockSetUp.MockCacheManager.AssertExpectations(t)
+	mockSetUp.folderRepository.AssertExpectations(t)
+	mockSetUp.cacheManager.AssertExpectations(t)
 }
 
 func TestGetFolders(t *testing.T) {
@@ -93,12 +94,12 @@ func TestGetFolders(t *testing.T) {
 		{ID: uuid.New(), Name: "folder2"},
 	}
 
-	mockSetUp.MockFolderRepository.On("GetFolders", parentID).Return(mockFolders, nil)
+	mockSetUp.folderRepository.On("GetFolders", parentID).Return(mockFolders, nil)
 
-	folders, err := mockSetUp.FolderService.GetFolders(parentID.String())
+	folders, err := mockSetUp.folderService.GetFolders(parentID.String())
 	assert.NoError(t, err)
 	assert.Equal(t, mockFolders, folders)
-	mockSetUp.MockFolderRepository.AssertExpectations(t)
+	mockSetUp.folderRepository.AssertExpectations(t)
 }
 
 func TestMoveFolder(t *testing.T) {
@@ -107,11 +108,11 @@ func TestMoveFolder(t *testing.T) {
 	folderID := uuid.MustParse("550e8400-e29b-41d4-a716-446655440000")
 	newParentID := uuid.MustParse("550e8400-e29b-41d4-a716-446655440001")
 
-	mockSetUp.MockFolderRepository.On("MoveFolder", folderID, newParentID).Return(nil)
+	mockSetUp.folderRepository.On("MoveFolder", folderID, newParentID).Return(nil)
 
-	err := mockSetUp.FolderService.MoveFolder(folderID.String(), newParentID.String())
+	err := mockSetUp.folderService.MoveFolder(folderID.String(), newParentID.String())
 	assert.NoError(t, err)
-	mockSetUp.MockFolderRepository.AssertExpectations(t)
+	mockSetUp.folderRepository.AssertExpectations(t)
 }
 
 func TestRenameFolder(t *testing.T) {
@@ -122,11 +123,11 @@ func TestRenameFolder(t *testing.T) {
 
 	user_id := "user1"
 
-	mockSetUp.MockFolderRepository.On("RenameFolder", user_id, folderID, newName).Return(nil)
+	mockSetUp.folderRepository.On("RenameFolder", user_id, folderID, newName).Return(nil)
 
-	err := mockSetUp.FolderService.RenameFolder(user_id, folderID.String(), newName)
+	err := mockSetUp.folderService.RenameFolder(user_id, folderID.String(), newName)
 	assert.NoError(t, err)
-	mockSetUp.MockFolderRepository.AssertExpectations(t)
+	mockSetUp.folderRepository.AssertExpectations(t)
 }
 
 func TestDeleteFolder(t *testing.T) {
@@ -135,12 +136,12 @@ func TestDeleteFolder(t *testing.T) {
 	folderID := uuid.MustParse("550e8400-e29b-41d4-a716-446655440000")
 	parentID := uuid.MustParse("550e8400-e29b-41d4-a716-446655440001")
 
-	mockSetUp.MockFolderRepository.On("DeleteFolder", folderID).Return(parentID.String(), nil)
+	mockSetUp.folderRepository.On("DeleteFolder", folderID).Return(parentID.String(), nil)
 
-	returnedParentID, err := mockSetUp.FolderService.DeleteFolder(folderID.String())
+	returnedParentID, err := mockSetUp.folderService.DeleteFolder(folderID.String())
 	assert.NoError(t, err)
 	assert.Equal(t, parentID.String(), returnedParentID)
-	mockSetUp.MockFolderRepository.AssertExpectations(t)
+	mockSetUp.folderRepository.AssertExpectations(t)
 }
 
 func TestScrubFolder(t *testing.T) {
@@ -150,15 +151,15 @@ func TestScrubFolder(t *testing.T) {
 	parentID := uuid.MustParse("550e8400-e29b-41d4-a716-446655440001")
 	mockFolder := &model.FolderModel{ID: folderID, Path: "/path/to/folder"}
 
-	mockSetUp.MockFolderRepository.On("GetFolder", folderID).Return(mockFolder, nil)
+	mockSetUp.folderRepository.On("GetFolder", folderID).Return(mockFolder, nil)
 
-	mockSetUp.MockFileSystemService.On("FSDeleteFolder", mockFolder.Path).Return(nil)
+	mockSetUp.backend.On("DeleteFolder", mockFolder.Path).Return(nil)
 
-	mockSetUp.MockFolderRepository.On("ScrubFolder", "user1", folderID).Return(parentID.String(), nil)
+	mockSetUp.folderRepository.On("ScrubFolder", "user1", folderID).Return(parentID.String(), nil)
 
-	returnedParentID, err := mockSetUp.FolderService.ScrubFolder("user1", folderID.String())
+	returnedParentID, err := mockSetUp.folderService.ScrubFolder("user1", folderID.String())
 	assert.NoError(t, err)
 	assert.Equal(t, parentID.String(), returnedParentID)
-	mockSetUp.MockFolderRepository.AssertExpectations(t)
-	mockSetUp.MockFileSystemService.AssertExpectations(t)
+	mockSetUp.folderRepository.AssertExpectations(t)
+	mockSetUp.backend.AssertExpectations(t)
 }

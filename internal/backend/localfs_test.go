@@ -1,0 +1,137 @@
+package backend
+
+import (
+	"os"
+	"path/filepath"
+	"testing"
+
+	"github.com/Rhaqim/buckt/internal/mocks"
+	"github.com/Rhaqim/buckt/pkg/logger"
+	"github.com/stretchr/testify/assert"
+)
+
+func setupFSV2Test() (*LocalFileSystemService, string) {
+	log := logger.NewLogger("", true, false)
+	mediaDir := os.TempDir()
+	cache := new(mocks.LRUCache)
+	bfs := NewLocalFileSystemService(log, mediaDir, cache).(*LocalFileSystemService)
+	return bfs, mediaDir
+}
+
+func TestFSV2Put(t *testing.T) {
+	bfs, mediaDir := setupFSV2Test()
+	testPath := "testfile.txt"
+	testContent := []byte("Hello, World!")
+	expectedPath := filepath.Join(mediaDir, testPath)
+
+	// Create a test file
+	_, err := os.Create(expectedPath)
+	assert.NoError(t, err)
+
+	// Write file
+	err = bfs.Put(testPath, testContent)
+	assert.NoError(t, err)
+	defer os.Remove(expectedPath)
+
+	// Validate file content
+	content, err := os.ReadFile(expectedPath)
+	assert.NoError(t, err)
+	assert.Equal(t, testContent, content)
+}
+
+func TestFSV2GetFile(t *testing.T) {
+	bfs, mediaDir := setupFSV2Test()
+	testPath := "testfile.txt"
+	testContent := []byte("Hello, World!")
+	expectedPath := filepath.Join(mediaDir, testPath)
+
+	// Create a test file
+	_, err := os.Create(expectedPath)
+	assert.NoError(t, err)
+
+	// Create a test file
+	err = os.WriteFile(expectedPath, testContent, 0644)
+	assert.NoError(t, err)
+	defer os.Remove(expectedPath)
+
+	// Get file
+	content, err := bfs.Get(testPath)
+	assert.NoError(t, err)
+	assert.Equal(t, testContent, content)
+}
+
+func TestFSV2Move(t *testing.T) {
+	bfs, mediaDir := setupFSV2Test()
+	oldPath := "oldfile.txt"
+	newPath := "newfile.txt"
+	testContent := []byte("Hello, World!")
+	oldFilePath := filepath.Join(mediaDir, oldPath)
+	newFilePath := filepath.Join(mediaDir, newPath)
+
+	// Create a test file
+	_, err := os.Create(oldFilePath)
+	assert.NoError(t, err)
+
+	// Create a test file
+	_, err = os.Create(newFilePath)
+	assert.NoError(t, err)
+
+	// Create a test file
+	err = os.WriteFile(oldFilePath, testContent, 0644)
+	assert.NoError(t, err)
+	defer os.Remove(oldFilePath)
+	defer os.Remove(newFilePath)
+
+	// Move file
+	err = bfs.Move(oldPath, newPath)
+	assert.NoError(t, err)
+
+	// Validate old file does not exist
+	_, err = os.Stat(oldFilePath)
+	assert.True(t, os.IsNotExist(err))
+
+	// Validate new file content
+	content, err := os.ReadFile(newFilePath)
+	assert.NoError(t, err)
+	assert.Equal(t, testContent, content)
+}
+
+func TestFSV2DeleteFile(t *testing.T) {
+	bfs, mediaDir := setupFSV2Test()
+	testPath := "testfile.txt"
+	expectedPath := filepath.Join(mediaDir, testPath)
+
+	// Create a test file
+	_, err := os.Create(expectedPath)
+	assert.NoError(t, err)
+
+	// Delete file
+	err = bfs.Delete(testPath)
+	assert.NoError(t, err)
+
+	// Validate file does not exist
+	_, err = os.Stat(expectedPath)
+	assert.True(t, os.IsNotExist(err))
+}
+func TestFSV2DeleteFolder(t *testing.T) {
+	bfs, mediaDir := setupFSV2Test()
+	testFolderPath := "testfolder"
+	expectedFolderPath := filepath.Join(mediaDir, testFolderPath)
+
+	// Create a test folder
+	err := os.MkdirAll(expectedFolderPath, os.ModePerm)
+	assert.NoError(t, err)
+
+	// Create a test file inside the folder
+	testFilePath := filepath.Join(expectedFolderPath, "testfile.txt")
+	_, err = os.Create(testFilePath)
+	assert.NoError(t, err)
+
+	// Delete folder
+	err = bfs.DeleteFolder(testFolderPath)
+	assert.NoError(t, err)
+
+	// Validate folder does not exist
+	_, err = os.Stat(expectedFolderPath)
+	assert.True(t, os.IsNotExist(err))
+}
