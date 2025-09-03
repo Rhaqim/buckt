@@ -110,7 +110,7 @@ type BackendConfig struct {
 	// Source is the current backend in use (e.g., local, S3).
 	Source Backend
 
-	// Target is the backend to migrate to (e.g., S3, Azure).
+	// Target is the backup or primary backend to migrate to (e.g., S3, Azure).
 	// If MigrationEnabled is false, this is ignored.
 	Target Backend
 
@@ -131,7 +131,7 @@ func LocalBackend() Backend {
 	return &domain.PlaceholderBackend{Title: "local"}
 }
 
-// BucktOptions represents the configuration options for the Buckt application.
+// Config represents the configuration options for the Buckt application.
 // It includes settings for logging, media directory, and standalone mode.
 //
 // Fields:
@@ -151,6 +151,7 @@ type Config struct {
 	Backend BackendConfig
 }
 
+// ConfigFunc is a function type that takes a pointer to Config and modifies it.
 type ConfigFunc func(*Config)
 
 // WithDB is a configuration function that sets the database connection
@@ -171,15 +172,14 @@ func WithDB(driver DBDrivers, db *sql.DB) ConfigFunc {
 	}
 }
 
-// WithLogger is a configuration function that sets the logger for the Config.
-// It takes a Log instance as an argument and assigns it to the Log field of Config.
+// WithCache is a configuration function that sets the cache configuration for the Config.
+// It takes a CacheConfig instance as an argument and assigns it to the Cache field of Config.
 //
 // Parameters:
-//   - log: An instance of Log to be used for logging.
+//   - cache: An instance of CacheConfig to be used for caching.
 //
 // Returns:
-//   - A ConfigFunc that sets the Log field of Config.
-//     A ConfigFunc that sets the CacheManager in the Config.
+//   - A ConfigFunc that sets the CacheManager in the Config.
 func WithCache(cache CacheConfig) ConfigFunc {
 	return func(c *Config) {
 		c.Cache = cache

@@ -35,15 +35,16 @@ type Client struct {
 	folderService domain.FolderService
 }
 
-// New initializes a new Buckt instance with the provided configuration options.
-// It accepts a BucktConfig struct as an argument and returns a pointer to the initialized Buckt instance.
+// New initializes a new Buckt client with the provided configuration options.
+// It accepts a Config struct and a variadic number of ConfigFunc options as arguments and returns a pointer to the initialized Buckt client.
 //
 // Parameters:
-// - bucktOpts: A BucktConfig struct containing the configuration options for the Buckt instance.
+// - conf: A Config struct containing the configuration options for the Buckt client.
+// - opts: A variadic number of ConfigFunc options to customize the BucktConfig.
 //
 // Returns:
-// - A pointer to the initialized Buckt instance.
-// - An error if the Buckt instance could not be created.
+// - A pointer to the initialized Buckt Client.
+// - An error if the Buckt client could not be created.
 func New(conf Config, opts ...ConfigFunc) (*Client, error) {
 	for _, opt := range opts {
 		if opt != nil {
@@ -98,21 +99,20 @@ func New(conf Config, opts ...ConfigFunc) (*Client, error) {
 	return buckt, nil
 }
 
-// Default initializes a new Buckt instance with default configuration options.
+// Default initializes a new Buckt Client with default configuration options.
 // It accepts a variadic number of ConfigFunc options to customize the BucktConfig.
 //
 // The default configuration includes:
 // - LogConfig with LogTerminal set to true, LogFile set to "logs", and Debug set to true.
 // - MediaDir set to "media".
-// - StandaloneMode set to true.
 // - FlatNameSpaces set to true.
 //
 // Parameters:
 // - opts: A variadic number of ConfigFunc options to customize the BucktConfig.
 //
 // Returns:
-// - A pointer to the initialized Buckt instance.
-// - An error if the Buckt instance could not be created.
+// - A pointer to the initialized Buckt Client.
+// - An error if the Buckt Client could not be created.
 func Default(opts ...ConfigFunc) (*Client, error) {
 	bucktOpts := Config{
 		Log:            LogConfig{LogTerminal: true, Debug: true},
@@ -130,7 +130,7 @@ func Default(opts ...ConfigFunc) (*Client, error) {
 }
 
 // Close closes the Buckt instance.
-// It closes the database connection.
+// It closes the database connection and the LRU cache.
 func (b *Client) Close() {
 	b.db.Close()
 	b.lruCache.Close()
@@ -139,12 +139,16 @@ func (b *Client) Close() {
 /* Folder Methods */
 
 // NewFolder creates a new folder for a user within a specified parent folder.
-// It takes the following parameters:
-// - user_id: The ID of the user creating the folder.
-// - parent_id: The ID of the parent folder where the new folder will be created.
-// - folder_name: The name of the new folder.
-// - description: A description of the new folder.
-// It returns the ID of the newly created folder and an error if the operation fails.
+//
+// Parameters:
+//   - user_id: The ID of the user creating the folder.
+//   - parent_id: The ID of the parent folder where the new folder will be created.
+//   - folder_name: The name of the new folder.
+//   - description: A description of the new folder.
+//
+// Returns:
+//   - The ID of the newly created folder.
+//   - An error if the operation fails.
 func (b *Client) NewFolder(user_id string, parent_id string, folder_name string, description string) (new_folder_id string, err error) {
 	return b.folderService.CreateFolder(user_id, parent_id, folder_name, description)
 }
@@ -152,13 +156,11 @@ func (b *Client) NewFolder(user_id string, parent_id string, folder_name string,
 // ListFolders retrieves a list of folders for a given folder.
 //
 // Parameters:
-//
-//	folder_id - The ID of the folder to retrieve.
+//   - folder_id: The ID of the folder to retrieve.
 //
 // Returns:
-//
-//	[]model.FolderModel - A list of folders.
-//	error - An error if the folder could not be retrieved.
+//   - []model.FolderModel: A list of folders.
+//   - error: An error if the folder could not be retrieved.
 func (b *Client) ListFolders(folder_id string) ([]model.FolderModel, error) {
 	return b.folderService.GetFolders(folder_id)
 }
@@ -166,14 +168,12 @@ func (b *Client) ListFolders(folder_id string) ([]model.FolderModel, error) {
 // GetFolderWithContent retrieves a folder and its content.
 //
 // Parameters:
-//
-//	user_id - The ID of the user who owns the folder.
-//	folder_id - The ID of the folder to retrieve the content for.
+//   - user_id: The ID of the user who owns the folder.
+//   - folder_id: The ID of the folder to retrieve the content for.
 //
 // Returns:
-//
-//	*model.FolderModel - The folder model containing the folder content.
-//	error - An error if the folder content could not be retrieved.
+//   - *model.FolderModel: The folder model containing the folder content.
+//   - error: An error if the folder content could not be retrieved.
 func (b *Client) GetFolderWithContent(user_id, folder_id string) (*model.FolderModel, error) {
 	return b.folderService.GetFolder(user_id, folder_id)
 }
@@ -181,14 +181,12 @@ func (b *Client) GetFolderWithContent(user_id, folder_id string) (*model.FolderM
 // MoveFolder moves a folder to a new parent folder.
 //
 // Parameters:
-//
-//	user_id: The ID of the user performing the operation.
-//	folder_id: The ID of the folder to be moved.
-//	new_parent_id: The ID of the new parent folder.
+//   - user_id: The ID of the user performing the operation.
+//   - folder_id: The ID of the folder to be moved.
+//   - new_parent_id: The ID of the new parent folder.
 //
 // Returns:
-//
-//	error: An error if the operation fails, otherwise nil.
+//   - error: An error if the operation fails, otherwise nil.
 func (b *Client) MoveFolder(user_id, folder_id string, new_parent_id string) error {
 	return b.folderService.MoveFolder(folder_id, new_parent_id)
 }
@@ -196,14 +194,12 @@ func (b *Client) MoveFolder(user_id, folder_id string, new_parent_id string) err
 // RenameFolder renames a folder.
 //
 // Parameters:
-//
-//	user_id: The ID of the user performing the operation.
-//	folder_id: The ID of the folder to be renamed.
-//	new_name: The new name for the folder.
+//   - user_id: The ID of the user performing the operation.
+//   - folder_id: The ID of the folder to be renamed.
+//   - new_name: The new name for the folder.
 //
 // Returns:
-//
-//	error: An error if the operation fails, otherwise nil.
+//   - error: An error if the operation fails, otherwise nil.
 func (b *Client) RenameFolder(user_id, folder_id string, new_name string) error {
 	return b.folderService.RenameFolder(user_id, folder_id, new_name)
 }
@@ -289,13 +285,12 @@ func (b *Client) GetFileStream(file_id string) (*model.FileModel, io.ReadCloser,
 // ListFiles retrieves a list of files for a given folder.
 //
 // Parameters:
-//
-//	folder_id - The ID of the folder to retrieve.
+//   - folder_id: The ID of the folder to retrieve.
 //
 // Returns:
 //
-//	[]model.FileModel - A list of files.
-//	error - An error if the folder could not be retrieved.
+//   - []model.FileModel: A list of files.
+//   - error: An error if the folder could not be retrieved.
 func (b *Client) ListFiles(folder_id string) ([]model.FileModel, error) {
 	return b.fileService.GetFiles(folder_id)
 }
