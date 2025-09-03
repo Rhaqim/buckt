@@ -8,24 +8,22 @@ import (
 	"path/filepath"
 
 	"github.com/Rhaqim/buckt/internal/domain"
-	"github.com/Rhaqim/buckt/pkg/logger"
 	"golang.org/x/sync/singleflight"
 )
 
 type FileSystemService struct {
-	*logger.BucktLogger
-
 	MediaDir string
+	logger   domain.BucktLogger
 
 	g     singleflight.Group
 	cache domain.LRUCache
 }
 
-func NewFileSystemService(bucktLogger *logger.BucktLogger, medaiDir string, cache domain.LRUCache) domain.FileSystemService {
+func NewFileSystemService(bucktLogger domain.BucktLogger, medaiDir string, cache domain.LRUCache) domain.FileSystemService {
 	bucktLogger.Info("🚀 Initialising file system services")
 	return &FileSystemService{
-		BucktLogger: bucktLogger,
-		MediaDir:    medaiDir,
+		MediaDir: medaiDir,
+		logger:   bucktLogger,
 
 		g:     singleflight.Group{},
 		cache: cache,
@@ -36,7 +34,7 @@ func (bfs *FileSystemService) FSValidatePath(path string) (string, error) {
 	filePath := filepath.Join(bfs.MediaDir, path)
 
 	if _, err := os.Stat(filePath); err != nil {
-		return "", bfs.WrapError("failed to validate file path", err)
+		return "", bfs.logger.WrapError("failed to validate file path", err)
 	}
 
 	return filePath, nil
@@ -48,11 +46,11 @@ func (bfs *FileSystemService) FSWriteFile(filePath string, file []byte) error {
 
 	// Save the file to the file system
 	if err := os.MkdirAll(filepath.Dir(filePath), os.ModePerm); err != nil {
-		return bfs.WrapError("failed to create directory", err)
+		return bfs.logger.WrapError("failed to create directory", err)
 	}
 
 	if err := os.WriteFile(filePath, file, 0644); err != nil {
-		return bfs.WrapError("failed to write file", err)
+		return bfs.logger.WrapError("failed to write file", err)
 	}
 
 	return nil
@@ -73,12 +71,12 @@ func (bfs *FileSystemService) FSGetFile(path string) ([]byte, error) {
 	})
 
 	if err != nil {
-		return nil, bfs.WrapError("failed to read file", err)
+		return nil, bfs.logger.WrapError("failed to read file", err)
 	}
 
 	// check what type result is
 	if _, ok := result.([]byte); !ok {
-		return nil, bfs.WrapError(fmt.Sprintf("failed to read file: expected []byte but got %T", result), errors.New("unexpected type"))
+		return nil, bfs.logger.WrapError(fmt.Sprintf("failed to read file: expected []byte but got %T", result), errors.New("unexpected type"))
 	}
 	// bfs.cache.Add(filePath, result.([]byte))
 	bfs.cache.Add(filePath, result.([]byte))
@@ -112,11 +110,11 @@ func (bfs *FileSystemService) FSUpdateFile(oldPath, newPath string) error {
 	}
 
 	if err := os.MkdirAll(filepath.Dir(newFilePath), 0755); err != nil {
-		return bfs.WrapError("failed to create directory", err)
+		return bfs.logger.WrapError("failed to create directory", err)
 	}
 
 	if err := os.Rename(oldFilePath, newFilePath); err != nil {
-		return bfs.WrapError("failed to update file", err)
+		return bfs.logger.WrapError("failed to update file", err)
 	}
 
 	return nil
@@ -129,7 +127,7 @@ func (bfs *FileSystemService) FSDeleteFile(folderPath string) error {
 	}
 
 	if err := os.Remove(filePath); err != nil {
-		return bfs.WrapError("failed to delete file", err)
+		return bfs.logger.WrapError("failed to delete file", err)
 	}
 
 	return nil
@@ -139,7 +137,7 @@ func (bfs *FileSystemService) FSDeleteFolder(folderPath string) error {
 	folderPath = filepath.Join(bfs.MediaDir, folderPath)
 
 	if err := os.RemoveAll(folderPath); err != nil {
-		return bfs.WrapError("failed to delete folder", err)
+		return bfs.logger.WrapError("failed to delete folder", err)
 	}
 
 	return nil

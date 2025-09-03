@@ -7,8 +7,8 @@ import (
 
 	_ "github.com/lib/pq"
 
+	"github.com/Rhaqim/buckt/internal/domain"
 	"github.com/Rhaqim/buckt/internal/model"
-	"github.com/Rhaqim/buckt/pkg/logger"
 
 	"gorm.io/driver/postgres"
 	"gorm.io/driver/sqlite"
@@ -18,12 +18,12 @@ import (
 
 type DB struct {
 	*gorm.DB
-	*logger.BucktLogger
+	log      domain.BucktLogger
 	external bool
 }
 
 // NewSQLite creates a new SQLite database connection.
-func NewDB(sqlDBInstance *sql.DB, driver model.DBDrivers, log *logger.BucktLogger, debug bool) (*DB, error) {
+func NewDB(sqlDBInstance *sql.DB, driver model.DBDrivers, log domain.BucktLogger, debug bool) (*DB, error) {
 	var external bool
 
 	// Define supported database drivers
@@ -60,7 +60,7 @@ func NewDB(sqlDBInstance *sql.DB, driver model.DBDrivers, log *logger.BucktLogge
 	// Create a new GORM configuration
 	gormConfig := &gorm.Config{
 		Logger: gormLogger.New(
-			log.Logger,
+			log.GetLogger(),
 			gormLogger.Config{
 				SlowThreshold: time.Second,
 				LogLevel:      logLevel,
@@ -123,13 +123,13 @@ func NewDB(sqlDBInstance *sql.DB, driver model.DBDrivers, log *logger.BucktLogge
 // Close closes the database connection.
 func (db *DB) Close() error {
 	if db.external {
-		db.Info("Skipping database close: external connection")
+		db.log.Info("Skipping database close: external connection")
 		return nil // Don't close external DB
 	}
 
 	sqlDB, err := db.DB.DB()
 	if err != nil {
-		return db.WrapError("Failed to get database connection: %v", err)
+		return db.log.WrapError("Failed to get database connection: %v", err)
 	}
 
 	err = sqlDB.Close()
@@ -138,17 +138,17 @@ func (db *DB) Close() error {
 }
 
 func (db *DB) Migrate() error {
-	db.Info("🚀 Running migrations...")
+	db.log.Info("🚀 Running migrations...")
 
 	if err := db.AutoMigrate(&model.FolderModel{}); err != nil {
-		return db.WrapErrorf("❌ failed to migrate FolderModel: %w", err)
+		return db.log.WrapErrorf("❌ failed to migrate FolderModel: %w", err)
 	}
-	db.Logger.Println("✅ FolderModel migrated")
+	db.log.GetLogger().Println("✅ FolderModel migrated")
 
 	if err := db.AutoMigrate(&model.FileModel{}); err != nil {
-		return db.WrapErrorf("❌ failed to migrate FileModel: %w", err)
+		return db.log.WrapErrorf("❌ failed to migrate FileModel: %w", err)
 	}
-	db.Logger.Println("✅ FileModel migrated")
+	db.log.GetLogger().Println("✅ FileModel migrated")
 
 	return nil
 }

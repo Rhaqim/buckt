@@ -1,5 +1,10 @@
 package domain
 
+import (
+	"io"
+	"log"
+)
+
 type CacheManager interface {
 	// Set sets the value for the given key.
 	SetBucktValue(key string, value any) error
@@ -17,4 +22,16 @@ type LRUCache interface {
 	Hits() uint64
 	Misses() uint64
 	Close()
+}
+
+type BucktLogger interface {
+	Errorf(format string, args ...any)
+	Info(message string)
+	Infof(format string, args ...any)
+	Warn(message string)
+	WrapError(message string, err error) error
+	WrapErrorf(message string, err error, args ...any) error
+	AddLogger(logger *log.Logger)
+	GetLogger() *log.Logger
+	Writer() io.Writer
 }

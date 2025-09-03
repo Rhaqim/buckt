@@ -6,6 +6,8 @@ import (
 	"os"
 	"path/filepath"
 	"time"
+
+	"github.com/Rhaqim/buckt/internal/domain"
 )
 
 type BucktLogger struct {
@@ -13,9 +15,9 @@ type BucktLogger struct {
 	debug  bool
 }
 
-type LogFunc func(*BucktLogger)
+type LogFunc func(domain.BucktLogger)
 
-func NewLogger(logFile string, logTerminal, debug bool, opts ...LogFunc) *BucktLogger {
+func NewLogger(logFile string, logTerminal, debug bool, opts ...LogFunc) domain.BucktLogger {
 	bucktLogger := &BucktLogger{debug: debug}
 
 	for _, opt := range opts {
@@ -62,9 +64,17 @@ func NewLogger(logFile string, logTerminal, debug bool, opts ...LogFunc) *BucktL
 }
 
 func WithLogger(logger *log.Logger) LogFunc {
-	return func(l *BucktLogger) {
-		l.Logger = logger
+	return func(l domain.BucktLogger) {
+		l.AddLogger(logger)
 	}
+}
+
+func (l *BucktLogger) AddLogger(logger *log.Logger) {
+	l.Logger = logger
+}
+
+func (l *BucktLogger) GetLogger() *log.Logger {
+	return l.Logger
 }
 
 // Writer returns the writer for the info logger

@@ -7,18 +7,17 @@ import (
 
 	"github.com/Rhaqim/buckt/internal/domain"
 	"github.com/Rhaqim/buckt/internal/model"
-	"github.com/Rhaqim/buckt/pkg/logger"
 	"golang.org/x/sync/singleflight"
 )
 
 type LocalFileSystemService struct {
-	logger   *logger.BucktLogger
+	logger   domain.BucktLogger
 	mediaDir string
 	g        singleflight.Group
 	cache    domain.LRUCache
 }
 
-func NewLocalFileSystemService(logger *logger.BucktLogger, mediaDir string, cache domain.LRUCache) domain.FileBackend {
+func NewLocalFileSystemService(logger domain.BucktLogger, mediaDir string, cache domain.LRUCache) domain.FileBackend {
 	logger.Info("🚀 Initialising local file system backend")
 	return &LocalFileSystemService{
 		logger:   logger,

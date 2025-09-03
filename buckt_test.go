@@ -6,7 +6,8 @@ import (
 	"io"
 	"testing"
 
-	"github.com/Rhaqim/buckt/internal/cache"
+	"github.com/Rhaqim/buckt/internal/backend"
+	"github.com/Rhaqim/buckt/internal/database"
 	"github.com/Rhaqim/buckt/internal/mocks"
 	"github.com/Rhaqim/buckt/internal/model"
 
@@ -158,7 +159,7 @@ func TestDefault(t *testing.T) {
 		}
 
 		cacheConfig := CacheConfig{
-			Manager:         cache.NewNoOpCache(),
+			Manager:         mocks.NewNoopCache(),
 			FileCacheConfig: fileCacheConfig,
 		}
 
@@ -207,7 +208,7 @@ func TestDefault(t *testing.T) {
 		}
 
 		cacheConfig := CacheConfig{
-			Manager:         cache.NewNoOpCache(),
+			Manager:         mocks.NewNoopCache(),
 			FileCacheConfig: fileCacheConfig,
 		}
 
@@ -222,29 +223,6 @@ func TestDefault(t *testing.T) {
 		assert.NotNil(t, buckt)
 	})
 }
-
-// func TestGetHandler(t *testing.T) {
-// 	buckt := setupBucktTest(t)
-
-// 	handler := buckt.GetHandler()
-// 	assert.NotNil(t, handler)
-// }
-
-// func TestServer(t *testing.T) {
-// 	buckt := setupBucktTest(t)
-
-// 	go func() {
-// 		err := buckt.StartServer(":8080")
-// 		assert.NoError(t, err)
-// 	}()
-
-// 	time.Sleep(100 * time.Millisecond) // Ensure server starts before test exits
-
-// 	// Cleanup to ensure the server is closed after the test
-// 	t.Cleanup(func() {
-// 		buckt.Close()
-// 	})
-// }
 
 func TestClose(t *testing.T) {
 	buckt := setupBucktTest(t)
@@ -564,4 +542,165 @@ func TestDeleteFilePermanently(t *testing.T) {
 
 	// Verify expectations
 	buckt.MockFileService.AssertExpectations(t)
+}
+
+func TestInitializeCache(t *testing.T) {
+	// Mock logger
+	mockLogger := &mocks.NoopLogger{}
+
+	t.Run("returns provided cache manager and valid lruCache", func(t *testing.T) {
+		fileCacheConfig := FileCacheConfig{
+			NumCounters: 1e3,
+			MaxCost:     1 << 20,
+			BufferItems: 8,
+		}
+		providedCache := mocks.NewNoopCache()
+		conf := CacheConfig{
+			Manager:         providedCache,
+			FileCacheConfig: fileCacheConfig,
+		}
+
+		cm, lru := initializeCache(conf, mockLogger)
+		assert.Equal(t, providedCache, cm)
+		assert.NotNil(t, lru)
+	})
+
+	t.Run("returns NoOpCache if Manager is nil", func(t *testing.T) {
+		fileCacheConfig := FileCacheConfig{
+			NumCounters: 1e3,
+			MaxCost:     1 << 20,
+			BufferItems: 8,
+		}
+		conf := CacheConfig{
+			Manager:         nil,
+			FileCacheConfig: fileCacheConfig,
+		}
+
+		cm, lru := initializeCache(conf, mockLogger)
+		assert.NotNil(t, cm)
+		assert.NotNil(t, lru)
+	})
+
+	t.Run("fallbacks to NoOpFileCache on error", func(t *testing.T) {
+		// Use invalid config to force error
+		fileCacheConfig := FileCacheConfig{
+			NumCounters: 0,
+			MaxCost:     0,
+			BufferItems: 0,
+		}
+		conf := CacheConfig{
+			Manager:         nil,
+			FileCacheConfig: fileCacheConfig,
+		}
+
+		cm, lru := initializeCache(conf, mockLogger)
+		assert.NotNil(t, cm)
+		assert.NotNil(t, lru)
+	})
+}
+
+func TestResolveBackend(t *testing.T) {
+	mockLogger := &mocks.NoopLogger{}
+	mockLRU := &mocks.NoopLRUCache{}
+	mediaDir := "media"
+
+	t.Run("MigrationEnabled with Source and Target", func(t *testing.T) {
+		source := &mocks.Backend{NameVal: "local"}
+		target := &mocks.Backend{NameVal: "mock"}
+		bc := BackendConfig{
+			MigrationEnabled: true,
+			Source:           source,
+			Target:           target,
+		}
+		result := resolveBackend(mediaDir, bc, mockLogger, mockLRU)
+		_, ok := result.(*backend.MigrationBackendService)
+		assert.True(t, ok)
+	})
+
+	t.Run("Source only", func(t *testing.T) {
+		source := &mocks.Backend{NameVal: "local"}
+		bc := BackendConfig{
+			Source: source,
+		}
+		result := resolveBackend(mediaDir, bc, mockLogger, mockLRU)
+		// Should instantiate local backend
+		_, ok := result.(*backend.LocalFileSystemService)
+		assert.True(t, ok)
+	})
+
+	t.Run("Target only", func(t *testing.T) {
+		target := &mocks.Backend{NameVal: "local"}
+		bc := BackendConfig{
+			Target: target,
+		}
+		result := resolveBackend(mediaDir, bc, mockLogger, mockLRU)
+		_, ok := result.(*backend.LocalFileSystemService)
+		assert.True(t, ok)
+	})
+
+	t.Run("No Source or Target", func(t *testing.T) {
+		bc := BackendConfig{}
+		result := resolveBackend(mediaDir, bc, mockLogger, mockLRU)
+		_, ok := result.(*backend.LocalFileSystemService)
+		assert.True(t, ok)
+	})
+}
+
+func TestInstantiateIfLocal(t *testing.T) {
+	mockLogger := &mocks.NoopLogger{}
+	mockLRU := &mocks.NoopLRUCache{}
+	mediaDir := "media"
+
+	t.Run("Returns LocalFileSystemService if backend name is local", func(t *testing.T) {
+		b := &mocks.Backend{NameVal: "local"}
+		result := instantiateIfLocal(b, mediaDir, mockLogger, mockLRU)
+		_, ok := result.(*backend.LocalFileSystemService)
+		assert.True(t, ok)
+	})
+
+	t.Run("Returns backend as is if name is not local", func(t *testing.T) {
+		b := &mocks.Backend{NameVal: "mock"}
+		result := instantiateIfLocal(b, mediaDir, mockLogger, mockLRU)
+		assert.Equal(t, b, result)
+	})
+}
+
+func TestNewAppServices(t *testing.T) {
+	mockLogger := &mocks.NoopLogger{}
+	mockCacheManager := &mocks.NoopCache{}
+	mockBackend := &mocks.Backend{}
+	// Use an in-memory SQLite DB for testing
+	sqlDB, err := sql.Open("sqlite3", ":memory:")
+	assert.NoError(t, err)
+	defer sqlDB.Close()
+
+	dbConf := DBConfig{Driver: SQLite, Database: sqlDB}
+	db, err := database.NewDB(dbConf.Database, dbConf.Driver, mockLogger, false)
+	assert.NoError(t, err)
+	defer db.Close()
+
+	t.Run("returns valid FolderService and FileService", func(t *testing.T) {
+		folderService, fileService := newAppServices(
+			true,
+			db,
+			mockLogger,
+			mockCacheManager,
+			mockBackend,
+		)
+		assert.NotNil(t, folderService)
+		assert.NotNil(t, fileService)
+	})
+
+	t.Run("returns different instances for FolderService and FileService", func(t *testing.T) {
+		folderService, fileService := newAppServices(
+			false,
+			db,
+			mockLogger,
+			mockCacheManager,
+			mockBackend,
+		)
+		assert.NotNil(t, folderService)
+		assert.NotNil(t, fileService)
+		assert.NotEqual(t, folderService, fileService)
+	})
 }

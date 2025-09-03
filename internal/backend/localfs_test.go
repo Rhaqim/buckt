@@ -13,7 +13,7 @@ import (
 func setupFSV2Test() (*LocalFileSystemService, string) {
 	log := logger.NewLogger("", true, false)
 	mediaDir := os.TempDir()
-	cache := new(mocks.LRUCache)
+	cache := new(mocks.NoopLRUCache)
 	bfs := NewLocalFileSystemService(log, mediaDir, cache).(*LocalFileSystemService)
 	return bfs, mediaDir
 }

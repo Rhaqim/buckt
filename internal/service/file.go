@@ -9,14 +9,13 @@ import (
 
 	"github.com/Rhaqim/buckt/internal/domain"
 	"github.com/Rhaqim/buckt/internal/model"
-	"github.com/Rhaqim/buckt/pkg/logger"
 	"github.com/google/uuid"
 )
 
 type FileService struct {
 	flatNameSpaces bool
 
-	logger *logger.BucktLogger
+	logger domain.BucktLogger
 
 	cache domain.CacheManager
 	repo  domain.FileRepository
@@ -26,7 +25,7 @@ type FileService struct {
 }
 
 func NewFileService(
-	bucktLogger *logger.BucktLogger,
+	bucktLogger domain.BucktLogger,
 
 	cache domain.CacheManager,
 	fileRepository domain.FileRepository,

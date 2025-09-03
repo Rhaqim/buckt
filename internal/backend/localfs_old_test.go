@@ -18,8 +18,8 @@ func (M *MockLRUCache) Hits() uint64                      { return 0 }
 func (M *MockLRUCache) Misses() uint64                    { return 0 }
 
 func setupFSTest() (*FileSystemService, string) {
-	log := logger.NewLogger("", true, false)
 	mediaDir := os.TempDir()
+	log := logger.NewLogger("", true, false)
 	cache := &MockLRUCache{}
 	bfs := NewFileSystemService(log, mediaDir, cache).(*FileSystemService)
 	return bfs, mediaDir

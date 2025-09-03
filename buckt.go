@@ -15,6 +15,7 @@ import (
 	"github.com/Rhaqim/buckt/internal/cache"
 	"github.com/Rhaqim/buckt/internal/database"
 	"github.com/Rhaqim/buckt/internal/domain"
+	"github.com/Rhaqim/buckt/internal/mocks"
 	"github.com/Rhaqim/buckt/internal/model"
 	"github.com/Rhaqim/buckt/internal/repository"
 	"github.com/Rhaqim/buckt/internal/service"
@@ -22,12 +23,12 @@ import (
 )
 
 type Client struct {
-	db     *database.DB
-	logger *logger.BucktLogger
+	db *database.DB
 
 	FlatnameSpaces bool
 	Debug          bool
 
+	logger   domain.BucktLogger
 	lruCache domain.LRUCache
 
 	fileService   domain.FileService
@@ -49,13 +50,11 @@ func New(conf Config, opts ...ConfigFunc) (*Client, error) {
 	}
 
 	logConf := conf.Log
-
 	bucktLog := logger.NewLogger(logConf.LogFile, logConf.LogTerminal, logConf.Debug, logger.WithLogger(logConf.Logger))
 	bucktLog.Info("🚀 Starting Buckt")
 
-	dbConf := conf.DB
-
 	// Initialize database
+	dbConf := conf.DB
 	db, err := database.NewDB(dbConf.Database, dbConf.Driver, bucktLog, logConf.Debug)
 	if err != nil {
 		return nil, bucktLog.WrapErrorf("failed to initialize database", err)
@@ -74,10 +73,9 @@ func New(conf Config, opts ...ConfigFunc) (*Client, error) {
 
 	// Initialize the app services
 	folderService, fileService := newAppServices(
-
 		conf.FlatNameSpaces,
-		bucktLog,
 		db,
+		bucktLog,
 		cacheManager,
 		backend,
 	)
@@ -338,14 +336,14 @@ func (b *Client) DeleteFilePermanently(file_id string) (string, error) {
 
 /* Helper Methods */
 
-func initializeCache(conf CacheConfig, bucktLog *logger.BucktLogger) (domain.CacheManager, domain.LRUCache) {
+func initializeCache(conf CacheConfig, bucktLog domain.BucktLogger) (domain.CacheManager, domain.LRUCache) {
 	fileConf := conf.FileCacheConfig
 	fileConf.Validate()
 
 	lruCache, err := cache.NewFileCache(fileConf.NumCounters, fileConf.MaxCost, fileConf.BufferItems)
 	if err != nil {
 		bucktLog.WrapErrorf("failed to initialize file cache", err)
-		lruCache = cache.NewNoOpFileCache()
+		lruCache = mocks.NewNoopLRUCache()
 	}
 	bucktLog.Info("✅ Initialized file cache")
 
@@ -353,13 +351,13 @@ func initializeCache(conf CacheConfig, bucktLog *logger.BucktLogger) (domain.Cac
 		bucktLog.Info("✅ Using provided cache")
 		return conf.Manager, lruCache
 	}
-	return cache.NewNoOpCache(), lruCache
+	return mocks.NewNoopCache(), lruCache
 }
 
 func newAppServices(
 	flatNameSpaces bool,
-	logger *logger.BucktLogger,
 	db *database.DB,
+	logger domain.BucktLogger,
 	cacheManager domain.CacheManager,
 	activeBackend domain.FileBackend,
 ) (domain.FolderService, domain.FileService) {
@@ -377,7 +375,7 @@ func newAppServices(
 }
 
 // ResolveBackend picks the correct backend based on the config.
-func resolveBackend(mediaDir string, bc BackendConfig, log *logger.BucktLogger, lru domain.LRUCache) Backend {
+func resolveBackend(mediaDir string, bc BackendConfig, log domain.BucktLogger, lru domain.LRUCache) Backend {
 	switch {
 	case bc.MigrationEnabled && bc.Source != nil && bc.Target != nil:
 		log.Infof("🔄 Migration mode: %s → %s", bc.Source.Name(), bc.Target.Name())
@@ -400,7 +398,7 @@ func resolveBackend(mediaDir string, bc BackendConfig, log *logger.BucktLogger, 
 	}
 }
 
-func instantiateIfLocal(b Backend, mediaDir string, log *logger.BucktLogger, lru domain.LRUCache) Backend {
+func instantiateIfLocal(b Backend, mediaDir string, log domain.BucktLogger, lru domain.LRUCache) Backend {
 	if b.Name() == "local" {
 		return backend.NewLocalFileSystemService(log, mediaDir, lru)
 	}

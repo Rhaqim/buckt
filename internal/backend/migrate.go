@@ -6,11 +6,10 @@ import (
 	"io"
 
 	"github.com/Rhaqim/buckt/internal/domain"
-	"github.com/Rhaqim/buckt/pkg/logger"
 )
 
 type MigrationBackendService struct {
-	logger *logger.BucktLogger
+	logger domain.BucktLogger
 
 	primaryBackend   domain.FileBackend
 	secondaryBackend domain.FileBackend
@@ -19,7 +18,7 @@ type MigrationBackendService struct {
 	// stats     migrationStats
 }
 
-func NewMigrationBackend(bucktLogger *logger.BucktLogger, primary domain.FileBackend, secondary domain.FileBackend) domain.MigratableBackend {
+func NewMigrationBackend(bucktLogger domain.BucktLogger, primary domain.FileBackend, secondary domain.FileBackend) domain.MigratableBackend {
 	bucktLogger.Info("🚀 Initialising local file system backend")
 	return &MigrationBackendService{
 		logger:           bucktLogger,
