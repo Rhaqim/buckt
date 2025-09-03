@@ -3,7 +3,7 @@ package middleware
 import (
 	"log"
 
-	"github.com/Rhaqim/buckt/web/domain"
+	"github.com/Rhaqim/buckt/client/web/domain"
 	"github.com/gin-gonic/gin"
 )
 

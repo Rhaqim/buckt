@@ -1,6 +1,6 @@
 package web
 
-import "github.com/Rhaqim/buckt/web/model"
+import "github.com/Rhaqim/buckt/client/web/model"
 
 type WebMode = model.WebMode
 

@@ -2,8 +2,8 @@ package backend
 
 import (
 	"context"
+	"fmt"
 	"io"
-	"sync/atomic"
 
 	"github.com/Rhaqim/buckt/internal/domain"
 	"github.com/Rhaqim/buckt/pkg/logger"
@@ -15,7 +15,7 @@ type MigrationBackendService struct {
 	primaryBackend   domain.FileBackend
 	secondaryBackend domain.FileBackend
 
-	migrating atomic.Bool // indicates an active migration
+	// migrating atomic.Bool // indicates an active migration
 	// stats     migrationStats
 }
 
@@ -139,15 +139,15 @@ func (d *MigrationBackendService) DeleteFolder(prefix string) error {
 
 // MigrateAll implements domain.MigratableBackend.
 func (d *MigrationBackendService) MigrateAll(ctx context.Context) error {
-	panic("unimplemented")
+	return fmt.Errorf("MigrateAll not implemented")
 }
 
 // MigrateFile implements domain.MigratableBackend.
 func (d *MigrationBackendService) MigrateFile(ctx context.Context, path string) error {
-	panic("unimplemented")
+	return fmt.Errorf("MigrateFile not implemented")
 }
 
 // MigrationStatus implements domain.MigratableBackend.
 func (d *MigrationBackendService) MigrationStatus() (completed int64, total int64) {
-	panic("unimplemented")
+	return 0, 0
 }

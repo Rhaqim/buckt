@@ -8,7 +8,7 @@ import (
 )
 
 func main() {
-	opts := buckt.BucktConfig{
+	opts := buckt.Config{
 		Log: buckt.LogConfig{
 			LogTerminal: true,
 			LogFile:     "logs",

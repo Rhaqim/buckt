@@ -40,7 +40,7 @@ func (g *GCPBackend) Name() string {
 }
 
 func (g *GCPBackend) Put(path string, data []byte) error {
-	ctx := context.TODO()
+	ctx := context.Background()
 	w := g.client.Bucket(g.bucketName).Object(path).NewWriter(ctx)
 	if _, err := w.Write(data); err != nil {
 		return fmt.Errorf("failed to write object: %w", err)
@@ -52,7 +52,7 @@ func (g *GCPBackend) Put(path string, data []byte) error {
 }
 
 func (g *GCPBackend) Get(path string) ([]byte, error) {
-	ctx := context.TODO()
+	ctx := context.Background()
 	r, err := g.client.Bucket(g.bucketName).Object(path).NewReader(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open reader: %w", err)
@@ -67,7 +67,7 @@ func (g *GCPBackend) Get(path string) ([]byte, error) {
 }
 
 func (g *GCPBackend) Stream(path string) (io.ReadCloser, error) {
-	ctx := context.TODO()
+	ctx := context.Background()
 	r, err := g.client.Bucket(g.bucketName).Object(path).NewReader(ctx)
 	if err != nil {
 		return nil, err
@@ -76,7 +76,7 @@ func (g *GCPBackend) Stream(path string) (io.ReadCloser, error) {
 }
 
 func (g *GCPBackend) Delete(path string) error {
-	ctx := context.TODO()
+	ctx := context.Background()
 	if err := g.client.Bucket(g.bucketName).Object(path).Delete(ctx); err != nil {
 		return fmt.Errorf("failed to delete object: %w", err)
 	}
@@ -84,7 +84,7 @@ func (g *GCPBackend) Delete(path string) error {
 }
 
 func (g *GCPBackend) Exists(path string) (bool, error) {
-	ctx := context.TODO()
+	ctx := context.Background()
 	_, err := g.client.Bucket(g.bucketName).Object(path).Attrs(ctx)
 	if err == storage.ErrObjectNotExist {
 		return false, nil
@@ -96,7 +96,7 @@ func (g *GCPBackend) Exists(path string) (bool, error) {
 }
 
 func (g *GCPBackend) Stat(path string) (*FileInfo, error) {
-	ctx := context.TODO()
+	ctx := context.Background()
 	attrs, err := g.client.Bucket(g.bucketName).Object(path).Attrs(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to stat object: %w", err)
@@ -110,7 +110,7 @@ func (g *GCPBackend) Stat(path string) (*FileInfo, error) {
 }
 
 func (g *GCPBackend) DeleteFolder(prefix string) error {
-	ctx := context.TODO()
+	ctx := context.Background()
 	it := g.client.Bucket(g.bucketName).Objects(ctx, &storage.Query{Prefix: prefix + "/"})
 
 	for {
@@ -129,7 +129,7 @@ func (g *GCPBackend) DeleteFolder(prefix string) error {
 }
 
 func (g *GCPBackend) Move(oldPath, newPath string) error {
-	ctx := context.TODO()
+	ctx := context.Background()
 	src := g.client.Bucket(g.bucketName).Object(oldPath)
 	dst := g.client.Bucket(g.bucketName).Object(newPath)
 

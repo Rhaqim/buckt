@@ -5,8 +5,8 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/Rhaqim/buckt/web/domain"
-	"github.com/Rhaqim/buckt/web/model"
+	"github.com/Rhaqim/buckt/client/web/domain"
+	"github.com/Rhaqim/buckt/client/web/model"
 	"github.com/gin-gonic/gin"
 )
 

@@ -7,9 +7,9 @@ import (
 	"strings"
 
 	"github.com/Rhaqim/buckt"
+	"github.com/Rhaqim/buckt/client/web/domain"
 	"github.com/Rhaqim/buckt/internal/utils"
 	"github.com/Rhaqim/buckt/pkg/response"
-	"github.com/Rhaqim/buckt/web/domain"
 	"github.com/gin-gonic/gin"
 )
 

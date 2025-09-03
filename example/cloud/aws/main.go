@@ -16,7 +16,13 @@ func main() {
 		Bucket:    "my-bucket",
 	}
 
-	backend := buckt.RegisterPrimaryBackend(aws.NewBackend(cloudConfig))
+	awsBackend, err := aws.NewBackend(cloudConfig)
+	if err != nil {
+		fmt.Println("Failed to create AWS backend:", err)
+		return
+	}
+
+	backend := buckt.RegisterPrimaryBackend(awsBackend)
 
 	client, err := buckt.Default(buckt.WithLog(buckt.LogConfig{}), backend)
 	if err != nil {

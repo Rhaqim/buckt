@@ -14,7 +14,13 @@ func main() {
 		Bucket:          "my-bucket",
 	}
 
-	backend := buckt.RegisterPrimaryBackend(gcp.NewBackend(cloudConfig))
+	gcpBackend, err := gcp.NewBackend(cloudConfig)
+	if err != nil {
+		fmt.Println("Failed to create GCP backend:", err)
+		return
+	}
+
+	backend := buckt.RegisterPrimaryBackend(gcpBackend)
 
 	client, err := buckt.Default(buckt.WithLog(buckt.LogConfig{}), backend)
 	if err != nil {

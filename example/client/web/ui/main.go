@@ -8,7 +8,7 @@ import (
 	"os"
 
 	"github.com/Rhaqim/buckt"
-	"github.com/Rhaqim/buckt/web"
+	"github.com/Rhaqim/buckt/client/web"
 )
 
 func main() {
@@ -18,7 +18,7 @@ func main() {
 		log.Fatalf("Failed to initialize the database: %v", err)
 	}
 
-	client, err := buckt.Default(buckt.FlatNameSpaces(true), buckt.WithDB(db))
+	client, err := buckt.Default(buckt.FlatNameSpaces(true), buckt.WithDB(buckt.Postgres, db))
 	if err != nil {
 		log.Fatalf("Failed to initialize Buckt: %v", err)
 	}

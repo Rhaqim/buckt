@@ -15,7 +15,13 @@ func main() {
 		Container:   "container",
 	}
 
-	backend := buckt.RegisterPrimaryBackend(azure.NewBackend(cloudConfig))
+	azureBackend, err := azure.NewBackend(cloudConfig)
+	if err != nil {
+		fmt.Println("Failed to create Azure backend:", err)
+		return
+	}
+
+	backend := buckt.RegisterPrimaryBackend(azureBackend)
 
 	client, err := buckt.Default(buckt.WithLog(buckt.LogConfig{}), backend)
 	if err != nil {

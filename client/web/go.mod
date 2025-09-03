@@ -1,4 +1,4 @@
-module github.com/Rhaqim/buckt/web
+module github.com/Rhaqim/buckt/client/web
 
 go 1.24.0
 
