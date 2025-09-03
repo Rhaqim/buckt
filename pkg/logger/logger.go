@@ -84,35 +84,35 @@ func (l *BucktLogger) Writer() io.Writer {
 
 // Info logs an info message
 func (l *BucktLogger) Info(message string) {
-	if !l.debug {
+	if l.debug {
 		l.Logger.Println(message)
 	}
 }
 
 // infof logs an info message with formatting
 func (l *BucktLogger) Infof(format string, args ...any) {
-	if !l.debug {
+	if l.debug {
 		l.Logger.Printf(format, args...)
 	}
 }
 
 // Warn logs a warning message
 func (l *BucktLogger) Warn(message string) {
-	if !l.debug {
+	if l.debug {
 		l.Logger.Println("WARN:", message)
 	}
 }
 
 // Error logs an error message
 func (l *BucktLogger) Errorf(format string, args ...any) {
-	if !l.debug {
+	if l.debug {
 		l.Logger.Printf("ERROR: "+format, args...)
 	}
 }
 
 // WrapError logs an error message and returns an error
 func (l *BucktLogger) WrapError(message string, err error) error {
-	if !l.debug {
+	if l.debug {
 		l.Logger.Println("ERROR:", message, err)
 	}
 	return err
@@ -120,7 +120,7 @@ func (l *BucktLogger) WrapError(message string, err error) error {
 
 // WrapErrorf logs an error message with formatting
 func (l *BucktLogger) WrapErrorf(message string, err error, args ...any) error {
-	if !l.debug {
+	if l.debug {
 		l.Logger.Printf("ERROR: %s %v\n", message+" "+err.Error(), args)
 	}
 	return err
