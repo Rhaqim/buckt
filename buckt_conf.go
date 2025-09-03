@@ -113,6 +113,19 @@ type BackendConfig struct {
 	Target Backend
 }
 
+// LocalBackend is a placeholder and is replaced with the actual local backend implementation.
+//
+// Usecase: Selecting the local backend for migration.
+//
+//	backendConfig := BackendConfig{
+//	 MigrationEnabled: true,
+//		Source: buckt.LocalBackend(),
+//		Target: aws.S3Backend(),
+//	}
+func LocalBackend() Backend {
+	return &domain.PlaceholderBackend{Title: "local"}
+}
+
 // BucktOptions represents the configuration options for the Buckt application.
 // It includes settings for logging, media directory, and standalone mode.
 //

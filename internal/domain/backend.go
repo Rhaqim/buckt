@@ -2,6 +2,7 @@ package domain
 
 import (
 	"context"
+	"fmt"
 	"io"
 )
 
@@ -44,4 +45,45 @@ type MigratableBackend interface {
 
 	// Progress info for observability
 	MigrationStatus() (completed int64, total int64)
+}
+
+type PlaceholderBackend struct {
+	Title string
+}
+
+var _ FileBackend = (*PlaceholderBackend)(nil)
+
+func (p *PlaceholderBackend) Name() string { return p.Title }
+
+// Every other method should return an error, not panic
+func (p *PlaceholderBackend) Put(path string, data []byte) error {
+	return fmt.Errorf("placeholder backend (%s) cannot be used directly", p.Title)
+}
+func (p *PlaceholderBackend) Get(path string) ([]byte, error) {
+	return nil, fmt.Errorf("placeholder backend (%s) cannot be used directly", p.Title)
+}
+
+// Delete implements domain.FileBackend.
+func (p *PlaceholderBackend) Delete(path string) error {
+	return fmt.Errorf("placeholder backend (%s) cannot be used directly", p.Title)
+}
+
+// DeleteFolder implements domain.FileBackend.
+func (p *PlaceholderBackend) DeleteFolder(prefix string) error {
+	return fmt.Errorf("placeholder backend (%s) cannot be used directly", p.Title)
+}
+
+// Exists implements domain.FileBackend.
+func (p *PlaceholderBackend) Exists(path string) (bool, error) {
+	return false, fmt.Errorf("placeholder backend (%s) cannot be used directly", p.Title)
+}
+
+// Move implements domain.FileBackend.
+func (p *PlaceholderBackend) Move(oldPath string, newPath string) error {
+	return fmt.Errorf("placeholder backend (%s) cannot be used directly", p.Title)
+}
+
+// Stream implements domain.FileBackend.
+func (p *PlaceholderBackend) Stream(path string) (io.ReadCloser, error) {
+	return nil, fmt.Errorf("placeholder backend (%s) cannot be used directly", p.Title)
 }
