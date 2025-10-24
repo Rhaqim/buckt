@@ -35,7 +35,7 @@ func NewBackend(conf Config) (*S3Backend, error) {
 	if conf.Region != "" {
 		opts = append(opts, config.WithRegion(conf.Region))
 	} else {
-		opts = append(opts, config.WithRegion("auto"))
+		opts = append(opts, config.WithRegion(AUTO_REGION))
 	}
 
 	cfg, err := config.LoadDefaultConfig(context.TODO(), opts...)
@@ -48,7 +48,7 @@ func NewBackend(conf Config) (*S3Backend, error) {
 	// Handle custom endpoint (R2, MinIO, etc.)
 	if conf.Endpoint != "" {
 		client = s3.NewFromConfig(cfg, func(o *s3.Options) {
-			o.UsePathStyle = conf.UsePathStyle || strings.Contains(conf.Endpoint, "r2.cloudflarestorage.com")
+			o.UsePathStyle = conf.UsePathStyle || strings.Contains(conf.Endpoint, CLOUDFLARE_R2_ENDPOINT_SUBSTRING)
 			o.EndpointResolverV2 = &customEndpointResolver{rawURL: conf.Endpoint}
 		})
 	} else {
@@ -62,7 +62,7 @@ func NewBackend(conf Config) (*S3Backend, error) {
 }
 
 func (s *S3Backend) Name() string {
-	return "s3"
+	return NAME
 }
 
 func (s *S3Backend) Put(ctx context.Context, path string, data []byte) error {
@@ -170,7 +170,9 @@ func (s3b *S3Backend) Move(ctx context.Context, oldPath, newPath string) error {
 
 	// Fire-and-forget delete in background
 	go func() {
-		_, delErr := s3b.client.DeleteObject(context.Background(), &s3.DeleteObjectInput{
+		delCtx, delCancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer delCancel()
+		_, delErr := s3b.client.DeleteObject(delCtx, &s3.DeleteObjectInput{
 			Bucket: aws.String(s3b.bucketName),
 			Key:    aws.String(oldPath),
 		})
@@ -181,84 +183,6 @@ func (s3b *S3Backend) Move(ctx context.Context, oldPath, newPath string) error {
 
 	return nil
 }
-
-// func (s3b *S3Backend) Move(oldPath, newPath string) error {
-// 	// Copy
-// 	_, err := s3b.client.CopyObject(context.TODO(), &s3.CopyObjectInput{
-// 		Bucket:     aws.String(s3b.bucketName),
-// 		CopySource: aws.String(s3b.bucketName + "/" + oldPath),
-// 		Key:        aws.String(newPath),
-// 	})
-// 	if err != nil {
-// 		return fmt.Errorf("failed to copy object: %w", err)
-// 	}
-
-// 	waiter := s3.NewObjectExistsWaiter(s3b.client)
-
-// 	maxWaitDuration := 30 * time.Second
-
-// 	// Optional: Configure waiter options (e.g., max attempts, delay)
-// 	waitOpts := func(o *s3.ObjectExistsWaiterOptions) {
-// 		o.MinDelay = 5 * time.Second  // Default is 5 seconds
-// 		o.MaxDelay = 10 * time.Second // Default is 5 seconds
-// 	}
-
-// 	// Wait for copy to finish
-// 	err = waiter.Wait(context.TODO(), &s3.HeadObjectInput{
-// 		Bucket: aws.String(s3b.bucketName),
-// 		Key:    aws.String(newPath),
-// 	}, maxWaitDuration, waitOpts)
-// 	if err != nil {
-// 		return fmt.Errorf("failed waiting for copied object: %w", err)
-// 	}
-
-// 	// Delete old
-// 	_, err = s3b.client.DeleteObject(context.TODO(), &s3.DeleteObjectInput{
-// 		Bucket: aws.String(s3b.bucketName),
-// 		Key:    aws.String(oldPath),
-// 	})
-// 	if err != nil {
-// 		return fmt.Errorf("failed to delete old object: %w", err)
-// 	}
-
-// 	return nil
-// }
-
-// func (s *S3Backend) DeleteFolder(prefix string) error {
-// 	// Step 1: List all objects under the prefix
-// 	paginator := s3.NewListObjectsV2Paginator(s.client, &s3.ListObjectsV2Input{
-// 		Bucket: aws.String(s.bucketName),
-// 		Prefix: aws.String(prefix + "/"), // Ensure trailing slash for "folder"
-// 	})
-
-// 	// Step 2: Batch delete
-// 	for paginator.HasMorePages() {
-// 		page, err := paginator.NextPage(context.TODO())
-// 		if err != nil {
-// 			return fmt.Errorf("failed to list objects: %w", err)
-// 		}
-
-// 		if len(page.Contents) == 0 {
-// 			continue
-// 		}
-
-// 		// Prepare delete objects request
-// 		var objects []types.ObjectIdentifier
-// 		for _, obj := range page.Contents {
-// 			objects = append(objects, types.ObjectIdentifier{Key: obj.Key})
-// 		}
-
-// 		_, err = s.client.DeleteObjects(context.TODO(), &s3.DeleteObjectsInput{
-// 			Bucket: aws.String(s.bucketName),
-// 			Delete: &types.Delete{Objects: objects},
-// 		})
-// 		if err != nil {
-// 			return fmt.Errorf("failed to delete objects: %w", err)
-// 		}
-// 	}
-
-// 	return nil
-// }
 
 func (s *S3Backend) DeleteFolder(ctx context.Context, prefix string) error {
 	ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
