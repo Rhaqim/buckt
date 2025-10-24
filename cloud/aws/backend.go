@@ -49,7 +49,7 @@ func NewBackend(conf Config) (*S3Backend, error) {
 	// Handle custom endpoint (R2, MinIO, etc.)
 	if conf.Endpoint != "" {
 		client = s3.NewFromConfig(cfg, func(o *s3.Options) {
-			o.UsePathStyle = conf.UsePathStyle || strings.Contains(conf.Endpoint, CLOUDFLARE_R2_ENDPOINT_SUBSTRING)
+			o.UsePathStyle = conf.UsePathStyle || strings.HasSuffix(conf.Endpoint, CLOUDFLARE_R2_ENDPOINT_SUBSTRING)
 			o.EndpointResolverV2 = &customEndpointResolver{rawURL: conf.Endpoint}
 		})
 	} else {
@@ -155,12 +155,10 @@ func (s *S3Backend) Stat(ctx context.Context, path string) (*FileInfo, error) {
 	}
 	return fi, nil
 }
-
 func (s3b *S3Backend) Move(ctx context.Context, oldPath, newPath string) error {
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 
-	// Copy object (synchronous copy)
 	_, err := s3b.client.CopyObject(ctx, &s3.CopyObjectInput{
 		Bucket:     aws.String(s3b.bucketName),
 		CopySource: aws.String(s3b.bucketName + "/" + oldPath),
@@ -170,18 +168,21 @@ func (s3b *S3Backend) Move(ctx context.Context, oldPath, newPath string) error {
 		return fmt.Errorf("failed to copy object: %w", err)
 	}
 
-	// Fire-and-forget delete in background
-	go func() {
-		delCtx, delCancel := context.WithTimeout(context.Background(), 30*time.Second)
-		defer delCancel()
+	// Asynchronous best-effort delete
+	go func(bucket, key string) {
+		delCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+
 		_, delErr := s3b.client.DeleteObject(delCtx, &s3.DeleteObjectInput{
-			Bucket: aws.String(s3b.bucketName),
-			Key:    aws.String(oldPath),
+			Bucket: aws.String(bucket),
+			Key:    aws.String(key),
 		})
 		if delErr != nil {
-			log.Printf("async delete failed for %s: %v\n", oldPath, delErr)
+			log.Printf("async delete failed for %s: %v\n", key, delErr)
+			// Optionally enqueue for retry
+			// s3b.cleanupQueue.Enqueue(key)
 		}
-	}()
+	}(s3b.bucketName, oldPath)
 
 	return nil
 }
@@ -242,24 +243,33 @@ func withRetry(ctx context.Context, maxAttempts int, fn func() error) error {
 		if err == nil {
 			return nil
 		}
-		var ae smithy.APIError
-		if errors.As(err, &ae) {
-			type httpErr interface{ HTTPStatusCode() int }
-			// Check for server-side errors (5xx status codes)
-			if httpErr, ok := ae.(httpErr); ok {
-				if httpErr.HTTPStatusCode() >= 500 {
-					// transient server-side issue
-					select {
-					case <-ctx.Done():
-						return ctx.Err()
-					case <-time.After(backoff):
-					}
-					backoff *= 2
-					continue
+
+		var apiErr smithy.APIError
+		if errors.As(err, &apiErr) {
+			status := 0
+
+			// Extract HTTP status code if available
+			if h, ok := apiErr.(interface{ HTTPStatusCode() int }); ok {
+				status = h.HTTPStatusCode()
+			}
+
+			if status >= 500 {
+				// Transient server-side error → retry
+				select {
+				case <-ctx.Done():
+					return ctx.Err()
+				case <-time.After(backoff):
 				}
+				backoff *= 2
+				continue
 			}
 		}
+
 		return err
 	}
 	return fmt.Errorf("operation failed after %d attempts", maxAttempts)
+}
+
+func (s *S3Backend) CleanupQueue(key string) {
+	// Placeholder for cleanup queue logic
 }

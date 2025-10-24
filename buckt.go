@@ -603,7 +603,7 @@ func resolveBackend(mediaDir string, bc BackendConfig, log domain.BucktLogger, l
 			return backend.NewLocalFileSystemService(log, mediaDir, lru)
 		}
 		if source.Name() == target.Name() {
-			log.Errorf("❌ Migration enabled but source and target backends are the same — disabling migration and falling back to a single backend")
+			log.Errorf("❌ Migration enabled but source and target backends are the same instance — disabling migration and falling back to a single backend")
 			return source
 		}
 
