@@ -180,8 +180,10 @@ func (s *S3Backend) Stat(ctx context.Context, path string) (*FileInfo, error) {
 	}
 	return fi, nil
 }
+
 func (s3b *S3Backend) Move(ctx context.Context, oldPath, newPath string) error {
-	ctx, cancel := context.WithTimeout(ctx, MOVE_TIMEOUT)
+	// Respect parent context's existing deadline
+	ctx, cancel := withTimeoutIfNone(ctx, MOVE_TIMEOUT)
 	defer cancel()
 
 	_, err := s3b.client.CopyObject(ctx, &s3.CopyObjectInput{
@@ -205,7 +207,6 @@ func (s3b *S3Backend) Move(ctx context.Context, oldPath, newPath string) error {
 		if delErr != nil {
 			log.Printf("async delete failed for %s: %v\n", key, delErr)
 			// Optionally enqueue for retry
-			// s3b.cleanupQueue.Enqueue(key)
 		}
 	}(s3b.bucketName, oldPath)
 
@@ -311,4 +312,11 @@ func withRetry(ctx context.Context, maxAttempts int, fn func() error) error {
 			log.Printf("Retrying after %v: %v", next, err)
 		},
 	)
+}
+
+func withTimeoutIfNone(ctx context.Context, d time.Duration) (context.Context, context.CancelFunc) {
+	if _, ok := ctx.Deadline(); ok {
+		return ctx, func() {}
+	}
+	return context.WithTimeout(ctx, d)
 }
