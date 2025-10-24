@@ -181,7 +181,7 @@ func (s *S3Backend) Stat(ctx context.Context, path string) (*FileInfo, error) {
 	return fi, nil
 }
 func (s3b *S3Backend) Move(ctx context.Context, oldPath, newPath string) error {
-	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, MOVE_TIMEOUT)
 	defer cancel()
 
 	_, err := s3b.client.CopyObject(ctx, &s3.CopyObjectInput{
@@ -195,7 +195,7 @@ func (s3b *S3Backend) Move(ctx context.Context, oldPath, newPath string) error {
 
 	// Asynchronous best-effort delete
 	go func(bucket, key string) {
-		delCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		delCtx, cancel := context.WithTimeout(context.Background(), MOVE_TIMEOUT)
 		defer cancel()
 
 		_, delErr := s3b.client.DeleteObject(delCtx, &s3.DeleteObjectInput{
@@ -262,6 +262,10 @@ func (s *S3Backend) deleteBatch(ctx context.Context, objects []types.ObjectIdent
 }
 
 func withRetry(ctx context.Context, maxAttempts int, fn func() error) error {
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+
 	b := backoff.NewExponentialBackOff()
 	b.InitialInterval = 200 * time.Millisecond
 	b.MaxElapsedTime = 0 // disable total timeout; respect context instead
