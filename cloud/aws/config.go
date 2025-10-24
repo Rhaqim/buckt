@@ -20,7 +20,7 @@ type Config struct {
 
 	// Optional: used when connecting to S3-compatible endpoints like Cloudflare R2, MinIO, etc.
 	Endpoint     string // e.g., "https://<account_id>.r2.cloudflarestorage.com"
-	UsePathStyle bool   // true for R2 and other non-AWS S3 services
+	UsePathStyle bool   // Set to true for path-style addressing (required for some S3-compatible services); auto-detected for Cloudflare R2 based on endpoint
 }
 
 func (a Config) Validate() error {
