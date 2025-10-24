@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/service/s3"
@@ -34,14 +35,23 @@ func (a Config) Validate() error {
 	if a.Bucket == "" {
 		missing = append(missing, "Bucket")
 	}
+
 	if len(missing) > 0 {
-		return fmt.Errorf("missing required field(s): %v", missing)
+		return fmt.Errorf("missing required field(s): %s", strings.Join(missing, ", "))
 	}
 
-	// Region is not required for R2, so skip enforcing it if endpoint is provided
+	// Region is optional if a custom endpoint is provided (e.g., R2, MinIO)
 	if a.Region == "" && a.Endpoint == "" {
 		return fmt.Errorf("missing region or custom endpoint")
 	}
+
+	// Validate endpoint URL format if provided
+	if a.Endpoint != "" {
+		if _, err := url.ParseRequestURI(a.Endpoint); err != nil {
+			return fmt.Errorf("invalid endpoint URL format: %w", err)
+		}
+	}
+
 	return nil
 }
 

@@ -219,7 +219,8 @@ func (bfs *LocalFileSystemService) Move(ctx context.Context, oldPath, newPath st
 	}
 
 	if err := os.Rename(oldFilePath, newFilePath); err != nil {
-		if linkErr, ok := err.(*os.LinkError); ok && linkErr.Err == syscall.EXDEV {
+		var linkErr *os.LinkError
+		if errors.As(err, &linkErr) && linkErr.Err == syscall.EXDEV {
 			// cross-device move fallback: copy then delete
 			if copyErr := copyFile(oldFilePath, newFilePath); copyErr != nil {
 				return bfs.logger.WrapError("cross-device copy failed", copyErr)
