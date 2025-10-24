@@ -16,6 +16,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"github.com/aws/smithy-go"
+	"github.com/cenkalti/backoff/v4"
 )
 
 type S3Backend struct {
@@ -237,39 +238,37 @@ func (s *S3Backend) deleteBatch(ctx context.Context, objects []types.ObjectIdent
 }
 
 func withRetry(ctx context.Context, maxAttempts int, fn func() error) error {
-	backoff := time.Millisecond * 200
-	for attempt := 1; attempt <= maxAttempts; attempt++ {
-		err := fn()
-		if err == nil {
-			return nil
-		}
+	b := backoff.NewExponentialBackOff()
+	b.InitialInterval = 200 * time.Millisecond
+	b.MaxElapsedTime = 0 // disable total timeout; respect context instead
 
-		var apiErr smithy.APIError
-		if errors.As(err, &apiErr) {
-			status := 0
-
-			// Extract HTTP status code if available
-			if h, ok := apiErr.(interface{ HTTPStatusCode() int }); ok {
-				status = h.HTTPStatusCode()
+	return backoff.RetryNotify(
+		func() error {
+			err := fn()
+			if err == nil {
+				return nil
 			}
 
-			if status >= 500 {
-				// Transient server-side error → retry
-				select {
-				case <-ctx.Done():
-					return ctx.Err()
-				case <-time.After(backoff):
+			var apiErr smithy.APIError
+			if errors.As(err, &apiErr) {
+				status := 0
+				if h, ok := apiErr.(interface{ HTTPStatusCode() int }); ok {
+					status = h.HTTPStatusCode()
 				}
-				backoff *= 2
-				continue
+
+				// Retry only for 5xx
+				if status >= 500 {
+					return err
+				}
 			}
-		}
 
-		return err
-	}
-	return fmt.Errorf("operation failed after %d attempts", maxAttempts)
-}
-
-func (s *S3Backend) CleanupQueue(key string) {
-	// Placeholder for cleanup queue logic
+			// Non-retryable error → stop immediately
+			return backoff.Permanent(err)
+		},
+		backoff.WithContext(backoff.WithMaxRetries(b, uint64(maxAttempts)), ctx),
+		func(err error, next time.Duration) {
+			// Optional: log retries or metrics here
+			log.Printf("Retrying after %v: %v", next, err)
+		},
+	)
 }

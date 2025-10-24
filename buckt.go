@@ -602,7 +602,8 @@ func resolveBackend(mediaDir string, bc BackendConfig, log domain.BucktLogger, l
 			log.Errorf("❌ Migration enabled but one of the backends is nil — falling back to local")
 			return backend.NewLocalFileSystemService(log, mediaDir, lru)
 		}
-		if source.Name() == target.Name() {
+
+		if source == target {
 			log.Errorf("❌ Migration enabled but source and target backends are the same instance — disabling migration and falling back to a single backend")
 			return source
 		}
