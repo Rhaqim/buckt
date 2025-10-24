@@ -38,6 +38,7 @@ func setupFolderTest() MockFolderServices {
 
 func TestCreateFolder(t *testing.T) {
 	mockSetUp := setupFolderTest()
+	ctx := t.Context()
 
 	// Define the expected folder return for GetFolder
 	folderID := uuid.MustParse("550e8400-e29b-41d4-a716-446655440000")
@@ -49,7 +50,7 @@ func TestCreateFolder(t *testing.T) {
 	// Mock Create method
 	mockSetUp.folderRepository.On("Create", mock.Anything).Return(folderID.String(), nil)
 
-	new_folder_id, err := mockSetUp.folderService.CreateFolder("user1", folderID.String(), "folder", "description")
+	new_folder_id, err := mockSetUp.folderService.CreateFolder(ctx, "user1", folderID.String(), "folder", "description")
 
 	assert.Len(t, new_folder_id, 36)
 
@@ -60,6 +61,7 @@ func TestCreateFolder(t *testing.T) {
 
 func TestGetFolder(t *testing.T) {
 	mockSetUp := setupFolderTest()
+	ctx := t.Context()
 
 	folderID := uuid.MustParse("550e8400-e29b-41d4-a716-446655440000")
 	mockFolder := &model.FolderModel{ID: folderID, Name: "folder"}
@@ -77,7 +79,7 @@ func TestGetFolder(t *testing.T) {
 	// Mock cache set with correct JSON string
 	mockSetUp.cacheManager.On("SetBucktValue", "folder:"+folderID.String(), jsonStr).Return(nil)
 
-	folder, err := mockSetUp.folderService.GetFolder("user1", folderID.String())
+	folder, err := mockSetUp.folderService.GetFolder(ctx, "user1", folderID.String())
 	assert.NoError(t, err)
 	assert.Equal(t, mockFolder, folder)
 
@@ -87,6 +89,7 @@ func TestGetFolder(t *testing.T) {
 
 func TestGetFolders(t *testing.T) {
 	mockSetUp := setupFolderTest()
+	ctx := t.Context()
 
 	parentID := uuid.MustParse("550e8400-e29b-41d4-a716-446655440000")
 	mockFolders := []model.FolderModel{
@@ -96,7 +99,7 @@ func TestGetFolders(t *testing.T) {
 
 	mockSetUp.folderRepository.On("GetFolders", parentID).Return(mockFolders, nil)
 
-	folders, err := mockSetUp.folderService.GetFolders(parentID.String())
+	folders, err := mockSetUp.folderService.GetFolders(ctx, parentID.String())
 	assert.NoError(t, err)
 	assert.Equal(t, mockFolders, folders)
 	mockSetUp.folderRepository.AssertExpectations(t)
@@ -104,19 +107,21 @@ func TestGetFolders(t *testing.T) {
 
 func TestMoveFolder(t *testing.T) {
 	mockSetUp := setupFolderTest()
+	ctx := t.Context()
 
 	folderID := uuid.MustParse("550e8400-e29b-41d4-a716-446655440000")
 	newParentID := uuid.MustParse("550e8400-e29b-41d4-a716-446655440001")
 
 	mockSetUp.folderRepository.On("MoveFolder", folderID, newParentID).Return(nil)
 
-	err := mockSetUp.folderService.MoveFolder(folderID.String(), newParentID.String())
+	err := mockSetUp.folderService.MoveFolder(ctx, folderID.String(), newParentID.String())
 	assert.NoError(t, err)
 	mockSetUp.folderRepository.AssertExpectations(t)
 }
 
 func TestRenameFolder(t *testing.T) {
 	mockSetUp := setupFolderTest()
+	ctx := t.Context()
 
 	folderID := uuid.MustParse("550e8400-e29b-41d4-a716-446655440000")
 	newName := "new_folder_name"
@@ -125,20 +130,21 @@ func TestRenameFolder(t *testing.T) {
 
 	mockSetUp.folderRepository.On("RenameFolder", user_id, folderID, newName).Return(nil)
 
-	err := mockSetUp.folderService.RenameFolder(user_id, folderID.String(), newName)
+	err := mockSetUp.folderService.RenameFolder(ctx, user_id, folderID.String(), newName)
 	assert.NoError(t, err)
 	mockSetUp.folderRepository.AssertExpectations(t)
 }
 
 func TestDeleteFolder(t *testing.T) {
 	mockSetUp := setupFolderTest()
+	ctx := t.Context()
 
 	folderID := uuid.MustParse("550e8400-e29b-41d4-a716-446655440000")
 	parentID := uuid.MustParse("550e8400-e29b-41d4-a716-446655440001")
 
 	mockSetUp.folderRepository.On("DeleteFolder", folderID).Return(parentID.String(), nil)
 
-	returnedParentID, err := mockSetUp.folderService.DeleteFolder(folderID.String())
+	returnedParentID, err := mockSetUp.folderService.DeleteFolder(ctx, folderID.String())
 	assert.NoError(t, err)
 	assert.Equal(t, parentID.String(), returnedParentID)
 	mockSetUp.folderRepository.AssertExpectations(t)
@@ -146,6 +152,7 @@ func TestDeleteFolder(t *testing.T) {
 
 func TestScrubFolder(t *testing.T) {
 	mockSetUp := setupFolderTest()
+	ctx := t.Context()
 
 	folderID := uuid.MustParse("550e8400-e29b-41d4-a716-446655440000")
 	parentID := uuid.MustParse("550e8400-e29b-41d4-a716-446655440001")
@@ -157,7 +164,7 @@ func TestScrubFolder(t *testing.T) {
 
 	mockSetUp.folderRepository.On("ScrubFolder", "user1", folderID).Return(parentID.String(), nil)
 
-	returnedParentID, err := mockSetUp.folderService.ScrubFolder("user1", folderID.String())
+	returnedParentID, err := mockSetUp.folderService.ScrubFolder(ctx, "user1", folderID.String())
 	assert.NoError(t, err)
 	assert.Equal(t, parentID.String(), returnedParentID)
 	mockSetUp.folderRepository.AssertExpectations(t)

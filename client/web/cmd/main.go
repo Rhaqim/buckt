@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"sync"
 
@@ -39,7 +40,7 @@ func NewCache() *Cache {
 	}
 }
 
-func (c *Cache) GetBucktValue(key string) (any, error) {
+func (c *Cache) GetBucktValue(ctx context.Context, key string) (any, error) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
@@ -55,7 +56,7 @@ func (c *Cache) GetBucktValue(key string) (any, error) {
 	return nil, nil
 }
 
-func (c *Cache) SetBucktValue(key string, value any) error {
+func (c *Cache) SetBucktValue(ctx context.Context, key string, value any) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -65,7 +66,7 @@ func (c *Cache) SetBucktValue(key string, value any) error {
 	return nil
 }
 
-func (c *Cache) DeleteBucktValue(key string) error {
+func (c *Cache) DeleteBucktValue(ctx context.Context, key string) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 

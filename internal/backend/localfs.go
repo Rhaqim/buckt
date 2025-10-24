@@ -1,6 +1,7 @@
 package backend
 
 import (
+	"context"
 	"io"
 	"os"
 	"path/filepath"
@@ -36,7 +37,7 @@ func (bfs *LocalFileSystemService) resolve(path string) string {
 }
 
 // Put writes/overwrites a file.
-func (bfs *LocalFileSystemService) Put(path string, data []byte) error {
+func (bfs *LocalFileSystemService) Put(ctx context.Context, path string, data []byte) error {
 	filePath := bfs.resolve(path)
 	if err := os.MkdirAll(filepath.Dir(filePath), 0755); err != nil {
 		return bfs.logger.WrapError("failed to create directory", err)
@@ -45,7 +46,7 @@ func (bfs *LocalFileSystemService) Put(path string, data []byte) error {
 }
 
 // Get reads the entire file into memory.
-func (bfs *LocalFileSystemService) Get(path string) ([]byte, error) {
+func (bfs *LocalFileSystemService) Get(ctx context.Context, path string) ([]byte, error) {
 	filePath := bfs.resolve(path)
 
 	// check cache first
@@ -66,13 +67,13 @@ func (bfs *LocalFileSystemService) Get(path string) ([]byte, error) {
 }
 
 // Stream returns a file stream (caller must Close).
-func (bfs *LocalFileSystemService) Stream(path string) (io.ReadCloser, error) {
+func (bfs *LocalFileSystemService) Stream(ctx context.Context, path string) (io.ReadCloser, error) {
 	filePath := bfs.resolve(path)
 	return os.Open(filePath)
 }
 
 // Delete removes a file.
-func (bfs *LocalFileSystemService) Delete(path string) error {
+func (bfs *LocalFileSystemService) Delete(ctx context.Context, path string) error {
 	filePath := bfs.resolve(path)
 	if err := os.Remove(filePath); err != nil {
 		return bfs.logger.WrapError("failed to delete file", err)
@@ -81,7 +82,7 @@ func (bfs *LocalFileSystemService) Delete(path string) error {
 }
 
 // Exists checks if a file exists.
-func (bfs *LocalFileSystemService) Exists(path string) (bool, error) {
+func (bfs *LocalFileSystemService) Exists(ctx context.Context, path string) (bool, error) {
 	filePath := bfs.resolve(path)
 	_, err := os.Stat(filePath)
 	if err == nil {
@@ -94,7 +95,7 @@ func (bfs *LocalFileSystemService) Exists(path string) (bool, error) {
 }
 
 // Stat returns metadata.
-func (bfs *LocalFileSystemService) Stat(path string) (*model.FileInfo, error) {
+func (bfs *LocalFileSystemService) Stat(ctx context.Context, path string) (*model.FileInfo, error) {
 	filePath := bfs.resolve(path)
 	info, err := os.Stat(filePath)
 	if err != nil {
@@ -108,12 +109,12 @@ func (bfs *LocalFileSystemService) Stat(path string) (*model.FileInfo, error) {
 	}, nil
 }
 
-func (bfs *LocalFileSystemService) DeleteFolder(path string) error {
+func (bfs *LocalFileSystemService) DeleteFolder(ctx context.Context, path string) error {
 	dirPath := bfs.resolve(path)
 	return os.RemoveAll(dirPath)
 }
 
-func (bfs *LocalFileSystemService) Move(oldPath, newPath string) error {
+func (bfs *LocalFileSystemService) Move(ctx context.Context, oldPath, newPath string) error {
 	oldFilePath := filepath.Join(bfs.mediaDir, oldPath)
 	newFilePath := filepath.Join(bfs.mediaDir, newPath)
 

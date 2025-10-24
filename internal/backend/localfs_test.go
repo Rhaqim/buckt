@@ -23,13 +23,14 @@ func TestFSV2Put(t *testing.T) {
 	testPath := "testfile.txt"
 	testContent := []byte("Hello, World!")
 	expectedPath := filepath.Join(mediaDir, testPath)
+	ctx := t.Context()
 
 	// Create a test file
 	_, err := os.Create(expectedPath)
 	assert.NoError(t, err)
 
 	// Write file
-	err = bfs.Put(testPath, testContent)
+	err = bfs.Put(ctx, testPath, testContent)
 	assert.NoError(t, err)
 	defer os.Remove(expectedPath)
 
@@ -44,6 +45,7 @@ func TestFSV2GetFile(t *testing.T) {
 	testPath := "testfile.txt"
 	testContent := []byte("Hello, World!")
 	expectedPath := filepath.Join(mediaDir, testPath)
+	ctx := t.Context()
 
 	// Create a test file
 	_, err := os.Create(expectedPath)
@@ -55,7 +57,7 @@ func TestFSV2GetFile(t *testing.T) {
 	defer os.Remove(expectedPath)
 
 	// Get file
-	content, err := bfs.Get(testPath)
+	content, err := bfs.Get(ctx, testPath)
 	assert.NoError(t, err)
 	assert.Equal(t, testContent, content)
 }
@@ -67,6 +69,7 @@ func TestFSV2Move(t *testing.T) {
 	testContent := []byte("Hello, World!")
 	oldFilePath := filepath.Join(mediaDir, oldPath)
 	newFilePath := filepath.Join(mediaDir, newPath)
+	ctx := t.Context()
 
 	// Create a test file
 	_, err := os.Create(oldFilePath)
@@ -83,7 +86,7 @@ func TestFSV2Move(t *testing.T) {
 	defer os.Remove(newFilePath)
 
 	// Move file
-	err = bfs.Move(oldPath, newPath)
+	err = bfs.Move(ctx, oldPath, newPath)
 	assert.NoError(t, err)
 
 	// Validate old file does not exist
@@ -100,13 +103,14 @@ func TestFSV2DeleteFile(t *testing.T) {
 	bfs, mediaDir := setupFSV2Test()
 	testPath := "testfile.txt"
 	expectedPath := filepath.Join(mediaDir, testPath)
+	ctx := t.Context()
 
 	// Create a test file
 	_, err := os.Create(expectedPath)
 	assert.NoError(t, err)
 
 	// Delete file
-	err = bfs.Delete(testPath)
+	err = bfs.Delete(ctx, testPath)
 	assert.NoError(t, err)
 
 	// Validate file does not exist
@@ -117,6 +121,7 @@ func TestFSV2DeleteFolder(t *testing.T) {
 	bfs, mediaDir := setupFSV2Test()
 	testFolderPath := "testfolder"
 	expectedFolderPath := filepath.Join(mediaDir, testFolderPath)
+	ctx := t.Context()
 
 	// Create a test folder
 	err := os.MkdirAll(expectedFolderPath, os.ModePerm)
@@ -128,7 +133,7 @@ func TestFSV2DeleteFolder(t *testing.T) {
 	assert.NoError(t, err)
 
 	// Delete folder
-	err = bfs.DeleteFolder(testFolderPath)
+	err = bfs.DeleteFolder(ctx, testFolderPath)
 	assert.NoError(t, err)
 
 	// Validate folder does not exist
