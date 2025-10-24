@@ -7,7 +7,9 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -249,6 +251,19 @@ func withRetry(ctx context.Context, maxAttempts int, fn func() error) error {
 				return nil
 			}
 
+			// Retry on transient network-level errors
+			var netErr net.Error
+			if errors.As(err, &netErr) && netErr.Timeout() {
+				return err
+			}
+
+			// Retry on syscall-level errors like connection refused or reset
+			if errors.Is(err, syscall.ECONNRESET) ||
+				errors.Is(err, syscall.ECONNREFUSED) ||
+				errors.Is(err, syscall.ETIMEDOUT) {
+				return err
+			}
+
 			var apiErr smithy.APIError
 			if errors.As(err, &apiErr) {
 				status := 0
@@ -267,7 +282,6 @@ func withRetry(ctx context.Context, maxAttempts int, fn func() error) error {
 		},
 		backoff.WithContext(backoff.WithMaxRetries(b, uint64(maxAttempts)), ctx),
 		func(err error, next time.Duration) {
-			// Optional: log retries or metrics here
 			log.Printf("Retrying after %v: %v", next, err)
 		},
 	)
