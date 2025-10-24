@@ -64,6 +64,23 @@ func (g *GCPBackend) Get(ctx context.Context, path string) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
+func (g *GCPBackend) List(ctx context.Context, prefix string) ([]string, error) {
+	var results []string
+	it := g.client.Bucket(g.bucketName).Objects(ctx, &storage.Query{Prefix: prefix})
+
+	for {
+		obj, err := it.Next()
+		if err == iterator.Done {
+			break
+		}
+		if err != nil {
+			return nil, fmt.Errorf("failed to list objects: %w", err)
+		}
+		results = append(results, obj.Name)
+	}
+	return results, nil
+}
+
 func (g *GCPBackend) Stream(ctx context.Context, path string) (io.ReadCloser, error) {
 	r, err := g.client.Bucket(g.bucketName).Object(path).NewReader(ctx)
 	if err != nil {

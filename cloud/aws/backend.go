@@ -99,6 +99,28 @@ func (s *S3Backend) Get(ctx context.Context, path string) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
+func (s *S3Backend) List(ctx context.Context, prefix string) ([]string, error) {
+	var paths []string
+
+	paginator := s3.NewListObjectsV2Paginator(s.client, &s3.ListObjectsV2Input{
+		Bucket: aws.String(s.bucketName),
+		Prefix: aws.String(prefix),
+	})
+
+	for paginator.HasMorePages() {
+		page, err := paginator.NextPage(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		for _, obj := range page.Contents {
+			paths = append(paths, *obj.Key)
+		}
+	}
+
+	return paths, nil
+}
+
 func (s *S3Backend) Stream(ctx context.Context, path string) (io.ReadCloser, error) {
 	resp, err := s.client.GetObject(ctx, &s3.GetObjectInput{
 		Bucket: aws.String(s.bucketName),

@@ -35,6 +35,11 @@ func (m *LocalFileSystemService) Get(ctx context.Context, path string) ([]byte, 
 	return args.Get(0).([]byte), args.Error(1)
 }
 
+func (m *LocalFileSystemService) List(ctx context.Context, prefix string) ([]string, error) {
+	args := m.Called(prefix)
+	return args.Get(0).([]string), args.Error(1)
+}
+
 func (m *LocalFileSystemService) Stream(ctx context.Context, path string) (io.ReadCloser, error) {
 	args := m.Called(path)
 	return args.Get(0).(io.ReadCloser), args.Error(1)

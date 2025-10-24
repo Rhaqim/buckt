@@ -67,6 +67,28 @@ func (a *AzureBackend) Get(ctx context.Context, path string) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
+func (a *AzureBackend) List(ctx context.Context, prefix string) ([]string, error) {
+	pager := a.client.NewListBlobsFlatPager(&container.ListBlobsFlatOptions{
+		Prefix: &prefix,
+	})
+
+	var paths []string
+	for pager.More() {
+		page, err := pager.NextPage(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("failed to list blobs: %w", err)
+		}
+
+		for _, blob := range page.Segment.BlobItems {
+			if blob.Name != nil {
+				paths = append(paths, *blob.Name)
+			}
+		}
+	}
+
+	return paths, nil
+}
+
 func (a *AzureBackend) Stream(ctx context.Context, path string) (io.ReadCloser, error) {
 	blobClient := a.client.NewBlockBlobClient(path)
 	resp, err := blobClient.DownloadStream(ctx, nil)

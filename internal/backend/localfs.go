@@ -116,6 +116,37 @@ func (bfs *LocalFileSystemService) Get(ctx context.Context, path string) ([]byte
 	return bytes, nil
 }
 
+// List lists files with the given prefix.
+func (bfs *LocalFileSystemService) List(ctx context.Context, prefix string) ([]string, error) {
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	default:
+	}
+
+	dirPath := bfs.resolve(prefix)
+	var files []string
+
+	err := filepath.WalkDir(dirPath, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if !d.IsDir() {
+			relPath, err := filepath.Rel(bfs.mediaDir, path)
+			if err != nil {
+				return err
+			}
+			files = append(files, relPath)
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, bfs.logger.WrapError("failed to list files", err)
+	}
+
+	return files, nil
+}
+
 // Stream returns a file stream (caller must Close).
 func (bfs *LocalFileSystemService) Stream(ctx context.Context, path string) (io.ReadCloser, error) {
 	select {

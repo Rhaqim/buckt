@@ -53,6 +53,11 @@ func (b *Backend) Stream(ctx context.Context, path string) (io.ReadCloser, error
 	return nil, nil
 }
 
+// List implements domain.FileBackend.
+func (b *Backend) List(ctx context.Context, prefix string) ([]string, error) {
+	return nil, nil
+}
+
 type MigrationBackend struct {
 	Backend
 }

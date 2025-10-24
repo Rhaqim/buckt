@@ -12,6 +12,9 @@ type FileBackend interface {
 	// Put writes/overwrites a file.
 	Put(ctx context.Context, path string, data []byte) error
 
+	// List(prefix string) ([]string, error)
+	List(ctx context.Context, prefix string) ([]string, error)
+
 	// Get reads the entire file into memory.
 	Get(ctx context.Context, path string) ([]byte, error)
 
@@ -59,6 +62,13 @@ func (p *PlaceholderBackend) Name() string { return p.Title }
 func (p *PlaceholderBackend) Put(ctx context.Context, path string, data []byte) error {
 	return fmt.Errorf("placeholder backend (%s) cannot be used directly", p.Title)
 }
+
+// List implements domain.FileBackend.
+func (p *PlaceholderBackend) List(ctx context.Context, prefix string) ([]string, error) {
+	return nil, fmt.Errorf("placeholder backend (%s) cannot be used directly", p.Title)
+}
+
+// Get implements domain.FileBackend.
 func (p *PlaceholderBackend) Get(ctx context.Context, path string) ([]byte, error) {
 	return nil, fmt.Errorf("placeholder backend (%s) cannot be used directly", p.Title)
 }

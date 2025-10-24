@@ -62,6 +62,22 @@ func (d *MigrationBackendService) Get(ctx context.Context, path string) ([]byte,
 	return data, nil
 }
 
+// List implements domain.FileBackend.
+func (d *MigrationBackendService) List(ctx context.Context, prefix string) ([]string, error) {
+	// Try to list files from the primary backend
+	paths, err := d.primaryBackend.List(ctx, prefix)
+	if err != nil {
+		d.logger.Errorf("Failed to list files from primary backend: %v", err)
+		// If the primary backend fails, try the secondary backend
+		paths, err = d.secondaryBackend.List(ctx, prefix)
+		if err != nil {
+			d.logger.Errorf("Failed to list files from secondary backend: %v", err)
+			return nil, err
+		}
+	}
+	return paths, nil
+}
+
 // Stream implements domain.FileBackend.
 func (d *MigrationBackendService) Stream(ctx context.Context, path string) (io.ReadCloser, error) {
 	// Try to stream the file from the primary backend

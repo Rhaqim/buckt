@@ -62,6 +62,44 @@ func TestFSV2GetFile(t *testing.T) {
 	assert.Equal(t, testContent, content)
 }
 
+func TestFSV2GetNonExistentFile(t *testing.T) {
+	bfs, _ := setupFSV2Test()
+	nonExistentPath := "nonexistentfile.txt"
+	ctx := t.Context()
+
+	// Get non-existent file
+	_, err := bfs.Get(ctx, nonExistentPath)
+	assert.Error(t, err)
+}
+
+func TestFSV2List(t *testing.T) {
+	bfs, mediaDir := setupFSV2Test()
+	testFolderPath := "testfolder"
+	expectedFolderPath := filepath.Join(mediaDir, testFolderPath)
+	ctx := t.Context()
+
+	// Create a test folder
+	err := os.MkdirAll(expectedFolderPath, os.ModePerm)
+	assert.NoError(t, err)
+	defer os.RemoveAll(expectedFolderPath)
+
+	// Create test files inside the folder
+	testFile1Path := filepath.Join(expectedFolderPath, "file1.txt")
+	_, err = os.Create(testFile1Path)
+	assert.NoError(t, err)
+
+	testFile2Path := filepath.Join(expectedFolderPath, "file2.txt")
+	_, err = os.Create(testFile2Path)
+	assert.NoError(t, err)
+
+	// List files
+	files, err := bfs.List(ctx, testFolderPath)
+	assert.NoError(t, err)
+	assert.Len(t, files, 2)
+	assert.Contains(t, files, "testfolder/file1.txt")
+	assert.Contains(t, files, "testfolder/file2.txt")
+}
+
 func TestFSV2Move(t *testing.T) {
 	bfs, mediaDir := setupFSV2Test()
 	oldPath := "oldfile.txt"
