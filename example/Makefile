@@ -1,4 +1,4 @@
-.PHONY: direct aws gcp azure ui api mount
+.PHONY: direct aws gcp azure migration ui api mount clean
 
 CMD = go run
 MAIN = main.go
@@ -19,6 +19,9 @@ gcp:
 azure:
 	$(CMD) $(CLOUD_ROOT)/azure/$(MAIN)
 
+migration:
+	$(CMD) $(CLOUD_ROOT)/migration/$(MAIN)
+
 ui:
 	$(CMD) $(WEB_ROOT)/UI/$(MAIN) $(PORT_FLAG)
 
@@ -27,3 +30,7 @@ api:
 
 mount:
 	$(CMD) $(WEB_ROOT)/mount/$(MAIN) $(PORT_FLAG)
+
+clean:
+	rm -rf db.sqlite
+	rm -rf media/

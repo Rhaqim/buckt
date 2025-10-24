@@ -32,14 +32,14 @@ func (d *MigrationBackendService) Name() string {
 }
 
 // Put implements domain.FileBackend.
-func (d *MigrationBackendService) Put(path string, data []byte) error {
+func (d *MigrationBackendService) Put(ctx context.Context, path string, data []byte) error {
 	// Try to put the file in the primary backend
-	if err := d.primaryBackend.Put(path, data); err != nil {
+	if err := d.primaryBackend.Put(ctx, path, data); err != nil {
 		d.logger.Errorf("Failed to put file in primary backend: %v", err)
 	}
 
 	// If the primary backend fails, try the secondary backend
-	if err := d.secondaryBackend.Put(path, data); err != nil {
+	if err := d.secondaryBackend.Put(ctx, path, data); err != nil {
 		d.logger.Errorf("⚠️ Failed to mirror to secondary: %v", err)
 		return err
 	}
@@ -47,13 +47,13 @@ func (d *MigrationBackendService) Put(path string, data []byte) error {
 }
 
 // Get implements domain.FileBackend.
-func (d *MigrationBackendService) Get(path string) ([]byte, error) {
+func (d *MigrationBackendService) Get(ctx context.Context, path string) ([]byte, error) {
 	// Try to get the file from the primary backend
-	data, err := d.primaryBackend.Get(path)
+	data, err := d.primaryBackend.Get(ctx, path)
 	if err != nil {
 		d.logger.Errorf("Failed to get file from primary backend: %v", err)
 		// If the primary backend fails, try the secondary backend
-		data, err = d.secondaryBackend.Get(path)
+		data, err = d.secondaryBackend.Get(ctx, path)
 		if err != nil {
 			d.logger.Errorf("Failed to get file from secondary backend: %v", err)
 			return nil, err
@@ -62,14 +62,30 @@ func (d *MigrationBackendService) Get(path string) ([]byte, error) {
 	return data, nil
 }
 
+// List implements domain.FileBackend.
+func (d *MigrationBackendService) List(ctx context.Context, prefix string) ([]string, error) {
+	// Try to list files from the primary backend
+	paths, err := d.primaryBackend.List(ctx, prefix)
+	if err != nil {
+		d.logger.Errorf("Failed to list files from primary backend: %v", err)
+		// If the primary backend fails, try the secondary backend
+		paths, err = d.secondaryBackend.List(ctx, prefix)
+		if err != nil {
+			d.logger.Errorf("Failed to list files from secondary backend: %v", err)
+			return nil, err
+		}
+	}
+	return paths, nil
+}
+
 // Stream implements domain.FileBackend.
-func (d *MigrationBackendService) Stream(path string) (io.ReadCloser, error) {
+func (d *MigrationBackendService) Stream(ctx context.Context, path string) (io.ReadCloser, error) {
 	// Try to stream the file from the primary backend
-	reader, err := d.primaryBackend.Stream(path)
+	reader, err := d.primaryBackend.Stream(ctx, path)
 	if err != nil {
 		d.logger.Errorf("Failed to stream file from primary backend: %v", err)
 		// If the primary backend fails, try the secondary backend
-		reader, err = d.secondaryBackend.Stream(path)
+		reader, err = d.secondaryBackend.Stream(ctx, path)
 		if err != nil {
 			d.logger.Errorf("Failed to stream file from secondary backend: %v", err)
 			return nil, err
@@ -79,12 +95,12 @@ func (d *MigrationBackendService) Stream(path string) (io.ReadCloser, error) {
 }
 
 // Move implements domain.FileBackend.
-func (d *MigrationBackendService) Move(oldPath string, newPath string) error {
+func (d *MigrationBackendService) Move(ctx context.Context, oldPath string, newPath string) error {
 	// Try to move the file in the primary backend
-	if err := d.primaryBackend.Move(oldPath, newPath); err != nil {
+	if err := d.primaryBackend.Move(ctx, oldPath, newPath); err != nil {
 		d.logger.Errorf("Failed to move file in primary backend: %v", err)
 		// If the primary backend fails, try the secondary backend
-		if err := d.secondaryBackend.Move(oldPath, newPath); err != nil {
+		if err := d.secondaryBackend.Move(ctx, oldPath, newPath); err != nil {
 			d.logger.Errorf("Failed to move file in secondary backend: %v", err)
 			return err
 		}
@@ -93,13 +109,13 @@ func (d *MigrationBackendService) Move(oldPath string, newPath string) error {
 }
 
 // Exists implements domain.FileBackend.
-func (d *MigrationBackendService) Exists(path string) (bool, error) {
+func (d *MigrationBackendService) Exists(ctx context.Context, path string) (bool, error) {
 	// Check if the file exists in the primary backend
-	exists, err := d.primaryBackend.Exists(path)
+	exists, err := d.primaryBackend.Exists(ctx, path)
 	if err != nil {
 		d.logger.Errorf("Failed to check existence in primary backend: %v", err)
 		// If the primary backend fails, try the secondary backend
-		exists, err = d.secondaryBackend.Exists(path)
+		exists, err = d.secondaryBackend.Exists(ctx, path)
 		if err != nil {
 			d.logger.Errorf("Failed to check existence in secondary backend: %v", err)
 			return false, err
@@ -109,12 +125,12 @@ func (d *MigrationBackendService) Exists(path string) (bool, error) {
 }
 
 // Delete implements domain.FileBackend.
-func (d *MigrationBackendService) Delete(path string) error {
+func (d *MigrationBackendService) Delete(ctx context.Context, path string) error {
 	// Try to delete the file in the primary backend
-	if err := d.primaryBackend.Delete(path); err != nil {
+	if err := d.primaryBackend.Delete(ctx, path); err != nil {
 		d.logger.Errorf("Failed to delete file in primary backend: %v", err)
 		// If the primary backend fails, try the secondary backend
-		if err := d.secondaryBackend.Delete(path); err != nil {
+		if err := d.secondaryBackend.Delete(ctx, path); err != nil {
 			d.logger.Errorf("Failed to delete file in secondary backend: %v", err)
 			return err
 		}
@@ -123,12 +139,12 @@ func (d *MigrationBackendService) Delete(path string) error {
 }
 
 // DeleteFolder implements domain.FileBackend.
-func (d *MigrationBackendService) DeleteFolder(prefix string) error {
+func (d *MigrationBackendService) DeleteFolder(ctx context.Context, prefix string) error {
 	// Try to delete the folder in the primary backend
-	if err := d.primaryBackend.DeleteFolder(prefix); err != nil {
+	if err := d.primaryBackend.DeleteFolder(ctx, prefix); err != nil {
 		d.logger.Errorf("Failed to delete folder in primary backend: %v", err)
 		// If the primary backend fails, try the secondary backend
-		if err := d.secondaryBackend.DeleteFolder(prefix); err != nil {
+		if err := d.secondaryBackend.DeleteFolder(ctx, prefix); err != nil {
 			d.logger.Errorf("Failed to delete folder in secondary backend: %v", err)
 			return err
 		}
@@ -147,6 +163,6 @@ func (d *MigrationBackendService) MigrateFile(ctx context.Context, path string) 
 }
 
 // MigrationStatus implements domain.MigratableBackend.
-func (d *MigrationBackendService) MigrationStatus() (completed int64, total int64) {
+func (d *MigrationBackendService) MigrationStatus(ctx context.Context) (completed int64, total int64) {
 	return 0, 0
 }

@@ -239,3 +239,10 @@ func RegisterSecondaryBackend(backend Backend) ConfigFunc {
 		c.Backend.Target = backend
 	}
 }
+
+// EnableMigration enables dual-write migration mode in the Buckt application.
+func EnableMigration() ConfigFunc {
+	return func(c *Config) {
+		c.Backend.MigrationEnabled = true
+	}
+}
