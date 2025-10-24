@@ -577,17 +577,45 @@ func newAppServices(
 	return folderService, fileService
 }
 
-// ResolveBackend picks the correct backend based on the config.
 func resolveBackend(mediaDir string, bc BackendConfig, log domain.BucktLogger, lru domain.LRUCache) Backend {
-	switch {
-	case bc.MigrationEnabled && bc.Source != nil && bc.Target != nil:
-		log.Infof("🔄 Migration mode: %s → %s", bc.Source.Name(), bc.Target.Name())
+	if bc.MigrationEnabled {
+		var source, target Backend
 
-		source := instantiateIfLocal(bc.Source, mediaDir, log, lru)
-		target := instantiateIfLocal(bc.Target, mediaDir, log, lru)
+		// Fallback logic for source
+		if bc.Source != nil {
+			source = instantiateIfLocal(bc.Source, mediaDir, log, lru)
+		} else {
+			log.Warn("⚠️ Migration enabled but source backend missing — falling back to local as source")
+			source = backend.NewLocalFileSystemService(log, mediaDir, lru)
+		}
 
+		// Fallback logic for target
+		if bc.Target != nil {
+			target = instantiateIfLocal(bc.Target, mediaDir, log, lru)
+		} else {
+			log.Warn("⚠️ Migration enabled but target backend missing — falling back to local as target")
+			target = backend.NewLocalFileSystemService(log, mediaDir, lru)
+		}
+
+		// ensure both source and target are set and different
+		if source == nil || target == nil {
+			log.Errorf("❌ Migration enabled but one of the backends is nil — falling back to local")
+			return backend.NewLocalFileSystemService(log, mediaDir, lru)
+		}
+		if source.Name() == target.Name() {
+			log.Errorf(`
+				❌ Migration enabled but source and target backends are the same — 
+				disabling migration and falling back to a single backend
+			`)
+			return source
+		}
+
+		log.Infof("🔄 Migration mode: %s → %s", source.Name(), target.Name())
 		return backend.NewMigrationBackend(log, source, target)
+	}
 
+	// Non-migration modes
+	switch {
 	case bc.Source != nil:
 		return instantiateIfLocal(bc.Source, mediaDir, log, lru)
 
