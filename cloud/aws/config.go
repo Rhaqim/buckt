@@ -24,9 +24,20 @@ type Config struct {
 }
 
 func (a Config) Validate() error {
-	if a.AccessKey == "" || a.SecretKey == "" || a.Bucket == "" {
-		return fmt.Errorf("AWS credentials are incomplete")
+	var missing []string
+	if a.AccessKey == "" {
+		missing = append(missing, "AccessKey")
 	}
+	if a.SecretKey == "" {
+		missing = append(missing, "SecretKey")
+	}
+	if a.Bucket == "" {
+		missing = append(missing, "Bucket")
+	}
+	if len(missing) > 0 {
+		return fmt.Errorf("missing required field(s): %v", missing)
+	}
+
 	// Region is not required for R2, so skip enforcing it if endpoint is provided
 	if a.Region == "" && a.Endpoint == "" {
 		return fmt.Errorf("missing region or custom endpoint")

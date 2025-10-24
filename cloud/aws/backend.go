@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"strings"
 	"time"
 
@@ -121,7 +122,8 @@ func (s *S3Backend) Exists(ctx context.Context, path string) (bool, error) {
 		Key:    aws.String(path),
 	})
 	if err != nil {
-		if ae, ok := err.(smithy.APIError); ok && ae.ErrorCode() == "NotFound" {
+		var ae smithy.APIError
+		if errors.As(err, &ae) && ae.ErrorCode() == "NotFound" {
 			return false, nil
 		}
 		return false, err
@@ -177,7 +179,7 @@ func (s3b *S3Backend) Move(ctx context.Context, oldPath, newPath string) error {
 			Key:    aws.String(oldPath),
 		})
 		if delErr != nil {
-			fmt.Printf("async delete failed for %s: %v\n", oldPath, delErr)
+			log.Printf("async delete failed for %s: %v\n", oldPath, delErr)
 		}
 	}()
 
@@ -242,8 +244,9 @@ func withRetry(ctx context.Context, maxAttempts int, fn func() error) error {
 		}
 		var ae smithy.APIError
 		if errors.As(err, &ae) {
+			type httpErr interface{ HTTPStatusCode() int }
 			// Check for server-side errors (5xx status codes)
-			if httpErr, ok := ae.(interface{ HTTPStatusCode() int }); ok {
+			if httpErr, ok := ae.(httpErr); ok {
 				if httpErr.HTTPStatusCode() >= 500 {
 					// transient server-side issue
 					select {
