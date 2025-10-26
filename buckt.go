@@ -248,6 +248,22 @@ func (b *Client) UploadFile(user_id string, parent_id string, file_name string, 
 	return b.UploadFileContext(context.Background(), user_id, parent_id, file_name, content_type, file_data)
 }
 
+// UploadFileFromReader uploads a file to the specified user's bucket from an io.Reader.
+//
+// Parameters:
+//   - user_id: The ID of the user who owns the bucket.
+//   - parent_id: The ID of the parent directory where the file will be uploaded.
+//   - file_name: The name of the file to be uploaded.
+//   - content_type: The MIME type of the file.
+//   - file_data: An io.Reader containing the file data.
+//
+// Returns:
+//   - string: The ID of the newly created file.
+//   - error: An error if the file upload fails, otherwise nil.
+func (b *Client) UploadFileFromReader(user_id string, parent_id string, file_name string, content_type string, file_data io.Reader) (string, error) {
+	return b.UploadFileFromReaderContext(context.Background(), user_id, parent_id, file_name, content_type, file_data)
+}
+
 // GetFile retrieves a file based on the provided file ID.
 // It returns the file data and an error, if any occurred during the retrieval process.
 //
@@ -449,6 +465,42 @@ func (b *Client) DeleteFolderPermanentlyContext(ctx context.Context, user_id, fo
 //   - error: An error if the file upload fails, otherwise nil.
 func (b *Client) UploadFileContext(ctx context.Context, user_id string, parent_id string, file_name string, content_type string, file_data []byte) (string, error) {
 	return b.fileService.CreateFile(ctx, user_id, parent_id, file_name, content_type, file_data)
+}
+
+// UploadFileFromReaderContext uploads a file to the specified user's bucket from an io.Reader.
+//
+// Parameters:
+//   - ctx: The context for the operation.
+//   - user_id: The ID of the user who owns the bucket.
+//   - parent_id: The ID of the parent directory where the file will be uploaded.
+//   - file_name: The name of the file to be uploaded.
+//   - content_type: The MIME type of the file.
+//   - file_data: An io.Reader containing the file data.
+//
+// Returns:
+//   - string: The ID of the newly created file.
+//   - error: An error if the file upload fails, otherwise nil.
+func (b *Client) UploadFileFromReaderContext(ctx context.Context, user_id string, parent_id string, file_name string, content_type string, file_data io.Reader) (string, error) {
+
+	// Get the file size
+	file_info, err := file_data.(io.Seeker).Seek(0, io.SeekEnd)
+	if err != nil {
+		return "", err
+	}
+	_, err = file_data.(io.Seeker).Seek(0, io.SeekStart)
+	if err != nil {
+		return "", err
+	}
+
+	// Read the file data
+	file_bytes := make([]byte, file_info)
+	_, err = io.ReadFull(file_data, file_bytes)
+	if err != nil {
+		return "", err
+	}
+
+	// Upload the file
+	return b.fileService.CreateFile(ctx, user_id, parent_id, file_name, content_type, file_bytes)
 }
 
 // GetFileContext retrieves a file based on the provided file ID.
