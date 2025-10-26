@@ -1,6 +1,7 @@
 package mocks
 
 import (
+	"context"
 	"errors"
 
 	"github.com/Rhaqim/buckt/internal/domain"
@@ -13,17 +14,17 @@ type CacheManager struct {
 
 var _ domain.CacheManager = (*CacheManager)(nil)
 
-func (m *CacheManager) SetBucktValue(key string, value any) error {
+func (m *CacheManager) SetBucktValue(ctx context.Context, key string, value any) error {
 	args := m.Called(key, value)
 	return args.Error(0)
 }
 
-func (m *CacheManager) GetBucktValue(key string) (any, error) {
+func (m *CacheManager) GetBucktValue(ctx context.Context, key string) (any, error) {
 	args := m.Called(key)
 	return args.Get(0), args.Error(1)
 }
 
-func (m *CacheManager) DeleteBucktValue(key string) error {
+func (m *CacheManager) DeleteBucktValue(ctx context.Context, key string) error {
 	args := m.Called(key)
 	return args.Error(0)
 }
@@ -34,9 +35,11 @@ func NewNoopCache() domain.CacheManager {
 	return &NoopCache{}
 }
 
-func (n *NoopCache) SetBucktValue(key string, value any) error { return nil }
-func (n *NoopCache) GetBucktValue(key string) (any, error)     { return nil, errors.New("cache miss") }
-func (n *NoopCache) DeleteBucktValue(key string) error         { return nil }
+func (n *NoopCache) SetBucktValue(ctx context.Context, key string, value any) error { return nil }
+func (n *NoopCache) GetBucktValue(ctx context.Context, key string) (any, error) {
+	return nil, errors.New("cache miss")
+}
+func (n *NoopCache) DeleteBucktValue(ctx context.Context, key string) error { return nil }
 
 type NoopLRUCache struct{}
 

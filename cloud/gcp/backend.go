@@ -39,8 +39,7 @@ func (g *GCPBackend) Name() string {
 	return "gcp"
 }
 
-func (g *GCPBackend) Put(path string, data []byte) error {
-	ctx := context.Background()
+func (g *GCPBackend) Put(ctx context.Context, path string, data []byte) error {
 	w := g.client.Bucket(g.bucketName).Object(path).NewWriter(ctx)
 	if _, err := w.Write(data); err != nil {
 		return fmt.Errorf("failed to write object: %w", err)
@@ -51,8 +50,7 @@ func (g *GCPBackend) Put(path string, data []byte) error {
 	return nil
 }
 
-func (g *GCPBackend) Get(path string) ([]byte, error) {
-	ctx := context.Background()
+func (g *GCPBackend) Get(ctx context.Context, path string) ([]byte, error) {
 	r, err := g.client.Bucket(g.bucketName).Object(path).NewReader(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open reader: %w", err)
@@ -66,8 +64,24 @@ func (g *GCPBackend) Get(path string) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-func (g *GCPBackend) Stream(path string) (io.ReadCloser, error) {
-	ctx := context.Background()
+func (g *GCPBackend) List(ctx context.Context, prefix string) ([]string, error) {
+	var results []string
+	it := g.client.Bucket(g.bucketName).Objects(ctx, &storage.Query{Prefix: prefix})
+
+	for {
+		obj, err := it.Next()
+		if err == iterator.Done {
+			break
+		}
+		if err != nil {
+			return nil, fmt.Errorf("failed to list objects: %w", err)
+		}
+		results = append(results, obj.Name)
+	}
+	return results, nil
+}
+
+func (g *GCPBackend) Stream(ctx context.Context, path string) (io.ReadCloser, error) {
 	r, err := g.client.Bucket(g.bucketName).Object(path).NewReader(ctx)
 	if err != nil {
 		return nil, err
@@ -75,16 +89,14 @@ func (g *GCPBackend) Stream(path string) (io.ReadCloser, error) {
 	return r, nil // caller must close
 }
 
-func (g *GCPBackend) Delete(path string) error {
-	ctx := context.Background()
+func (g *GCPBackend) Delete(ctx context.Context, path string) error {
 	if err := g.client.Bucket(g.bucketName).Object(path).Delete(ctx); err != nil {
 		return fmt.Errorf("failed to delete object: %w", err)
 	}
 	return nil
 }
 
-func (g *GCPBackend) Exists(path string) (bool, error) {
-	ctx := context.Background()
+func (g *GCPBackend) Exists(ctx context.Context, path string) (bool, error) {
 	_, err := g.client.Bucket(g.bucketName).Object(path).Attrs(ctx)
 	if err == storage.ErrObjectNotExist {
 		return false, nil
@@ -95,8 +107,7 @@ func (g *GCPBackend) Exists(path string) (bool, error) {
 	return true, nil
 }
 
-func (g *GCPBackend) Stat(path string) (*FileInfo, error) {
-	ctx := context.Background()
+func (g *GCPBackend) Stat(ctx context.Context, path string) (*FileInfo, error) {
 	attrs, err := g.client.Bucket(g.bucketName).Object(path).Attrs(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to stat object: %w", err)
@@ -109,8 +120,7 @@ func (g *GCPBackend) Stat(path string) (*FileInfo, error) {
 	}, nil
 }
 
-func (g *GCPBackend) DeleteFolder(prefix string) error {
-	ctx := context.Background()
+func (g *GCPBackend) DeleteFolder(ctx context.Context, prefix string) error {
 	it := g.client.Bucket(g.bucketName).Objects(ctx, &storage.Query{Prefix: prefix + "/"})
 
 	for {
@@ -128,8 +138,7 @@ func (g *GCPBackend) DeleteFolder(prefix string) error {
 	return nil
 }
 
-func (g *GCPBackend) Move(oldPath, newPath string) error {
-	ctx := context.Background()
+func (g *GCPBackend) Move(ctx context.Context, oldPath, newPath string) error {
 	src := g.client.Bucket(g.bucketName).Object(oldPath)
 	dst := g.client.Bucket(g.bucketName).Object(newPath)
 

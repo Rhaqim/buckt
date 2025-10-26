@@ -14,27 +14,27 @@ type Backend struct {
 var _ domain.FileBackend = (*Backend)(nil)
 
 // Delete implements domain.FileBackend.
-func (b *Backend) Delete(path string) error {
+func (b *Backend) Delete(ctx context.Context, path string) error {
 	return nil
 }
 
 // DeleteFolder implements domain.FileBackend.
-func (b *Backend) DeleteFolder(prefix string) error {
+func (b *Backend) DeleteFolder(ctx context.Context, prefix string) error {
 	return nil
 }
 
 // Exists implements domain.FileBackend.
-func (b *Backend) Exists(path string) (bool, error) {
+func (b *Backend) Exists(ctx context.Context, path string) (bool, error) {
 	return false, nil
 }
 
 // Get implements domain.FileBackend.
-func (b *Backend) Get(path string) ([]byte, error) {
+func (b *Backend) Get(ctx context.Context, path string) ([]byte, error) {
 	return nil, nil
 }
 
 // Move implements domain.FileBackend.
-func (b *Backend) Move(oldPath string, newPath string) error {
+func (b *Backend) Move(ctx context.Context, oldPath string, newPath string) error {
 	return nil
 }
 
@@ -44,12 +44,17 @@ func (b *Backend) Name() string {
 }
 
 // Put implements domain.FileBackend.
-func (b *Backend) Put(path string, data []byte) error {
+func (b *Backend) Put(ctx context.Context, path string, data []byte) error {
 	return nil
 }
 
 // Stream implements domain.FileBackend.
-func (b *Backend) Stream(path string) (io.ReadCloser, error) {
+func (b *Backend) Stream(ctx context.Context, path string) (io.ReadCloser, error) {
+	return nil, nil
+}
+
+// List implements domain.FileBackend.
+func (b *Backend) List(ctx context.Context, prefix string) ([]string, error) {
 	return nil, nil
 }
 
@@ -70,6 +75,6 @@ func (m *MigrationBackend) MigrateFile(ctx context.Context, path string) error {
 }
 
 // MigrationStatus implements domain.MigratableBackend.
-func (m *MigrationBackend) MigrationStatus() (completed int64, total int64) {
+func (m *MigrationBackend) MigrationStatus(ctx context.Context) (completed int64, total int64) {
 	return 0, 0
 }
