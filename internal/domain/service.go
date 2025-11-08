@@ -1,30 +1,31 @@
 package domain
 
 import (
+	"context"
 	"io"
 
 	"github.com/Rhaqim/buckt/internal/model"
 )
 
 type FolderService interface {
-	CreateFolder(user_id, parent_id, folder_name, description string) (string, error)
-	GetRootFolder(user_id string) (*model.FolderModel, error)
-	GetFolder(user_id, folder_id string) (*model.FolderModel, error)
-	GetFolders(parent_id string) ([]model.FolderModel, error)
-	MoveFolder(folder_id, new_parent_id string) error
-	RenameFolder(user_id, folder_id, new_name string) error
-	DeleteFolder(folder_id string) (string, error)
-	ScrubFolder(user_id, folder_id string) (string, error)
+	CreateFolder(ctx context.Context, user_id, parent_id, folder_name, description string) (string, error)
+	GetRootFolder(ctx context.Context, user_id string) (*model.FolderModel, error)
+	GetFolder(ctx context.Context, user_id, folder_id string) (*model.FolderModel, error)
+	GetFolders(ctx context.Context, parent_id string) ([]model.FolderModel, error)
+	MoveFolder(ctx context.Context, folder_id, new_parent_id string) error
+	RenameFolder(ctx context.Context, user_id, folder_id, new_name string) error
+	DeleteFolder(ctx context.Context, folder_id string) (string, error)
+	ScrubFolder(ctx context.Context, user_id, folder_id string) (string, error)
 }
 
 type FileService interface {
-	CreateFile(user_id, parent_id, file_name, content_type string, file_data []byte) (string, error)
-	GetFile(file_id string) (*model.FileModel, error)
-	GetFileStream(file_id string) (*model.FileModel, io.ReadCloser, error)
-	GetFiles(parent_id string) ([]model.FileModel, error)
-	MoveFile(file_id, new_parent_id string) error
-	RenameFile(file_id, new_name string) error
-	UpdateFile(user_id, file_id, new_file_name string, new_file_data []byte) error
-	DeleteFile(file_id string) (string, error)
-	ScrubFile(file_id string) (string, error)
+	CreateFile(ctx context.Context, user_id, parent_id, file_name, content_type string, file_data []byte) (string, error)
+	GetFile(ctx context.Context, file_id string) (*model.FileModel, error)
+	GetFileStream(ctx context.Context, file_id string) (*model.FileModel, io.ReadCloser, error)
+	GetFiles(ctx context.Context, parent_id string) ([]model.FileModel, error)
+	MoveFile(ctx context.Context, file_id, new_parent_id string) error
+	RenameFile(ctx context.Context, file_id, new_name string) error
+	UpdateFile(ctx context.Context, user_id, file_id, new_file_name string, new_file_data []byte) error
+	DeleteFile(ctx context.Context, file_id string) (string, error)
+	ScrubFile(ctx context.Context, file_id string) (string, error)
 }

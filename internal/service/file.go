@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
@@ -51,13 +52,13 @@ func NewFileService(
 }
 
 // CreateFile implements domain.FileService.
-func (f *FileService) CreateFile(user_id, parent_id, file_name, content_type string, file_data []byte) (string, error) {
+func (f *FileService) CreateFile(ctx context.Context, user_id, parent_id, file_name, content_type string, file_data []byte) (string, error) {
 	var err error
 
 	// Get the parent folder
-	parentFolder, err := f.folderService.GetFolder(user_id, parent_id)
+	parentFolder, err := f.folderService.GetFolder(ctx, user_id, parent_id)
 	if err != nil {
-		parentFolder, err = f.folderService.GetRootFolder(user_id)
+		parentFolder, err = f.folderService.GetRootFolder(ctx, user_id)
 		if err != nil {
 			return "", err
 		}
@@ -90,10 +91,10 @@ func (f *FileService) CreateFile(user_id, parent_id, file_name, content_type str
 	}
 
 	// Create the file
-	err = f.repo.Create(file)
+	err = f.repo.Create(ctx, file)
 	if err != nil {
 		if err.Error() == "UNIQUE constraint failed: file_models.name, file_models.parent_id" {
-			file, err = f.repo.RestoreFile(file.ParentID, file.Name)
+			file, err = f.repo.RestoreFile(ctx, file.ParentID, file.Name)
 			if err != nil {
 				return "", f.logger.WrapError("failed to restore file", err)
 			}
@@ -102,7 +103,7 @@ func (f *FileService) CreateFile(user_id, parent_id, file_name, content_type str
 		}
 	} else {
 		// Write the file to the file system
-		if err := f.fileBackend.Put(file.Path, file_data); err != nil {
+		if err := f.fileBackend.Put(ctx, file.Path, file_data); err != nil {
 			return "", err
 		}
 	}
@@ -112,7 +113,7 @@ func (f *FileService) CreateFile(user_id, parent_id, file_name, content_type str
 
 // GetFile implements domain.FileService.
 // Subtle: this method shadows the method (FileRepository).GetFile of FileService.repo.
-func (f *FileService) GetFile(file_id string) (*model.FileModel, error) {
+func (f *FileService) GetFile(ctx context.Context, file_id string) (*model.FileModel, error) {
 	fileID, err := uuid.Parse(file_id)
 	if err != nil {
 		return nil, f.logger.WrapError("failed to parse uuid", err)
@@ -122,7 +123,7 @@ func (f *FileService) GetFile(file_id string) (*model.FileModel, error) {
 
 	// Check cache first
 	if f.cache != nil {
-		cached, err := f.cache.GetBucktValue(file_id)
+		cached, err := f.cache.GetBucktValue(ctx, file_id)
 		if err != nil {
 			f.logger.Warn("failed to get file metadata from cache: " + err.Error())
 		}
@@ -140,7 +141,7 @@ func (f *FileService) GetFile(file_id string) (*model.FileModel, error) {
 
 	// If not found in cache, fetch from repository
 	if file == nil {
-		file, err = f.repo.GetFile(fileID)
+		file, err = f.repo.GetFile(ctx, fileID)
 		if err != nil {
 			return nil, f.logger.WrapError("failed to get file metadata", err)
 		}
@@ -148,11 +149,11 @@ func (f *FileService) GetFile(file_id string) (*model.FileModel, error) {
 		// Store metadata in cache (without file data)
 		if f.cache != nil {
 			jsonData, _ := json.Marshal(file) // Ignore errors for now
-			_ = f.cache.SetBucktValue(file_id, string(jsonData))
+			_ = f.cache.SetBucktValue(ctx, file_id, string(jsonData))
 		}
 	}
 
-	data, err := f.fileBackend.Get(file.Path)
+	data, err := f.fileBackend.Get(ctx, file.Path)
 	if err != nil {
 		return nil, f.logger.WrapError("failed to get file data", err)
 	}
@@ -164,7 +165,7 @@ func (f *FileService) GetFile(file_id string) (*model.FileModel, error) {
 
 // GetFileStream implements domain.FileService.
 // Subtle: this method shadows the method (FileBackend).GetFilStream of FileService.fileBackend.
-func (f *FileService) GetFileStream(file_id string) (*model.FileModel, io.ReadCloser, error) {
+func (f *FileService) GetFileStream(ctx context.Context, file_id string) (*model.FileModel, io.ReadCloser, error) {
 	fileID, err := uuid.Parse(file_id)
 	if err != nil {
 		return nil, nil, f.logger.WrapError("failed to parse uuid", err)
@@ -174,7 +175,7 @@ func (f *FileService) GetFileStream(file_id string) (*model.FileModel, io.ReadCl
 
 	// Check cache first
 	if f.cache != nil {
-		cached, err := f.cache.GetBucktValue(file_id)
+		cached, err := f.cache.GetBucktValue(ctx, file_id)
 		if err == nil && cached != nil { // Ensure cached value is not nil
 			cachedStr, ok := cached.(string)
 			if ok { // Ensure type assertion succeeds
@@ -188,7 +189,7 @@ func (f *FileService) GetFileStream(file_id string) (*model.FileModel, io.ReadCl
 
 	// If not found in cache, fetch from repository
 	if file == nil {
-		file, err = f.repo.GetFile(fileID)
+		file, err = f.repo.GetFile(ctx, fileID)
 		if err != nil {
 			return nil, nil, f.logger.WrapError("failed to get file metadata", err)
 		}
@@ -196,12 +197,12 @@ func (f *FileService) GetFileStream(file_id string) (*model.FileModel, io.ReadCl
 		// Store metadata in cache (without file data)
 		if f.cache != nil {
 			jsonData, _ := json.Marshal(file) // Ignore errors for now
-			_ = f.cache.SetBucktValue(file_id, string(jsonData))
+			_ = f.cache.SetBucktValue(ctx, file_id, string(jsonData))
 		}
 	}
 
 	// Fetch actual file data separately
-	fileStream, err := f.fileBackend.Stream(file.Path)
+	fileStream, err := f.fileBackend.Stream(ctx, file.Path)
 	if err != nil {
 		return nil, nil, f.logger.WrapError("failed to get file data", err)
 	}
@@ -211,7 +212,7 @@ func (f *FileService) GetFileStream(file_id string) (*model.FileModel, io.ReadCl
 
 // GetFiles implements domain.FileService.
 // Subtle: this method shadows the method (FileRepository).GetFiles of FileService.repo.
-func (f *FileService) GetFiles(parent_id string) ([]model.FileModel, error) {
+func (f *FileService) GetFiles(ctx context.Context, parent_id string) ([]model.FileModel, error) {
 	parentID, err := uuid.Parse(parent_id)
 	if err != nil {
 		return nil, f.logger.WrapError("failed to parse uuid", err)
@@ -224,7 +225,7 @@ func (f *FileService) GetFiles(parent_id string) ([]model.FileModel, error) {
 
 	// Check cache first
 	if f.cache != nil {
-		cached, err := f.cache.GetBucktValue(cacheKey)
+		cached, err := f.cache.GetBucktValue(ctx, cacheKey)
 		if err == nil || cached != nil {
 			var cachedFiles []*model.FileModel
 			if jsonErr := json.Unmarshal([]byte(cached.(string)), &cachedFiles); jsonErr == nil {
@@ -235,7 +236,7 @@ func (f *FileService) GetFiles(parent_id string) ([]model.FileModel, error) {
 
 	// If not found in cache, fetch from repository
 	if len(files) == 0 {
-		files, err = f.repo.GetFiles(parentID)
+		files, err = f.repo.GetFiles(ctx, parentID)
 		if err != nil {
 			return nil, f.logger.WrapError("failed to get files", err)
 		}
@@ -243,14 +244,14 @@ func (f *FileService) GetFiles(parent_id string) ([]model.FileModel, error) {
 		// Store metadata in cache (without file data)
 		if f.cache != nil {
 			jsonData, _ := json.Marshal(files) // Ignore errors for now
-			_ = f.cache.SetBucktValue(cacheKey, string(jsonData))
+			_ = f.cache.SetBucktValue(ctx, cacheKey, string(jsonData))
 		}
 	}
 
 	// Fetch actual file data separately
 	var fileModels []model.FileModel
 	for _, file := range files {
-		fileData, err := f.fileBackend.Get(file.Path)
+		fileData, err := f.fileBackend.Get(ctx, file.Path)
 		if err != nil {
 			return nil, f.logger.WrapError("failed to get file data", err)
 		}
@@ -262,7 +263,7 @@ func (f *FileService) GetFiles(parent_id string) ([]model.FileModel, error) {
 }
 
 // MoveFile implements domain.FileService.
-func (f *FileService) MoveFile(file_id string, new_parent_id string) error {
+func (f *FileService) MoveFile(ctx context.Context, file_id string, new_parent_id string) error {
 	fileID, err := uuid.Parse(file_id)
 	if err != nil {
 		return f.logger.WrapError("failed to parse uuid", err)
@@ -274,14 +275,14 @@ func (f *FileService) MoveFile(file_id string, new_parent_id string) error {
 	}
 
 	// Move the file
-	oldPath, newPath, err := f.repo.MoveFile(fileID, newParentID)
+	oldPath, newPath, err := f.repo.MoveFile(ctx, fileID, newParentID)
 	if err != nil {
 		return f.logger.WrapError("failed to move file", err)
 	}
 
 	if !f.flatNameSpaces {
 		// Move the file in the file system
-		if err := f.fileBackend.Move(oldPath, newPath); err != nil {
+		if err := f.fileBackend.Move(ctx, oldPath, newPath); err != nil {
 			return f.logger.WrapError("failed to move file", err)
 		}
 	}
@@ -290,14 +291,14 @@ func (f *FileService) MoveFile(file_id string, new_parent_id string) error {
 }
 
 // RenameFile implements domain.FileService.
-func (f *FileService) RenameFile(file_id string, new_name string) error {
+func (f *FileService) RenameFile(ctx context.Context, file_id string, new_name string) error {
 	fileID, err := uuid.Parse(file_id)
 	if err != nil {
 		return f.logger.WrapError("failed to parse uuid", err)
 	}
 
 	// Rename the file
-	if err := f.repo.RenameFile(fileID, new_name); err != nil {
+	if err := f.repo.RenameFile(ctx, fileID, new_name); err != nil {
 		return f.logger.WrapError("failed to rename file", err)
 	}
 
@@ -305,19 +306,19 @@ func (f *FileService) RenameFile(file_id string, new_name string) error {
 }
 
 // UpdateFile implements domain.FileService.
-func (f *FileService) UpdateFile(user_id, file_id string, new_file_name string, new_file_data []byte) error {
+func (f *FileService) UpdateFile(ctx context.Context, user_id, file_id string, new_file_name string, new_file_data []byte) error {
 	fileID, err := uuid.Parse(file_id)
 	if err != nil {
 		return f.logger.WrapError("failed to parse uuid", err)
 	}
 
-	file, err := f.repo.GetFile(fileID)
+	file, err := f.repo.GetFile(ctx, fileID)
 	if err != nil {
 		return f.logger.WrapError("failed to get file", err)
 	}
 
 	// Get the parent folder
-	parentFolder, err := f.folderService.GetFolder(user_id, file.ParentID.String())
+	parentFolder, err := f.folderService.GetFolder(ctx, user_id, file.ParentID.String())
 	if err != nil {
 		return err
 	}
@@ -334,12 +335,12 @@ func (f *FileService) UpdateFile(user_id, file_id string, new_file_name string, 
 	file.Hash = newHash
 
 	// Update the file in the file system
-	if err := f.fileBackend.Put(newPath, new_file_data); err != nil {
+	if err := f.fileBackend.Put(ctx, newPath, new_file_data); err != nil {
 		return err
 	}
 
 	// Update the file
-	if err := f.repo.Update(file); err != nil {
+	if err := f.repo.Update(ctx, file); err != nil {
 		return f.logger.WrapError("failed to update file", err)
 	}
 
@@ -348,7 +349,7 @@ func (f *FileService) UpdateFile(user_id, file_id string, new_file_name string, 
 
 // DeleteFile implements domain.FileService.
 // Subtle: this method shadows the method (FileRepository).DeleteFile of FileService.repo.
-func (f *FileService) DeleteFile(file_id string) (string, error) {
+func (f *FileService) DeleteFile(ctx context.Context, file_id string) (string, error) {
 	var parentID string
 
 	fileID, err := uuid.Parse(file_id)
@@ -360,7 +361,7 @@ func (f *FileService) DeleteFile(file_id string) (string, error) {
 
 	// Check cache first
 	if f.cache != nil {
-		cached, err := f.cache.GetBucktValue(file_id)
+		cached, err := f.cache.GetBucktValue(ctx, file_id)
 		if err == nil {
 			var cachedFile model.FileModel
 			if jsonErr := json.Unmarshal([]byte(cached.(string)), &cachedFile); jsonErr == nil {
@@ -368,27 +369,27 @@ func (f *FileService) DeleteFile(file_id string) (string, error) {
 			}
 
 			// Delete from cache
-			_ = f.cache.DeleteBucktValue(file_id)
+			_ = f.cache.DeleteBucktValue(ctx, file_id)
 		}
 	}
 
 	// If not found in cache, fetch from repository
 	if file == nil {
-		file, err = f.repo.GetFile(fileID)
+		file, err = f.repo.GetFile(ctx, fileID)
 		if err != nil {
 			return parentID, f.logger.WrapError("failed to get file metadata", err)
 		}
 	}
 
 	// Delete the file
-	if err := f.repo.DeleteFile(fileID); err != nil {
+	if err := f.repo.DeleteFile(ctx, fileID); err != nil {
 		return parentID, f.logger.WrapError("failed to delete file", err)
 	}
 
 	return file.ParentID.String(), nil
 }
 
-func (f *FileService) ScrubFile(file_id string) (string, error) {
+func (f *FileService) ScrubFile(ctx context.Context, file_id string) (string, error) {
 	var parentID string
 
 	fileID, err := uuid.Parse(file_id)
@@ -400,7 +401,7 @@ func (f *FileService) ScrubFile(file_id string) (string, error) {
 
 	// Check cache first
 	if f.cache != nil {
-		cached, err := f.cache.GetBucktValue(file_id)
+		cached, err := f.cache.GetBucktValue(ctx, file_id)
 		if err == nil {
 			var cachedFile model.FileModel
 			if jsonErr := json.Unmarshal([]byte(cached.(string)), &cachedFile); jsonErr == nil {
@@ -408,25 +409,25 @@ func (f *FileService) ScrubFile(file_id string) (string, error) {
 			}
 
 			// Delete from cache
-			_ = f.cache.DeleteBucktValue(file_id)
+			_ = f.cache.DeleteBucktValue(ctx, file_id)
 		}
 	}
 
 	// If not found in cache, fetch from repository
 	if file == nil {
-		file, err = f.repo.GetFile(fileID)
+		file, err = f.repo.GetFile(ctx, fileID)
 		if err != nil {
 			return parentID, f.logger.WrapError("failed to get file metadata", err)
 		}
 	}
 
 	// Delete the file from the file system
-	if err := f.fileBackend.Delete(file.Path); err != nil {
+	if err := f.fileBackend.Delete(ctx, file.Path); err != nil {
 		return parentID, err
 	}
 
 	// Delete the file
-	if err := f.repo.ScrubFile(fileID); err != nil {
+	if err := f.repo.ScrubFile(ctx, fileID); err != nil {
 		return parentID, f.logger.WrapError("failed to delete file", err)
 	}
 

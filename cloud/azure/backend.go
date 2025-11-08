@@ -46,15 +46,15 @@ func (a *AzureBackend) Name() string {
 	return "azure"
 }
 
-func (a *AzureBackend) Put(path string, data []byte) error {
+func (a *AzureBackend) Put(ctx context.Context, path string, data []byte) error {
 	blobClient := a.client.NewBlockBlobClient(path)
-	_, err := blobClient.UploadBuffer(context.TODO(), data, &blockblob.UploadBufferOptions{})
+	_, err := blobClient.UploadBuffer(ctx, data, &blockblob.UploadBufferOptions{})
 	return err
 }
 
-func (a *AzureBackend) Get(path string) ([]byte, error) {
+func (a *AzureBackend) Get(ctx context.Context, path string) ([]byte, error) {
 	blobClient := a.client.NewBlockBlobClient(path)
-	resp, err := blobClient.DownloadStream(context.TODO(), nil)
+	resp, err := blobClient.DownloadStream(ctx, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -67,24 +67,46 @@ func (a *AzureBackend) Get(path string) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-func (a *AzureBackend) Stream(path string) (io.ReadCloser, error) {
+func (a *AzureBackend) List(ctx context.Context, prefix string) ([]string, error) {
+	pager := a.client.NewListBlobsFlatPager(&container.ListBlobsFlatOptions{
+		Prefix: &prefix,
+	})
+
+	var paths []string
+	for pager.More() {
+		page, err := pager.NextPage(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("failed to list blobs: %w", err)
+		}
+
+		for _, blob := range page.Segment.BlobItems {
+			if blob.Name != nil {
+				paths = append(paths, *blob.Name)
+			}
+		}
+	}
+
+	return paths, nil
+}
+
+func (a *AzureBackend) Stream(ctx context.Context, path string) (io.ReadCloser, error) {
 	blobClient := a.client.NewBlockBlobClient(path)
-	resp, err := blobClient.DownloadStream(context.TODO(), nil)
+	resp, err := blobClient.DownloadStream(ctx, nil)
 	if err != nil {
 		return nil, err
 	}
 	return resp.Body, nil
 }
 
-func (a *AzureBackend) Delete(path string) error {
+func (a *AzureBackend) Delete(ctx context.Context, path string) error {
 	blobClient := a.client.NewBlockBlobClient(path)
-	_, err := blobClient.Delete(context.TODO(), nil)
+	_, err := blobClient.Delete(ctx, nil)
 	return err
 }
 
-func (a *AzureBackend) Exists(path string) (bool, error) {
+func (a *AzureBackend) Exists(ctx context.Context, path string) (bool, error) {
 	blobClient := a.client.NewBlockBlobClient(path)
-	_, err := blobClient.GetProperties(context.TODO(), nil)
+	_, err := blobClient.GetProperties(ctx, nil)
 	if err != nil {
 		var respErr bloberror.Code
 		if ok := errorAs(err, &respErr); ok && respErr == bloberror.BlobNotFound {
@@ -95,9 +117,9 @@ func (a *AzureBackend) Exists(path string) (bool, error) {
 	return true, nil
 }
 
-func (a *AzureBackend) Stat(path string) (*FileInfo, error) {
+func (a *AzureBackend) Stat(ctx context.Context, path string) (*FileInfo, error) {
 	blobClient := a.client.NewBlockBlobClient(path)
-	props, err := blobClient.GetProperties(context.TODO(), nil)
+	props, err := blobClient.GetProperties(ctx, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -110,13 +132,13 @@ func (a *AzureBackend) Stat(path string) (*FileInfo, error) {
 	}, nil
 }
 
-func (a *AzureBackend) DeleteFolder(prefix string) error {
+func (a *AzureBackend) DeleteFolder(ctx context.Context, prefix string) error {
 	pager := a.client.NewListBlobsFlatPager(&container.ListBlobsFlatOptions{
 		Prefix: &prefix,
 	})
 
 	for pager.More() {
-		page, err := pager.NextPage(context.TODO())
+		page, err := pager.NextPage(ctx)
 		if err != nil {
 			return fmt.Errorf("failed to list blobs: %w", err)
 		}
@@ -125,19 +147,19 @@ func (a *AzureBackend) DeleteFolder(prefix string) error {
 			if blob.Name == nil {
 				continue
 			}
-			_ = a.Delete(*blob.Name) // best-effort delete
+			_ = a.Delete(ctx, *blob.Name) // best-effort delete
 		}
 	}
 
 	return nil
 }
 
-func (a *AzureBackend) Move(oldPath, newPath string) error {
+func (a *AzureBackend) Move(ctx context.Context, oldPath, newPath string) error {
 	// Copy
 	srcBlob := a.client.NewBlockBlobClient(oldPath)
 	destBlob := a.client.NewBlockBlobClient(newPath)
 
-	_, err := destBlob.StartCopyFromURL(context.TODO(), srcBlob.URL(), nil)
+	_, err := destBlob.StartCopyFromURL(ctx, srcBlob.URL(), nil)
 	if err != nil {
 		return fmt.Errorf("failed to copy blob: %w", err)
 	}
@@ -155,7 +177,7 @@ func (a *AzureBackend) Move(oldPath, newPath string) error {
 	}
 
 	// Delete old
-	return a.Delete(oldPath)
+	return a.Delete(ctx, oldPath)
 }
 
 func errorAs(err error, target any) bool {

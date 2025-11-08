@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func setupFSV2Test() (*LocalFileSystemService, string) {
+func setupFSTest() (*LocalFileSystemService, string) {
 	log := logger.NewLogger("", true, false)
 	mediaDir := os.TempDir()
 	cache := new(mocks.NoopLRUCache)
@@ -18,18 +18,19 @@ func setupFSV2Test() (*LocalFileSystemService, string) {
 	return bfs, mediaDir
 }
 
-func TestFSV2Put(t *testing.T) {
-	bfs, mediaDir := setupFSV2Test()
+func TestFSPut(t *testing.T) {
+	bfs, mediaDir := setupFSTest()
 	testPath := "testfile.txt"
 	testContent := []byte("Hello, World!")
 	expectedPath := filepath.Join(mediaDir, testPath)
+	ctx := t.Context()
 
 	// Create a test file
 	_, err := os.Create(expectedPath)
 	assert.NoError(t, err)
 
 	// Write file
-	err = bfs.Put(testPath, testContent)
+	err = bfs.Put(ctx, testPath, testContent)
 	assert.NoError(t, err)
 	defer os.Remove(expectedPath)
 
@@ -39,11 +40,12 @@ func TestFSV2Put(t *testing.T) {
 	assert.Equal(t, testContent, content)
 }
 
-func TestFSV2GetFile(t *testing.T) {
-	bfs, mediaDir := setupFSV2Test()
+func TestFSGetFile(t *testing.T) {
+	bfs, mediaDir := setupFSTest()
 	testPath := "testfile.txt"
 	testContent := []byte("Hello, World!")
 	expectedPath := filepath.Join(mediaDir, testPath)
+	ctx := t.Context()
 
 	// Create a test file
 	_, err := os.Create(expectedPath)
@@ -55,18 +57,57 @@ func TestFSV2GetFile(t *testing.T) {
 	defer os.Remove(expectedPath)
 
 	// Get file
-	content, err := bfs.Get(testPath)
+	content, err := bfs.Get(ctx, testPath)
 	assert.NoError(t, err)
 	assert.Equal(t, testContent, content)
 }
 
-func TestFSV2Move(t *testing.T) {
-	bfs, mediaDir := setupFSV2Test()
+func TestFSGetNonExistentFile(t *testing.T) {
+	bfs, _ := setupFSTest()
+	nonExistentPath := "nonexistentfile.txt"
+	ctx := t.Context()
+
+	// Get non-existent file
+	_, err := bfs.Get(ctx, nonExistentPath)
+	assert.Error(t, err)
+}
+
+func TestFSList(t *testing.T) {
+	bfs, mediaDir := setupFSTest()
+	testFolderPath := "testfolder"
+	expectedFolderPath := filepath.Join(mediaDir, testFolderPath)
+	ctx := t.Context()
+
+	// Create a test folder
+	err := os.MkdirAll(expectedFolderPath, os.ModePerm)
+	assert.NoError(t, err)
+	defer os.RemoveAll(expectedFolderPath)
+
+	// Create test files inside the folder
+	testFile1Path := filepath.Join(expectedFolderPath, "file1.txt")
+	_, err = os.Create(testFile1Path)
+	assert.NoError(t, err)
+
+	testFile2Path := filepath.Join(expectedFolderPath, "file2.txt")
+	_, err = os.Create(testFile2Path)
+	assert.NoError(t, err)
+
+	// List files
+	files, err := bfs.List(ctx, testFolderPath)
+	assert.NoError(t, err)
+	assert.Len(t, files, 2)
+	assert.Contains(t, files, "testfolder/file1.txt")
+	assert.Contains(t, files, "testfolder/file2.txt")
+}
+
+func TestFSMove(t *testing.T) {
+	bfs, mediaDir := setupFSTest()
 	oldPath := "oldfile.txt"
 	newPath := "newfile.txt"
 	testContent := []byte("Hello, World!")
 	oldFilePath := filepath.Join(mediaDir, oldPath)
 	newFilePath := filepath.Join(mediaDir, newPath)
+	ctx := t.Context()
 
 	// Create a test file
 	_, err := os.Create(oldFilePath)
@@ -83,7 +124,7 @@ func TestFSV2Move(t *testing.T) {
 	defer os.Remove(newFilePath)
 
 	// Move file
-	err = bfs.Move(oldPath, newPath)
+	err = bfs.Move(ctx, oldPath, newPath)
 	assert.NoError(t, err)
 
 	// Validate old file does not exist
@@ -96,27 +137,45 @@ func TestFSV2Move(t *testing.T) {
 	assert.Equal(t, testContent, content)
 }
 
-func TestFSV2DeleteFile(t *testing.T) {
-	bfs, mediaDir := setupFSV2Test()
+func TestFSDeleteFile(t *testing.T) {
+	bfs, mediaDir := setupFSTest()
 	testPath := "testfile.txt"
 	expectedPath := filepath.Join(mediaDir, testPath)
+	ctx := t.Context()
 
 	// Create a test file
 	_, err := os.Create(expectedPath)
 	assert.NoError(t, err)
 
 	// Delete file
-	err = bfs.Delete(testPath)
+	err = bfs.Delete(ctx, testPath)
 	assert.NoError(t, err)
 
 	// Validate file does not exist
 	_, err = os.Stat(expectedPath)
 	assert.True(t, os.IsNotExist(err))
 }
-func TestFSV2DeleteFolder(t *testing.T) {
-	bfs, mediaDir := setupFSV2Test()
+
+func TestDeleteNonExistentFile(t *testing.T) {
+	bfs, mediaDir := setupFSTest()
+	testPath := "this/definitely/does/not/exist.txt"
+	expectedPath := filepath.Join(mediaDir, testPath)
+	ctx := t.Context()
+
+	// Ensure the file does not exist
+	_, err := os.Stat(expectedPath)
+	assert.True(t, os.IsNotExist(err))
+
+	// Attempt to delete non-existent file
+	err = bfs.Delete(ctx, testPath)
+	assert.NoError(t, err)
+}
+
+func TestFSDeleteFolder(t *testing.T) {
+	bfs, mediaDir := setupFSTest()
 	testFolderPath := "testfolder"
 	expectedFolderPath := filepath.Join(mediaDir, testFolderPath)
+	ctx := t.Context()
 
 	// Create a test folder
 	err := os.MkdirAll(expectedFolderPath, os.ModePerm)
@@ -128,7 +187,7 @@ func TestFSV2DeleteFolder(t *testing.T) {
 	assert.NoError(t, err)
 
 	// Delete folder
-	err = bfs.DeleteFolder(testFolderPath)
+	err = bfs.DeleteFolder(ctx, testFolderPath)
 	assert.NoError(t, err)
 
 	// Validate folder does not exist

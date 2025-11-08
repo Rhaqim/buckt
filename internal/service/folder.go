@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"encoding/json"
 	"path/filepath"
 
@@ -36,7 +37,7 @@ func NewFolderService(
 }
 
 // CreateFolder implements domain.FolderService.
-func (f *FolderService) CreateFolder(user_id, parent_id, folder_name, description string) (string, error) {
+func (f *FolderService) CreateFolder(ctx context.Context, user_id, parent_id, folder_name, description string) (string, error) {
 	var err error
 	var parentFolder *model.FolderModel
 
@@ -49,9 +50,9 @@ func (f *FolderService) CreateFolder(user_id, parent_id, folder_name, descriptio
 		return "", f.logger.WrapError("failed to parse uuid", err)
 	}
 	// Get the parent folder
-	parentFolder, err = f.repo.GetFolder(parentID)
+	parentFolder, err = f.repo.GetFolder(ctx, parentID)
 	if err != nil {
-		parentFolder, err = f.GetRootFolder(user_id)
+		parentFolder, err = f.GetRootFolder(ctx, user_id)
 		if err != nil {
 			return "", err
 		}
@@ -67,7 +68,7 @@ func (f *FolderService) CreateFolder(user_id, parent_id, folder_name, descriptio
 		Path:        path,
 	}
 
-	new_folder_id, err := f.repo.Create(folder)
+	new_folder_id, err := f.repo.Create(ctx, folder)
 	if err != nil {
 		return "", f.logger.WrapError("failed to create folder", err)
 	}
@@ -77,7 +78,7 @@ func (f *FolderService) CreateFolder(user_id, parent_id, folder_name, descriptio
 
 // GetFolder implements domain.FolderService.
 // Subtle: this method shadows the method (FolderRepository).GetFolder of FolderService.repo.
-func (f *FolderService) GetFolder(user_id, folder_id string) (*model.FolderModel, error) {
+func (f *FolderService) GetFolder(ctx context.Context, user_id, folder_id string) (*model.FolderModel, error) {
 	if folder_id == "" {
 		folder_id = constant.DEFAULT_PARENT_FOLDER_ID
 	}
@@ -92,7 +93,7 @@ func (f *FolderService) GetFolder(user_id, folder_id string) (*model.FolderModel
 
 	// Try retrieving from cache
 	if f.cache != nil {
-		cached, err := f.cache.GetBucktValue(cacheKey)
+		cached, err := f.cache.GetBucktValue(ctx, cacheKey)
 		// Check if cached data is present and valid
 		if err == nil && cached != nil {
 			cachedStr, ok := cached.(string)
@@ -106,10 +107,10 @@ func (f *FolderService) GetFolder(user_id, folder_id string) (*model.FolderModel
 	}
 
 	// If not found in cache, fetch from database
-	folderPtr, err := f.repo.GetFolder(id)
+	folderPtr, err := f.repo.GetFolder(ctx, id)
 	if err != nil {
 		if err.Error() == "record not found" {
-			folderPtr, err = f.repo.GetRootFolder(user_id)
+			folderPtr, err = f.repo.GetRootFolder(ctx, user_id)
 			if err != nil {
 				return nil, err
 			}
@@ -121,7 +122,7 @@ func (f *FolderService) GetFolder(user_id, folder_id string) (*model.FolderModel
 	// Store in cache before returning
 	if f.cache != nil {
 		if jsonBytes, jsonErr := json.Marshal(folderPtr); jsonErr == nil {
-			_ = f.cache.SetBucktValue(cacheKey, string(jsonBytes)) // Ignore cache error
+			_ = f.cache.SetBucktValue(ctx, cacheKey, string(jsonBytes)) // Ignore cache error
 		}
 	}
 
@@ -129,9 +130,9 @@ func (f *FolderService) GetFolder(user_id, folder_id string) (*model.FolderModel
 }
 
 // GetRootFolder implements domain.FolderService.
-func (f *FolderService) GetRootFolder(user_id string) (*model.FolderModel, error) {
+func (f *FolderService) GetRootFolder(ctx context.Context, user_id string) (*model.FolderModel, error) {
 
-	rootFolder, err := f.repo.GetRootFolder(user_id)
+	rootFolder, err := f.repo.GetRootFolder(ctx, user_id)
 	if err != nil {
 		return nil, f.logger.WrapError("failed to get root folder", err)
 	}
@@ -141,13 +142,13 @@ func (f *FolderService) GetRootFolder(user_id string) (*model.FolderModel, error
 
 // GetFolders implements domain.FolderService.
 // Subtle: this method shadows the method (FolderRepository).GetFolders of FolderService.repo.
-func (f *FolderService) GetFolders(parent_id string) ([]model.FolderModel, error) {
+func (f *FolderService) GetFolders(ctx context.Context, parent_id string) ([]model.FolderModel, error) {
 	parentID, err := uuid.Parse(parent_id)
 	if err != nil {
 		return nil, f.logger.WrapError("failed to parse uuid", err)
 	}
 
-	folders, err := f.repo.GetFolders(parentID)
+	folders, err := f.repo.GetFolders(ctx, parentID)
 	if err != nil {
 		return nil, f.logger.WrapError("failed to get folders", err)
 	}
@@ -157,7 +158,7 @@ func (f *FolderService) GetFolders(parent_id string) ([]model.FolderModel, error
 
 // MoveFolder implements domain.FolderService.
 // Subtle: this method shadows the method (FolderRepository).MoveFolder of FolderService.repo.
-func (f *FolderService) MoveFolder(folder_id string, new_parent_id string) error {
+func (f *FolderService) MoveFolder(ctx context.Context, folder_id string, new_parent_id string) error {
 	folderID, err := uuid.Parse(folder_id)
 	if err != nil {
 		return f.logger.WrapError("failed to parse uuid", err)
@@ -168,7 +169,7 @@ func (f *FolderService) MoveFolder(folder_id string, new_parent_id string) error
 		return f.logger.WrapError("failed to parse uuid", err)
 	}
 
-	if err := f.repo.MoveFolder(folderID, newParentID); err != nil {
+	if err := f.repo.MoveFolder(ctx, folderID, newParentID); err != nil {
 		return f.logger.WrapError("failed to move folder", err)
 	}
 
@@ -177,13 +178,13 @@ func (f *FolderService) MoveFolder(folder_id string, new_parent_id string) error
 
 // RenameFolder implements domain.FolderService.
 // Subtle: this method shadows the method (FolderRepository).RenameFolder of FolderService.repo.
-func (f *FolderService) RenameFolder(user_id string, folder_id string, new_name string) error {
+func (f *FolderService) RenameFolder(ctx context.Context, user_id string, folder_id string, new_name string) error {
 	folderID, err := uuid.Parse(folder_id)
 	if err != nil {
 		return f.logger.WrapError("failed to parse uuid", err)
 	}
 
-	if err := f.repo.RenameFolder(user_id, folderID, new_name); err != nil {
+	if err := f.repo.RenameFolder(ctx, user_id, folderID, new_name); err != nil {
 		return f.logger.WrapError("failed to rename folder", err)
 	}
 
@@ -191,13 +192,13 @@ func (f *FolderService) RenameFolder(user_id string, folder_id string, new_name 
 }
 
 // DeleteFolder implements domain.FolderService.
-func (f *FolderService) DeleteFolder(folder_id string) (string, error) {
+func (f *FolderService) DeleteFolder(ctx context.Context, folder_id string) (string, error) {
 	folderID, err := uuid.Parse(folder_id)
 	if err != nil {
 		return "", f.logger.WrapError("failed to parse uuid", err)
 	}
 
-	parent_id, err := f.repo.DeleteFolder(folderID)
+	parent_id, err := f.repo.DeleteFolder(ctx, folderID)
 	if err != nil {
 		return "", f.logger.WrapError("failed to delete folder", err)
 	}
@@ -206,24 +207,24 @@ func (f *FolderService) DeleteFolder(folder_id string) (string, error) {
 }
 
 // ScrubFolder implements domain.FolderService.
-func (f *FolderService) ScrubFolder(user_id, folder_id string) (string, error) {
+func (f *FolderService) ScrubFolder(ctx context.Context, user_id, folder_id string) (string, error) {
 	folderID, err := uuid.Parse(folder_id)
 	if err != nil {
 		return "", f.logger.WrapError("failed to parse uuid", err)
 	}
 
 	// get folder
-	folder, err := f.repo.GetFolder(folderID)
+	folder, err := f.repo.GetFolder(ctx, folderID)
 	if err != nil {
 		return "", f.logger.WrapError("failed to get folder", err)
 	}
 
-	err = f.backend.DeleteFolder(folder.Path)
+	err = f.backend.DeleteFolder(ctx, folder.Path)
 	if err != nil {
 		return "", f.logger.WrapError("failed to delete folder", err)
 	}
 
-	parent_id, err := f.repo.ScrubFolder(user_id, folderID)
+	parent_id, err := f.repo.ScrubFolder(ctx, user_id, folderID)
 	if err != nil {
 		return "", f.logger.WrapError("failed to scrub folder", err)
 	}

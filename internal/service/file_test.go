@@ -42,6 +42,7 @@ func setupFileTest() MockFileServices {
 
 func TestCreateFile(t *testing.T) {
 	mockSetUp := setupFileTest()
+	ctx := t.Context()
 
 	parentFolder := &model.FolderModel{
 		ID:   uuid.New(),
@@ -59,12 +60,13 @@ func TestCreateFile(t *testing.T) {
 	// Mock Create
 	mockSetUp.fileRepository.On("Create", mock.Anything).Return(nil)
 
-	_, err := mockSetUp.fileService.CreateFile(user_id, "parent_id", "file.txt", "text/plain", []byte("file data"))
+	_, err := mockSetUp.fileService.CreateFile(ctx, user_id, "parent_id", "file.txt", "text/plain", []byte("file data"))
 	assert.NoError(t, err)
 }
 
 func TestGetFiles(t *testing.T) {
 	mockSetUp := setupFileTest()
+	ctx := t.Context()
 
 	parentID := uuid.New()
 	fileModels := []*model.FileModel{
@@ -84,7 +86,7 @@ func TestGetFiles(t *testing.T) {
 
 	mockSetUp.backend.On("Get", "/parent/folder/file2.txt").Return([]byte("file2 data"), nil)
 
-	files, err := mockSetUp.fileService.GetFiles(parentID.String())
+	files, err := mockSetUp.fileService.GetFiles(ctx, parentID.String())
 	assert.NoError(t, err)
 	assert.Len(t, files, 2)
 	assert.Equal(t, []byte("file1 data"), files[0].Data)
@@ -93,6 +95,7 @@ func TestGetFiles(t *testing.T) {
 
 func TestUpdateFile(t *testing.T) {
 	mockSetUp := setupFileTest()
+	ctx := t.Context()
 
 	fileID := uuid.New()
 	parentID := uuid.New()
@@ -116,12 +119,13 @@ func TestUpdateFile(t *testing.T) {
 
 	mockSetUp.fileRepository.On("Update", mock.Anything).Return(nil)
 
-	err := mockSetUp.fileService.UpdateFile(user_id, fileID.String(), "new_file.txt", []byte("new file data"))
+	err := mockSetUp.fileService.UpdateFile(ctx, user_id, fileID.String(), "new_file.txt", []byte("new file data"))
 	assert.NoError(t, err)
 }
 
 func TestDeleteFile(t *testing.T) {
 	mockSetUp := setupFileTest()
+	ctx := t.Context()
 
 	fileID := uuid.New()
 	fileModel := &model.FileModel{
@@ -140,12 +144,13 @@ func TestDeleteFile(t *testing.T) {
 
 	mockSetUp.fileRepository.On("DeleteFile", fileID).Return(nil)
 
-	_, err := mockSetUp.fileService.DeleteFile(fileID.String())
+	_, err := mockSetUp.fileService.DeleteFile(ctx, fileID.String())
 	assert.NoError(t, err)
 }
 
 func TestScrubFile(t *testing.T) {
 	mockSetUp := setupFileTest()
+	ctx := t.Context()
 
 	fileID := uuid.New()
 	parentID := uuid.New()
@@ -172,13 +177,14 @@ func TestScrubFile(t *testing.T) {
 	// Mock repository scrub
 	mockSetUp.fileRepository.On("ScrubFile", fileID).Return(nil)
 
-	parentIDStr, err := mockSetUp.fileService.ScrubFile(fileID.String())
+	parentIDStr, err := mockSetUp.fileService.ScrubFile(ctx, fileID.String())
 	assert.NoError(t, err)
 	assert.Equal(t, parentID.String(), parentIDStr)
 }
 
 func TestGetFile_CacheHit(t *testing.T) {
 	mockSetUp := setupFileTest()
+	ctx := t.Context()
 
 	fileID := uuid.New()
 	fileModel := &model.FileModel{
@@ -195,7 +201,7 @@ func TestGetFile_CacheHit(t *testing.T) {
 
 	mockSetUp.cacheManager.On("SetBucktValue", fileModel.Path, []byte("file data")).Return(nil)
 
-	file, err := mockSetUp.fileService.GetFile(fileID.String())
+	file, err := mockSetUp.fileService.GetFile(ctx, fileID.String())
 	assert.NoError(t, err)
 	assert.Equal(t, fileModel.ID, file.ID)
 	assert.Equal(t, fileModel.Path, file.Path)
@@ -203,6 +209,7 @@ func TestGetFile_CacheHit(t *testing.T) {
 
 func TestGetFile_CacheMiss_RepoHit(t *testing.T) {
 	mockSetUp := setupFileTest()
+	ctx := t.Context()
 
 	fileID := uuid.New()
 	fileModel := &model.FileModel{
@@ -217,7 +224,7 @@ func TestGetFile_CacheMiss_RepoHit(t *testing.T) {
 	mockSetUp.cacheManager.On("GetBucktValue", fileModel.Path).Return(nil, nil)
 	mockSetUp.cacheManager.On("SetBucktValue", fileModel.Path, []byte("file data")).Return(nil)
 
-	file, err := mockSetUp.fileService.GetFile(fileID.String())
+	file, err := mockSetUp.fileService.GetFile(ctx, fileID.String())
 	assert.NoError(t, err)
 	assert.Equal(t, fileModel.ID, file.ID)
 	assert.Equal(t, []byte("file data"), file.Data)
@@ -225,19 +232,21 @@ func TestGetFile_CacheMiss_RepoHit(t *testing.T) {
 
 func TestGetFile_CacheMiss_RepoMiss(t *testing.T) {
 	mockSetUp := setupFileTest()
+	ctx := t.Context()
 
 	fileID := uuid.New()
 
 	mockSetUp.cacheManager.On("GetBucktValue", fileID.String()).Return(nil, nil)
 	mockSetUp.fileRepository.On("GetFile", fileID).Return(nil, fmt.Errorf("file not found"))
 
-	file, err := mockSetUp.fileService.GetFile(fileID.String())
+	file, err := mockSetUp.fileService.GetFile(ctx, fileID.String())
 	assert.Error(t, err)
 	assert.Nil(t, file)
 }
 
 func TestGetFile_CacheHit_FileDataCacheHit(t *testing.T) {
 	mockSetUp := setupFileTest()
+	ctx := t.Context()
 
 	fileID := uuid.New()
 	fileModel := &model.FileModel{
@@ -250,7 +259,7 @@ func TestGetFile_CacheHit_FileDataCacheHit(t *testing.T) {
 
 	mockSetUp.backend.On("Get", fileModel.Path).Return([]byte("file data"), nil)
 
-	file, err := mockSetUp.fileService.GetFile(fileID.String())
+	file, err := mockSetUp.fileService.GetFile(ctx, fileID.String())
 	assert.NoError(t, err)
 	assert.Equal(t, fileModel.ID, file.ID)
 	assert.Equal(t, []byte("file data"), file.Data)
@@ -258,6 +267,7 @@ func TestGetFile_CacheHit_FileDataCacheHit(t *testing.T) {
 
 func TestGetFile_CacheHit_FileDataCacheMiss(t *testing.T) {
 	mockSetUp := setupFileTest()
+	ctx := t.Context()
 
 	fileID := uuid.New()
 	fileModel := &model.FileModel{
@@ -271,7 +281,7 @@ func TestGetFile_CacheHit_FileDataCacheMiss(t *testing.T) {
 	mockSetUp.backend.On("Get", fileModel.Path).Return([]byte("file data"), nil)
 	mockSetUp.cacheManager.On("SetBucktValue", fileModel.Path, []byte("file data")).Return(nil)
 
-	file, err := mockSetUp.fileService.GetFile(fileID.String())
+	file, err := mockSetUp.fileService.GetFile(ctx, fileID.String())
 	assert.NoError(t, err)
 	assert.Equal(t, fileModel.ID, file.ID)
 	assert.Equal(t, []byte("file data"), file.Data)
