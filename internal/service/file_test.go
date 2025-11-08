@@ -286,3 +286,25 @@ func TestGetFile_CacheHit_FileDataCacheMiss(t *testing.T) {
 	assert.Equal(t, fileModel.ID, file.ID)
 	assert.Equal(t, []byte("file data"), file.Data)
 }
+
+func TestGetFilesMetaData(t *testing.T) {
+	mockSetUp := setupFileTest()
+	ctx := t.Context()
+
+	parentID := uuid.New()
+	fileModels := []*model.FileModel{
+		{ID: uuid.New(), Path: "/parent/folder/file1.txt"},
+		{ID: uuid.New(), Path: "/parent/folder/file2.txt"},
+	}
+
+	var jsonStr string
+	mockSetUp.cacheManager.On("GetBucktValue", "files:"+parentID.String()).Return(jsonStr, nil)
+	mockSetUp.cacheManager.On("SetBucktValue", "files:"+parentID.String(), mock.Anything).Return(nil)
+	mockSetUp.fileRepository.On("GetFiles", parentID).Return(fileModels, nil)
+
+	files, err := mockSetUp.fileService.GetFilesMetadata(ctx, parentID.String())
+	assert.NoError(t, err)
+	assert.Len(t, files, 2)
+	assert.Equal(t, fileModels[0].ID, files[0].ID)
+	assert.Equal(t, fileModels[0].Path, files[0].Path)
+}

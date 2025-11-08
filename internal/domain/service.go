@@ -23,6 +23,7 @@ type FileService interface {
 	GetFile(ctx context.Context, file_id string) (*model.FileModel, error)
 	GetFileStream(ctx context.Context, file_id string) (*model.FileModel, io.ReadCloser, error)
 	GetFiles(ctx context.Context, parent_id string) ([]model.FileModel, error)
+	GetFilesMetadata(ctx context.Context, parent_id string) ([]model.FileModel, error)
 	MoveFile(ctx context.Context, file_id, new_parent_id string) error
 	RenameFile(ctx context.Context, file_id, new_name string) error
 	UpdateFile(ctx context.Context, user_id, file_id, new_file_name string, new_file_data []byte) error

@@ -306,6 +306,19 @@ func (b *Client) ListFiles(folder_id string) ([]model.FileModel, error) {
 	return b.ListFilesContext(context.Background(), folder_id)
 }
 
+// ListFilesMetadata retrieves a list of files' metadata for a given folder.
+//
+// Parameters:
+//   - folder_id: The ID of the folder to retrieve.
+//
+// Returns:
+//
+//   - []model.FileModel: A list of files' metadata.
+//   - error: An error if the folder could not be retrieved.
+func (b *Client) ListFilesMetadata(folder_id string) ([]model.FileModel, error) {
+	return b.ListFilesMetadataContext(context.Background(), folder_id)
+}
+
 // MoveFile moves a file to a new parent directory.
 //
 // Parameters:
@@ -546,6 +559,20 @@ func (b *Client) GetFileStreamContext(ctx context.Context, file_id string) (*mod
 //   - error: An error if the folder could not be retrieved.
 func (b *Client) ListFilesContext(ctx context.Context, folder_id string) ([]model.FileModel, error) {
 	return b.fileService.GetFiles(ctx, folder_id)
+}
+
+// ListFilesMetadataContext retrieves a list of files' metadata for a given folder.
+//
+// Parameters:
+//   - ctx: The context for the operation.
+//   - folder_id: The ID of the folder to retrieve.
+//
+// Returns:
+//
+//   - []model.FileModel: A list of files' metadata.
+//   - error: An error if the folder could not be retrieved.
+func (b *Client) ListFilesMetadataContext(ctx context.Context, folder_id string) ([]model.FileModel, error) {
+	return b.fileService.GetFilesMetadata(ctx, folder_id)
 }
 
 // MoveFileContext moves a file to a new parent directory.

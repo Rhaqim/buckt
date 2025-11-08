@@ -21,6 +21,11 @@ func (m *FileService) CreateFile(ctx context.Context, user_id, parent_id, file_n
 	return args.String(0), args.Error(1)
 }
 
+func (m *FileService) GetFilesMetadata(ctx context.Context, parent_id string) ([]model.FileModel, error) {
+	args := m.Called(parent_id)
+	return args.Get(0).([]model.FileModel), args.Error(1)
+}
+
 // GetFile implements domain.FileService.
 func (m *FileService) GetFile(ctx context.Context, file_id string) (*model.FileModel, error) {
 	args := m.Called(file_id)

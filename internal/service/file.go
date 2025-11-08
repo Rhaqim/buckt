@@ -210,9 +210,7 @@ func (f *FileService) GetFileStream(ctx context.Context, file_id string) (*model
 	return file, fileStream, nil
 }
 
-// GetFiles implements domain.FileService.
-// Subtle: this method shadows the method (FileRepository).GetFiles of FileService.repo.
-func (f *FileService) GetFiles(ctx context.Context, parent_id string) ([]model.FileModel, error) {
+func (f *FileService) getFiles(ctx context.Context, parent_id string) ([]*model.FileModel, error) {
 	parentID, err := uuid.Parse(parent_id)
 	if err != nil {
 		return nil, f.logger.WrapError("failed to parse uuid", err)
@@ -246,6 +244,32 @@ func (f *FileService) GetFiles(ctx context.Context, parent_id string) ([]model.F
 			jsonData, _ := json.Marshal(files) // Ignore errors for now
 			_ = f.cache.SetBucktValue(ctx, cacheKey, string(jsonData))
 		}
+	}
+
+	return files, nil
+}
+
+func (f *FileService) GetFilesMetadata(ctx context.Context, parent_id string) ([]model.FileModel, error) {
+	files, err := f.getFiles(ctx, parent_id)
+	if err != nil {
+		return nil, err
+	}
+
+	// Convert []*model.FileModel to []model.FileModel
+	var fileModels []model.FileModel
+	for _, file := range files {
+		fileModels = append(fileModels, *file)
+	}
+
+	return fileModels, nil
+}
+
+// GetFiles implements domain.FileService.
+// Subtle: this method shadows the method (FileRepository).GetFiles of FileService.repo.
+func (f *FileService) GetFiles(ctx context.Context, parent_id string) ([]model.FileModel, error) {
+	files, err := f.getFiles(ctx, parent_id)
+	if err != nil {
+		return nil, err
 	}
 
 	// Fetch actual file data separately

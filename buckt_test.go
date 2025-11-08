@@ -458,6 +458,32 @@ func TestGetFileStream(t *testing.T) {
 	buckt.MockFileService.AssertExpectations(t)
 }
 
+func TestListFilesMetadata(t *testing.T) {
+	buckt := setupBucktTest(t)
+
+	// Ensure cleanup after test execution
+	t.Cleanup(func() {
+		buckt.Close() // Assuming there's a method to clean up resources
+	})
+
+	// Mock the expected behavior
+	expectedFiles := []model.FileModel{
+		{ID: uuid.MustParse("550e8400-e29b-41d4-a716-446655440000"), Name: "file1", ContentType: "text/plain", Data: []byte("file content")},
+		{ID: uuid.MustParse("550e8400-e29b-41d4-a716-446655440001"), Name: "file2", ContentType: "text/plain", Data: []byte("file content")},
+	}
+
+	buckt.MockFileService.On("GetFilesMetadata", "550e8400-e29b-41d4-a716-446655440002").
+		Return(expectedFiles, nil)
+
+	// Call the method
+	files, err := buckt.ListFilesMetadata("550e8400-e29b-41d4-a716-446655440002")
+	assert.NoError(t, err)
+	assert.Equal(t, expectedFiles, files)
+
+	// Verify expectations
+	buckt.MockFileService.AssertExpectations(t)
+}
+
 func TestListFiles(t *testing.T) {
 	buckt := setupBucktTest(t)
 
