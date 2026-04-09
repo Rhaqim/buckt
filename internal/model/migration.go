@@ -38,6 +38,11 @@ type MigrationModel struct {
 	DeletedAt      gorm.DeletedAt   `gorm:"index" json:"deleted_at"`
 }
 
+// TableName specifies the table name for MigrationModel
+func (MigrationModel) TableName() string {
+	return "buckt_migration_models"
+}
+
 // BeforeCreate hook for MigrationModel to add a prefixed UUID
 func (migration *MigrationModel) BeforeCreate(tx *gorm.DB) (err error) {
 	migration.ID = uuid.New()

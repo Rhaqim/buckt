@@ -1,17 +1,57 @@
-{{ define "folders" }} {{ range . }}
+{{ define "folders" }}{{ range . }}
 <div
-	class="folder drop-zone"
+	class="folder-card drop-indicator bg-white border border-gray-200 rounded-xl p-4 cursor-pointer group relative"
 	id="folder-{{ .ID }}"
 	data-id="{{ .ID }}"
+	data-type="folder"
+	draggable="true"
 	ondragstart="dragStart(event)"
+	ondragend="dragEnd(event)"
 	ondrop="drop(event)"
 	ondragover="allowDrop(event)"
-	draggable="true"
+	ondragenter="dragEnter(event)"
+	ondragleave="dragLeave(event)"
 >
-	<h3 class="font-bold">
-		<!-- <a href="/folders/{{ .Name }}?folder={{ .Path }}" class="text-blue-500">{{ .Name }}</a> -->
-		<a href="/web/folder/{{ .ID }}" class="text-blue-500">{{ .Name }}</a>
-	</h3>
-	<p class="text-sm text-gray-500">Created: {{ .CreatedAt }}</p>
+	<a href="/web/folder/{{ .ID }}" class="block">
+		<div class="flex items-center space-x-3">
+			<div class="flex-shrink-0">
+				<svg class="w-10 h-10 text-blue-400" fill="currentColor" viewBox="0 0 24 24"><path d="M10 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/></svg>
+			</div>
+			<div class="min-w-0 flex-1">
+				<p class="text-sm font-medium text-gray-800 truncate">{{ .Name }}</p>
+				<p class="text-xs text-gray-400">{{ .CreatedAt.Format "Jan 02, 2006" }}</p>
+			</div>
+		</div>
+	</a>
+	<!-- Folder actions dropdown -->
+	<div class="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+		<div class="relative inline-block" onclick="event.preventDefault(); event.stopPropagation(); toggleMenu('folder-menu-{{ .ID }}')">
+			<button class="p-1 rounded-md hover:bg-gray-100 text-gray-400 hover:text-gray-600">
+				<svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg>
+			</button>
+			<div id="folder-menu-{{ .ID }}" class="hidden absolute right-0 top-6 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-10 w-36">
+				<button onclick="event.stopPropagation(); openRenameModal('folder', '{{ .ID }}', '{{ .Name }}')" class="w-full text-left px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50">Rename</button>
+				<button onclick="event.stopPropagation(); openMoveModal('folder', '{{ .ID }}', '{{ .Name }}')" class="w-full text-left px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50">Move</button>
+				<hr class="my-1">
+				<button hx-delete="/web/folder/{{ .ID }}" hx-target="#folder-{{ .ID }}" hx-swap="outerHTML" hx-confirm="Delete folder '{{ .Name }}'?" onclick="event.stopPropagation()" class="w-full text-left px-3 py-1.5 text-sm text-red-600 hover:bg-red-50">Delete</button>
+			</div>
+		</div>
+	</div>
 </div>
-{{ end }} {{ end }}
+{{ end }}{{ end }}
+
+<script>
+function toggleMenu(id) {
+	// Close all other menus first
+	document.querySelectorAll('[id^="folder-menu-"], [id^="file-menu-"]').forEach(el => {
+		if (el.id !== id) el.classList.add('hidden');
+	});
+	document.getElementById(id).classList.toggle('hidden');
+}
+// Close menus when clicking elsewhere
+document.addEventListener('click', function(e) {
+	if (!e.target.closest('[id^="folder-menu-"]') && !e.target.closest('[id^="file-menu-"]')) {
+		document.querySelectorAll('[id^="folder-menu-"], [id^="file-menu-"]').forEach(el => el.classList.add('hidden'));
+	}
+});
+</script>

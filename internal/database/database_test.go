@@ -74,6 +74,6 @@ func TestDB_Migrate(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NotNil(t, db)
 
-	err = db.Migrate()
+	err = db.Migrate(true)
 	assert.NoError(t, err)
 }

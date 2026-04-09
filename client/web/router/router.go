@@ -120,14 +120,14 @@ func (r *Router) registerWebRoutes() {
 			web.GET("/", r.WebService.ViewFolder)
 			web.GET("/folder/:folder_id", r.WebService.ViewFolder)
 			web.POST("/new-folder", r.WebService.NewFolder)
-			web.PUT("/rename-folder", r.WebService.RenameFolder)
-			web.PUT("/move-folder", r.WebService.MoveFolder)
+			web.POST("/rename-folder", r.WebService.RenameFolder)
+			web.POST("/move-folder", r.WebService.MoveFolder)
 			web.DELETE("/folder/:folder_id", r.WebService.DeleteFolder)
 			web.DELETE("/scrub-folder/:folder_id", r.WebService.DeleteFolderPermanently)
 
 			web.POST("/upload", r.WebService.UploadFile)
 			web.GET("/file/:file_id", r.WebService.DownloadFile)
-			web.PUT("/file/:file_id", r.WebService.MoveFile)
+			web.POST("/move-file/:file_id", r.WebService.MoveFile)
 			web.DELETE("/file/:file_id", r.WebService.DeleteFile)
 			web.DELETE("/scrub/:file_id", r.WebService.DeleteFilePermanently)
 		}

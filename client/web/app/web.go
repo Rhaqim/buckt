@@ -36,13 +36,19 @@ func (svc *WebService) ViewFolder(c *gin.Context) {
 	}
 
 	// Render the dashboard page with the files
+	parentID := ""
+	if folderContent.ParentID != nil {
+		parentID = folderContent.ParentID.String()
+	}
 	c.HTML(200, "dashboard.html", gin.H{
-		"Title":   "Dashboard",
-		"page":    "dashboard",
-		"ID":      folderContent.ID,
-		"Path":    folderContent.Path,
-		"Folders": folderContent.Folders,
-		"Files":   folderContent.Files,
+		"Title":    "Dashboard",
+		"page":     "dashboard",
+		"ID":       folderContent.ID,
+		"ParentID": parentID,
+		"Name":     folderContent.Name,
+		"Path":     folderContent.Path,
+		"Folders":  folderContent.Folders,
+		"Files":    folderContent.Files,
 	})
 }
 
@@ -259,6 +265,7 @@ func (svc *WebService) MoveFile(c *gin.Context) {
 		return
 	}
 
+	// Redirect to the target folder after move
 	c.Redirect(302, "/web/folder/"+newParentID)
 }
 

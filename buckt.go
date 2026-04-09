@@ -66,7 +66,7 @@ func New(conf Config, opts ...ConfigFunc) (*Client, error) {
 	}
 
 	// Migrate the database
-	if err = db.Migrate(); err != nil {
+	if err = db.Migrate(conf.Backend.MigrationEnabled); err != nil {
 		bucktLog.WrapErrorf("failed to migrate database", err)
 	}
 

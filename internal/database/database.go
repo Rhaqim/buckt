@@ -137,7 +137,7 @@ func (db *DB) Close() error {
 	return err
 }
 
-func (db *DB) Migrate() error {
+func (db *DB) Migrate(migrationEnabled bool) error {
 	db.log.Info("🚀 Running migrations...")
 
 	if err := db.AutoMigrate(&model.FolderModel{}); err != nil {
@@ -150,10 +150,12 @@ func (db *DB) Migrate() error {
 	}
 	db.log.GetLogger().Println("✅ FileModel migrated")
 
-	if err := db.AutoMigrate(&model.MigrationModel{}); err != nil {
-		return db.log.WrapErrorf("❌ failed to migrate MigrationModel: %w", err)
+	if migrationEnabled {
+		if err := db.AutoMigrate(&model.MigrationModel{}); err != nil {
+			return db.log.WrapErrorf("❌ failed to migrate MigrationModel: %w", err)
+		}
+		db.log.GetLogger().Println("✅ MigrationModel migrated")
 	}
-	db.log.GetLogger().Println("✅ MigrationModel migrated")
 
 	return nil
 }
