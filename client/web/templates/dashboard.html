@@ -185,6 +185,38 @@
 		if (e.key === "Escape") closeModal();
 	});
 
+	/* CONTEXT MENUS — single delegated handler */
+	document.addEventListener("click", function(e) {
+		const trigger = e.target.closest(".menu-trigger");
+
+		if (trigger) {
+			// Prevent the <a> tag on folders from navigating
+			e.preventDefault();
+			e.stopPropagation();
+
+			const menuId = trigger.dataset.menu;
+			const menu = document.getElementById(menuId);
+			const wasHidden = menu.classList.contains("hidden");
+
+			// Close all menus first
+			document.querySelectorAll(".context-menu").forEach(el => el.classList.add("hidden"));
+
+			// Toggle the clicked one
+			if (wasHidden) {
+				menu.classList.remove("hidden");
+			}
+			return;
+		}
+
+		// If click is inside an open menu, let it through (button actions)
+		if (e.target.closest(".context-menu")) {
+			return;
+		}
+
+		// Otherwise close all menus
+		document.querySelectorAll(".context-menu").forEach(el => el.classList.add("hidden"));
+	});
+
 	/* DRAG AND DROP */
 	function allowDrop(e) { e.preventDefault(); }
 

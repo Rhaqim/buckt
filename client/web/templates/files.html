@@ -1,6 +1,6 @@
 {{ define "files" }}{{ range . }}
 <div
-	class="file-card bg-white border border-gray-200 rounded-xl overflow-hidden group relative"
+	class="file-card bg-white border border-gray-200 rounded-xl group relative"
 	id="file-{{ .ID }}"
 	data-id="{{ .ID }}"
 	data-type="file"
@@ -9,7 +9,7 @@
 	ondragend="dragEnd(event)"
 >
 	<!-- Preview area -->
-	<div class="aspect-w-16 aspect-h-12 bg-gray-100" style="height: 140px;">
+	<div class="bg-gray-100 rounded-t-xl" style="height: 140px; overflow: hidden;">
 		{{ if hasPrefix .ContentType "image/" }}
 			<img src="/serve/{{ .ID }}" class="w-full h-full object-cover" loading="lazy" alt="{{ .Name }}" />
 		{{ else if hasPrefix .ContentType "audio/" }}
@@ -25,7 +25,7 @@
 			</video>
 		{{ else if hasPrefix .ContentType "application/pdf" }}
 			<div class="w-full h-full flex items-center justify-center bg-red-50">
-				<svg class="w-12 h-12 text-red-400" fill="currentColor" viewBox="0 0 24 24"><path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zM6 20V4h7v5h5v11H6z"/><path d="M8 15.01V12h2c.55 0 1 .45 1 1v.01c0 .55-.45.99-1 .99H9v1.01H8z"/></svg>
+				<svg class="w-12 h-12 text-red-400" fill="currentColor" viewBox="0 0 24 24"><path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zM6 20V4h7v5h5v11H6z"/></svg>
 			</div>
 		{{ else }}
 			<div class="w-full h-full flex items-center justify-center bg-gray-50">
@@ -40,18 +40,16 @@
 		<p class="text-xs text-gray-400 mt-0.5">{{ formatSize .Size }} &middot; {{ .CreatedAt.Format "Jan 02, 2006" }}</p>
 	</div>
 
-	<!-- File actions -->
-	<div class="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
-		<div class="relative inline-block" onclick="event.stopPropagation(); toggleMenu('file-menu-{{ .ID }}')">
-			<button class="p-1 rounded-md bg-black bg-opacity-30 hover:bg-opacity-50 text-white">
-				<svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg>
-			</button>
-			<div id="file-menu-{{ .ID }}" class="hidden absolute right-0 top-6 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-10 w-36">
-				<a href="/web/file/{{ .ID }}" class="block px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50">Download</a>
-				<button onclick="event.stopPropagation(); openMoveModal('file', '{{ .ID }}', '{{ .Name }}')" class="w-full text-left px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50">Move</button>
-				<hr class="my-1">
-				<button hx-delete="/web/file/{{ .ID }}" hx-target="#file-{{ .ID }}" hx-swap="outerHTML" hx-confirm="Delete '{{ .Name }}'?" onclick="event.stopPropagation()" class="w-full text-left px-3 py-1.5 text-sm text-red-600 hover:bg-red-50">Delete</button>
-			</div>
+	<!-- File actions - sits above preview -->
+	<div class="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity" style="z-index: 30;">
+		<button type="button" class="menu-trigger p-1.5 rounded-md bg-black bg-opacity-40 hover:bg-opacity-60 text-white" data-menu="file-menu-{{ .ID }}">
+			<svg class="w-5 h-5 pointer-events-none" fill="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg>
+		</button>
+		<div id="file-menu-{{ .ID }}" class="context-menu hidden absolute right-0 top-8 bg-white rounded-lg shadow-lg border border-gray-200 py-1 w-36" style="z-index: 40;">
+			<a href="/web/file/{{ .ID }}" class="block px-3 py-2 text-sm text-gray-700 hover:bg-gray-50">Download</a>
+			<button type="button" onclick="openMoveModal('file', '{{ .ID }}', '{{ .Name }}')" class="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50">Move</button>
+			<hr class="my-1">
+			<button type="button" hx-delete="/web/file/{{ .ID }}" hx-target="#file-{{ .ID }}" hx-swap="outerHTML" hx-confirm="Delete '{{ .Name }}'?" class="w-full text-left px-3 py-2 text-sm text-red-600 hover:bg-red-50">Delete</button>
 		</div>
 	</div>
 </div>

@@ -20,26 +20,25 @@ func Error(userMsg, devMsg string) APIResponse[any] {
 	return APIResponse[any]{
 		Data: nil,
 		Error: &APIError{
-			Message: userMsg, // User-friendly message
-			Details: devMsg,  // Internal developer message
+			Message: userMsg,
+			Details: devMsg,
 		},
 	}
 }
 
-// Wrap multiple errors together.
-// The internal error details are logged but not exposed to the client.
+// WrapError wraps an error into an API response, including the error details.
 func WrapError(userMsg string, err error) APIResponse[any] {
 	if err == nil {
 		return Success[any](nil)
 	}
-	return Error(userMsg, "")
+	return Error(userMsg, err.Error())
 }
 
-// WrapErrorDebug is like WrapError but includes the error details in the response.
-// Use this only in debug/development mode.
-func WrapErrorDebug(userMsg string, err error) APIResponse[any] {
+// WrapErrorSafe wraps an error but strips the internal details from the response.
+// Use this for public-facing APIs where internal errors should not be exposed.
+func WrapErrorSafe(userMsg string, err error) APIResponse[any] {
 	if err == nil {
 		return Success[any](nil)
 	}
-	return Error(userMsg, err.Error())
+	return Error(userMsg, "")
 }

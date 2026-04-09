@@ -35,15 +35,13 @@ func TestError(t *testing.T) {
 
 func TestWrapError(t *testing.T) {
 	userMsg := "user error message"
-
 	err := errors.New("developer error message")
 
-	// WrapError should NOT expose internal error details
 	expected := APIResponse[any]{
 		Data: nil,
 		Error: &APIError{
 			Message: userMsg,
-			Details: "",
+			Details: err.Error(),
 		},
 	}
 	result := WrapError(userMsg, err)
@@ -61,35 +59,35 @@ func TestWrapError(t *testing.T) {
 	}
 }
 
-func TestWrapErrorDebug(t *testing.T) {
+func TestWrapErrorSafe(t *testing.T) {
 	userMsg := "user error message"
 	err := errors.New("developer error message")
 
-	// WrapErrorDebug SHOULD expose internal error details
-	expected := APIResponse[any]{
-		Data: nil,
-		Error: &APIError{
-			Message: userMsg,
-			Details: err.Error(),
-		},
-	}
-	result := WrapErrorDebug(userMsg, err)
-
-	if !reflect.DeepEqual(result, expected) {
-		t.Errorf("WrapErrorDebug() = %v, want %v", result, expected)
-	}
-}
-
-func TestWrapErrorUsageWithErr(t *testing.T) {
-	userMsg := "user error message"
-	err := errors.New("developer error message")
-
-	// WrapError strips details for security
+	// WrapErrorSafe should NOT expose internal error details
 	expected := APIResponse[any]{
 		Data: nil,
 		Error: &APIError{
 			Message: userMsg,
 			Details: "",
+		},
+	}
+	result := WrapErrorSafe(userMsg, err)
+
+	if !reflect.DeepEqual(result, expected) {
+		t.Errorf("WrapErrorSafe() = %v, want %v", result, expected)
+	}
+}
+
+func TestWrapErrorUsageWithErr(t *testing.T) {
+	userMsg := "user error message"
+	devMsg := "developer error message"
+	err := errors.New(devMsg)
+
+	expected := APIResponse[any]{
+		Data: nil,
+		Error: &APIError{
+			Message: userMsg,
+			Details: devMsg,
 		},
 	}
 	result := WrapError(userMsg, err)
@@ -101,10 +99,8 @@ func TestWrapErrorUsageWithErr(t *testing.T) {
 
 func TestWrapErrorUsageWithoutErr(t *testing.T) {
 	userMsg := "user error message"
-
 	result := WrapError(userMsg, nil)
 
-	// asset that it fails
 	if result.Error != nil {
 		t.Errorf("WrapError() = %v, want %v", result.Error, nil)
 	}

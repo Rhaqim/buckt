@@ -28,6 +28,16 @@
 			.drop-indicator {
 				position: relative;
 			}
+			/* Ensure action menus are clickable above card content */
+			.file-card .aspect-w-16 img,
+			.file-card .aspect-w-16 video,
+			.file-card .aspect-w-16 audio,
+			.file-card .aspect-w-16 div {
+				pointer-events: none;
+			}
+			.file-card a, .file-card button, .file-card audio {
+				pointer-events: auto;
+			}
 			.drop-indicator.drag-over::after {
 				content: "Drop here";
 				position: absolute;
