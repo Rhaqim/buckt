@@ -76,11 +76,8 @@ func New(conf Config, opts ...ConfigFunc) (*Client, error) {
 	// Initialise Backend
 	var backend domain.FileBackend = resolveBackend(conf.MediaDir, conf.Backend, bucktLog, lruCache)
 
-	// Resolve max file size
+	// Max file size: 0 means no limit (backward compatible)
 	maxFileSize := conf.MaxFileSize
-	if maxFileSize <= 0 {
-		maxFileSize = DefaultMaxFileSize
-	}
 
 	// Initialize the app services
 	folderService, fileService := newAppServices(

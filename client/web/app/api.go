@@ -9,7 +9,7 @@ import (
 
 	"github.com/Rhaqim/buckt"
 	"github.com/Rhaqim/buckt/client/web/domain"
-	"github.com/Rhaqim/buckt/internal/utils"
+	"github.com/Rhaqim/buckt/pkg/fileutil"
 	"github.com/Rhaqim/buckt/pkg/response"
 	"github.com/gin-gonic/gin"
 )
@@ -232,7 +232,7 @@ func (svc *APIService) UploadFile(c *gin.Context) {
 	}
 
 	// Read file from request
-	fileName, fileByte, err := utils.ProcessFile(file)
+	fileName, fileByte, err := fileutil.ProcessFile(file)
 	if err != nil {
 		c.AbortWithStatusJSON(500, response.WrapError("failed to process file", err))
 		return
