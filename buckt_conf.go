@@ -141,9 +141,13 @@ func LocalBackend() Backend {
 //	Log: Configuration for logging.
 //	MediaDir: Path to the directory where media files are stored.
 //	FlatNameSpaces: Flag indicating whether the application should use flat namespaces when storing files.
+// DefaultMaxFileSize is 100MB
+const DefaultMaxFileSize int64 = 100 * 1024 * 1024
+
 type Config struct {
 	MediaDir       string
 	FlatNameSpaces bool
+	MaxFileSize    int64
 
 	DB      DBConfig
 	Cache   CacheConfig
@@ -244,5 +248,13 @@ func RegisterSecondaryBackend(backend Backend) ConfigFunc {
 func EnableMigration() ConfigFunc {
 	return func(c *Config) {
 		c.Backend.MigrationEnabled = true
+	}
+}
+
+// WithMaxFileSize sets the maximum allowed file size in bytes.
+// Default is 100MB if not set or set to 0.
+func WithMaxFileSize(size int64) ConfigFunc {
+	return func(c *Config) {
+		c.MaxFileSize = size
 	}
 }

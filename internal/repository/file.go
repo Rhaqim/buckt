@@ -48,6 +48,19 @@ func (f *FileRepository) GetFiles(ctx context.Context, parent_id uuid.UUID) ([]*
 	return files, err
 }
 
+// GetFilesPaginated implements domain.FileRepository.
+func (f *FileRepository) GetFilesPaginated(ctx context.Context, parent_id uuid.UUID, page model.Pagination) ([]*model.FileModel, error) {
+	page.Validate()
+	var files []*model.FileModel
+	err := f.db.DB.WithContext(ctx).
+		Where("parent_id = ?", parent_id).
+		Offset(page.Offset()).
+		Limit(page.PageSize).
+		Order("created_at DESC").
+		Find(&files).Error
+	return files, err
+}
+
 // MoveFile implements domain.FileRepository.
 func (f *FileRepository) MoveFile(ctx context.Context, file_id uuid.UUID, new_parent_id uuid.UUID) (string, string, error) { // TODO: MOdify function to accept file_id, new_parent_id, and new_name
 	var newParentFolder model.FolderModel

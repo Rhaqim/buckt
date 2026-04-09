@@ -32,12 +32,11 @@ func (b *bucketMiddleware) APIGuardMiddleware() gin.HandlerFunc {
 
 			// Set in Gin context for further use
 			c.Set("owner_id", userID)
-
 			c.Next()
+			return
 		}
 
 		c.Set("owner_id", "default")
-
 		c.Next()
 	}
 }

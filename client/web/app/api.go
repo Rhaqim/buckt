@@ -3,6 +3,7 @@ package app
 import (
 	"fmt"
 	"io"
+	"net/url"
 	"strconv"
 	"strings"
 
@@ -91,12 +92,38 @@ func (svc *APIService) GetFilesInFolder(c *gin.Context) {
 
 // GetSubFolders implements domain.APIService.
 func (svc *APIService) GetSubFolders(c *gin.Context) {
-	panic("unimplemented")
+	parentID := c.Param("parent_id")
+	if parentID == "" {
+		c.AbortWithStatusJSON(400, response.Error("parent_id is required", ""))
+		return
+	}
+
+	folders, err := svc.client.ListFolders(parentID)
+	if err != nil {
+		c.AbortWithStatusJSON(500, response.WrapError("failed to get sub-folders", err))
+		return
+	}
+
+	c.JSON(200, response.Success(folders))
 }
 
 // GetDescendants implements domain.APIService.
 func (svc *APIService) GetDescendants(c *gin.Context) {
-	panic("unimplemented")
+	user_id := c.GetString("owner_id")
+
+	folderID := c.Param("folder_id")
+	if folderID == "" {
+		c.AbortWithStatusJSON(400, response.Error("folder_id is required", ""))
+		return
+	}
+
+	folder, err := svc.client.GetFolderWithContent(user_id, folderID)
+	if err != nil {
+		c.AbortWithStatusJSON(500, response.WrapError("failed to get descendants", err))
+		return
+	}
+
+	c.JSON(200, response.Success(folder))
 }
 
 // DeleteFolder implements domain.APIService.
@@ -245,9 +272,10 @@ func (svc *APIService) DownloadFile(c *gin.Context) {
 
 	// Set headers
 	c.Header("Cache-Control", "public, max-age=86400")
-	c.Header("Content-Disposition", "attachment; filename="+file.Name)
+	c.Header("Content-Disposition", safeContentDisposition("attachment", file.Name))
 	c.Header("Content-Type", file.ContentType)
 	c.Header("Content-Length", fmt.Sprintf("%d", file.Size))
+	c.Header("X-Content-Type-Options", "nosniff")
 
 	// Send file data
 	c.Data(200, file.ContentType, file.Data)
@@ -276,9 +304,10 @@ func (svc *APIService) ServeFile(c *gin.Context) {
 
 	// Set headers
 	c.Header("Cache-Control", "public, max-age=86400")
-	c.Header("Content-Disposition", "attachment; filename="+file.Name)
+	c.Header("Content-Disposition", safeContentDisposition("inline", file.Name))
 	c.Header("Content-Type", file.ContentType)
 	c.Header("Content-Length", fmt.Sprintf("%d", file.Size))
+	c.Header("X-Content-Type-Options", "nosniff")
 
 	// Send file data
 	c.Data(200, file.ContentType, file.Data)
@@ -300,9 +329,10 @@ func (svc *APIService) StreamFile(c *gin.Context) {
 	defer stream.Close()
 
 	// Set headers
-	c.Header("Content-Disposition", "attachment; filename="+file.Name)
+	c.Header("Content-Disposition", safeContentDisposition("attachment", file.Name))
 	c.Header("Content-Type", file.ContentType)
 	c.Header("Content-Length", fmt.Sprintf("%d", file.Size))
+	c.Header("X-Content-Type-Options", "nosniff")
 
 	// If file is small, use io.Copy
 	if file.Size < 10*1024*1024 { // 10 MB threshold
@@ -409,6 +439,17 @@ func (svc *APIService) DeleteFilePermanently(c *gin.Context) {
 
 func (f *APIService) constructURL(s string) string {
 	return fmt.Sprintf("/serve/%s", s)
+}
+
+// safeContentDisposition builds a Content-Disposition header value that is safe
+// against header injection. It percent-encodes the filename per RFC 6266.
+func safeContentDisposition(disposition, filename string) string {
+	// Sanitize: remove path separators
+	filename = strings.ReplaceAll(filename, "/", "_")
+	filename = strings.ReplaceAll(filename, "\\", "_")
+	// Use RFC 5987 encoding for the filename
+	encoded := url.PathEscape(filename)
+	return fmt.Sprintf(`%s; filename*=UTF-8''%s`, disposition, encoded)
 }
 
 func parseRange(rangeHeader string, fileSize int64) (start, end int64, err error) {

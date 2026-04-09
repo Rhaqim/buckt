@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net/http"
 	"path/filepath"
 
 	"github.com/Rhaqim/buckt/internal/domain"
@@ -15,6 +16,7 @@ import (
 
 type FileService struct {
 	flatNameSpaces bool
+	maxFileSize    int64
 
 	logger domain.BucktLogger
 
@@ -35,6 +37,7 @@ func NewFileService(
 	fileBackend domain.FileBackend,
 
 	flatNameSpaces bool,
+	maxFileSize int64,
 ) domain.FileService {
 	bucktLogger.Info("🚀 Initialising file services")
 	return &FileService{
@@ -48,12 +51,24 @@ func NewFileService(
 		fileBackend:   fileBackend,
 
 		flatNameSpaces: flatNameSpaces,
+		maxFileSize:    maxFileSize,
 	}
 }
 
 // CreateFile implements domain.FileService.
 func (f *FileService) CreateFile(ctx context.Context, user_id, parent_id, file_name, content_type string, file_data []byte) (string, error) {
 	var err error
+
+	// Enforce max file size
+	if f.maxFileSize > 0 && int64(len(file_data)) > f.maxFileSize {
+		return "", fmt.Errorf("file size %d exceeds maximum allowed size %d bytes", len(file_data), f.maxFileSize)
+	}
+
+	// Detect and validate content type from actual file bytes
+	detectedType := http.DetectContentType(file_data)
+	if content_type == "" || content_type == "application/octet-stream" {
+		content_type = detectedType
+	}
 
 	// Get the parent folder
 	parentFolder, err := f.folderService.GetFolder(ctx, user_id, parent_id)
@@ -67,21 +82,23 @@ func (f *FileService) CreateFile(ctx context.Context, user_id, parent_id, file_n
 	// Get the file path
 	path := filepath.Join(parentFolder.Path, file_name)
 
-	// if flat namespaces is enabled save files in the root folder with uuid as name
+	// if flat namespaces is enabled save files with user_id prefix and uuid name
 	if f.flatNameSpaces {
 		ext := filepath.Ext(file_name)
-		path = uuid.New().String() + ext
+		path = filepath.Join(user_id, uuid.New().String()+ext)
 	}
 
-	// Calculate the file hash, for data verification
-	combinedData := append([]byte(path), file_data...)
-	hash := fmt.Sprintf("%x", sha256.Sum256(combinedData))
+	// Calculate the file hash from content only (not path)
+	h := sha256.New()
+	h.Write(file_data)
+	hash := fmt.Sprintf("%x", h.Sum(nil))
 
 	// Size of the file
 	fileSize := int64(len(file_data))
 
 	// Create the file model
 	file := &model.FileModel{
+		UserID:      user_id,
 		ParentID:    parentFolder.ID,
 		Name:        file_name,
 		Path:        path,
@@ -101,11 +118,11 @@ func (f *FileService) CreateFile(ctx context.Context, user_id, parent_id, file_n
 		} else {
 			return "", f.logger.WrapError("failed to create file", err)
 		}
-	} else {
-		// Write the file to the file system
-		if err := f.fileBackend.Put(ctx, file.Path, file_data); err != nil {
-			return "", err
-		}
+	}
+
+	// Always write the file to the backend (including on restore, to update content)
+	if err := f.fileBackend.Put(ctx, file.Path, file_data); err != nil {
+		return "", err
 	}
 
 	return file.ID.String(), nil
@@ -224,10 +241,12 @@ func (f *FileService) getFiles(ctx context.Context, parent_id string) ([]*model.
 	// Check cache first
 	if f.cache != nil {
 		cached, err := f.cache.GetBucktValue(ctx, cacheKey)
-		if err == nil || cached != nil {
-			var cachedFiles []*model.FileModel
-			if jsonErr := json.Unmarshal([]byte(cached.(string)), &cachedFiles); jsonErr == nil {
-				files = cachedFiles
+		if err == nil && cached != nil {
+			if cachedStr, ok := cached.(string); ok {
+				var cachedFiles []*model.FileModel
+				if jsonErr := json.Unmarshal([]byte(cachedStr), &cachedFiles); jsonErr == nil {
+					files = cachedFiles
+				}
 			}
 		}
 	}

@@ -53,6 +53,11 @@ func (m *FileRepository) GetFiles(ctx context.Context, parentID uuid.UUID) ([]*m
 	return args.Get(0).([]*model.FileModel), args.Error(1)
 }
 
+func (m *FileRepository) GetFilesPaginated(ctx context.Context, parentID uuid.UUID, page model.Pagination) ([]*model.FileModel, error) {
+	args := m.Called(parentID, page)
+	return args.Get(0).([]*model.FileModel), args.Error(1)
+}
+
 func (m *FileRepository) Update(ctx context.Context, file *model.FileModel) error {
 	args := m.Called(file)
 	return args.Error(0)

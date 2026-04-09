@@ -39,6 +39,11 @@ func (m *FolderRepository) GetFolders(ctx context.Context, parentID uuid.UUID) (
 	return args.Get(0).([]model.FolderModel), args.Error(1)
 }
 
+func (m *FolderRepository) GetFoldersPaginated(ctx context.Context, parentID uuid.UUID, page model.Pagination) ([]model.FolderModel, error) {
+	args := m.Called(parentID, page)
+	return args.Get(0).([]model.FolderModel), args.Error(1)
+}
+
 func (m *FolderRepository) MoveFolder(ctx context.Context, folderID, newParentID uuid.UUID) error {
 	args := m.Called(folderID, newParentID)
 	return args.Error(0)

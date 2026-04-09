@@ -73,6 +73,19 @@ func (f *FolderRepository) GetFolders(ctx context.Context, parent_id uuid.UUID) 
 	return folders, err
 }
 
+// GetFoldersPaginated implements domain.FolderRepository.
+func (f *FolderRepository) GetFoldersPaginated(ctx context.Context, parent_id uuid.UUID, page model.Pagination) ([]model.FolderModel, error) {
+	page.Validate()
+	var folders []model.FolderModel
+	err := f.db.DB.WithContext(ctx).
+		Where("parent_id = ?", parent_id).
+		Offset(page.Offset()).
+		Limit(page.PageSize).
+		Order("created_at DESC").
+		Find(&folders).Error
+	return folders, err
+}
+
 // MoveFolder implements domain.FolderRepository.
 func (f *FolderRepository) MoveFolder(ctx context.Context, folder_id uuid.UUID, new_parent_id uuid.UUID) error {
 	var newParentFolder model.FolderModel
@@ -93,11 +106,11 @@ func (f *FolderRepository) MoveFolder(ctx context.Context, folder_id uuid.UUID, 
 	}
 
 	// Prevent moving into its own subfolder
-	if strings.HasPrefix(newParentFolder.Path, folder.Path) {
+	if strings.HasPrefix(newParentFolder.Path, folder.Path+"/") {
 		return fmt.Errorf("invalid move: cannot move a folder into its own subfolder")
 	}
 
-	// Construct new path safely
+	oldPath := folder.Path
 	newPath := strings.TrimSuffix(newParentFolder.Path, "/") + "/" + folder.Name
 
 	// Avoid unnecessary updates
@@ -105,12 +118,32 @@ func (f *FolderRepository) MoveFolder(ctx context.Context, folder_id uuid.UUID, 
 		return nil
 	}
 
-	// Update both `path` and `parent_id`
-	return f.db.DB.WithContext(ctx).Model(&folder).Updates(map[string]interface{}{
-		"path":      newPath,
-		"parent_id": newParentFolder.ID,
-	}).Error
+	// Use a transaction to update the folder and all descendants atomically
+	return f.db.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		// Update the folder itself
+		if err := tx.Model(&folder).Updates(map[string]interface{}{
+			"path":      newPath,
+			"parent_id": newParentFolder.ID,
+		}).Error; err != nil {
+			return err
+		}
 
+		// Update all descendant folder paths (replace old prefix with new)
+		if err := tx.Model(&model.FolderModel{}).
+			Where("path LIKE ?", oldPath+"/%").
+			Update("path", gorm.Expr("REPLACE(path, ?, ?)", oldPath, newPath)).Error; err != nil {
+			return err
+		}
+
+		// Update all descendant file paths
+		if err := tx.Model(&model.FileModel{}).
+			Where("path LIKE ?", oldPath+"/%").
+			Update("path", gorm.Expr("REPLACE(path, ?, ?)", oldPath, newPath)).Error; err != nil {
+			return err
+		}
+
+		return nil
+	})
 }
 
 // RenameFolder implements domain.FolderRepository.
@@ -124,12 +157,34 @@ func (f *FolderRepository) RenameFolder(ctx context.Context, user_id string, fol
 		return err
 	}
 
-	// update the folder name and path
+	oldPath := folder.Path
 	newPath := strings.TrimSuffix(folder.Path, "/"+folder.Name) + "/" + new_name
-	return f.db.DB.WithContext(ctx).Model(&folder).Updates(map[string]interface{}{
-		"name": new_name,
-		"path": newPath,
-	}).Error
+
+	return f.db.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		// Update the folder name and path
+		if err := tx.Model(&folder).Updates(map[string]interface{}{
+			"name": new_name,
+			"path": newPath,
+		}).Error; err != nil {
+			return err
+		}
+
+		// Update all descendant folder paths
+		if err := tx.Model(&model.FolderModel{}).
+			Where("path LIKE ?", oldPath+"/%").
+			Update("path", gorm.Expr("REPLACE(path, ?, ?)", oldPath, newPath)).Error; err != nil {
+			return err
+		}
+
+		// Update all descendant file paths
+		if err := tx.Model(&model.FileModel{}).
+			Where("path LIKE ?", oldPath+"/%").
+			Update("path", gorm.Expr("REPLACE(path, ?, ?)", oldPath, newPath)).Error; err != nil {
+			return err
+		}
+
+		return nil
+	})
 }
 
 // DeleteFolder implements domain.FolderRepository.

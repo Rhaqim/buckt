@@ -9,12 +9,15 @@ import (
 	"mime"
 	"os"
 	"path/filepath"
+	"strings"
 	"syscall"
 
 	"github.com/Rhaqim/buckt/internal/domain"
 	"github.com/Rhaqim/buckt/internal/model"
 	"golang.org/x/sync/singleflight"
 )
+
+var ErrPathTraversal = fmt.Errorf("path traversal detected: path escapes media directory")
 
 type LocalFileSystemService struct {
 	logger   domain.BucktLogger
@@ -37,8 +40,13 @@ func (bfs *LocalFileSystemService) Name() string {
 	return "local"
 }
 
-func (bfs *LocalFileSystemService) resolve(path string) string {
-	return filepath.Join(bfs.mediaDir, path)
+func (bfs *LocalFileSystemService) resolve(path string) (string, error) {
+	full := filepath.Join(bfs.mediaDir, filepath.Clean("/"+path))
+	cleanBase := filepath.Clean(bfs.mediaDir)
+	if !strings.HasPrefix(full, cleanBase+string(os.PathSeparator)) && full != cleanBase {
+		return "", ErrPathTraversal
+	}
+	return full, nil
 }
 
 // Put writes/overwrites a file.
@@ -49,7 +57,10 @@ func (bfs *LocalFileSystemService) Put(ctx context.Context, path string, data []
 	default:
 	}
 
-	filePath := bfs.resolve(path)
+	filePath, err := bfs.resolve(path)
+	if err != nil {
+		return err
+	}
 	if err := os.MkdirAll(filepath.Dir(filePath), 0755); err != nil {
 		return bfs.logger.WrapError("failed to create directory", err)
 	}
@@ -93,7 +104,10 @@ func (bfs *LocalFileSystemService) Get(ctx context.Context, path string) ([]byte
 	default:
 	}
 
-	filePath := bfs.resolve(path)
+	filePath, err := bfs.resolve(path)
+	if err != nil {
+		return nil, err
+	}
 
 	// check cache first
 	if data, ok := bfs.cache.Get(filePath); ok {
@@ -124,10 +138,13 @@ func (bfs *LocalFileSystemService) List(ctx context.Context, prefix string) ([]s
 	default:
 	}
 
-	dirPath := bfs.resolve(prefix)
+	dirPath, err := bfs.resolve(prefix)
+	if err != nil {
+		return nil, err
+	}
 	var files []string
 
-	err := filepath.WalkDir(dirPath, func(path string, d fs.DirEntry, err error) error {
+	err = filepath.WalkDir(dirPath, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
@@ -155,7 +172,10 @@ func (bfs *LocalFileSystemService) Stream(ctx context.Context, path string) (io.
 	default:
 	}
 
-	filePath := bfs.resolve(path)
+	filePath, err := bfs.resolve(path)
+	if err != nil {
+		return nil, err
+	}
 	return os.Open(filePath)
 }
 
@@ -167,7 +187,10 @@ func (bfs *LocalFileSystemService) Delete(ctx context.Context, path string) erro
 	default:
 	}
 
-	filePath := bfs.resolve(path)
+	filePath, err := bfs.resolve(path)
+	if err != nil {
+		return err
+	}
 	if err := os.Remove(filePath); err != nil && !errors.Is(err, fs.ErrNotExist) {
 		return bfs.logger.WrapError("failed to delete file", err)
 	}
@@ -183,8 +206,11 @@ func (bfs *LocalFileSystemService) Exists(ctx context.Context, path string) (boo
 	default:
 	}
 
-	filePath := bfs.resolve(path)
-	_, err := os.Stat(filePath)
+	filePath, err := bfs.resolve(path)
+	if err != nil {
+		return false, err
+	}
+	_, err = os.Stat(filePath)
 	if err == nil {
 		return true, nil
 	}
@@ -202,7 +228,10 @@ func (bfs *LocalFileSystemService) Stat(ctx context.Context, path string) (*mode
 	default:
 	}
 
-	filePath := bfs.resolve(path)
+	filePath, err := bfs.resolve(path)
+	if err != nil {
+		return nil, err
+	}
 	info, err := os.Stat(filePath)
 	if err != nil {
 		return nil, bfs.logger.WrapError("failed to stat file", err)
@@ -227,7 +256,10 @@ func (bfs *LocalFileSystemService) DeleteFolder(ctx context.Context, path string
 	default:
 	}
 
-	dirPath := bfs.resolve(path)
+	dirPath, err := bfs.resolve(path)
+	if err != nil {
+		return err
+	}
 	return os.RemoveAll(dirPath)
 }
 
@@ -238,8 +270,14 @@ func (bfs *LocalFileSystemService) Move(ctx context.Context, oldPath, newPath st
 	default:
 	}
 
-	oldFilePath := filepath.Join(bfs.mediaDir, oldPath)
-	newFilePath := filepath.Join(bfs.mediaDir, newPath)
+	oldFilePath, err := bfs.resolve(oldPath)
+	if err != nil {
+		return err
+	}
+	newFilePath, err := bfs.resolve(newPath)
+	if err != nil {
+		return err
+	}
 
 	if _, err := os.Stat(oldFilePath); errors.Is(err, fs.ErrNotExist) {
 		return bfs.logger.WrapError("source file does not exist", err)

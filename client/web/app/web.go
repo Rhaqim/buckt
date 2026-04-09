@@ -2,6 +2,8 @@ package app
 
 import (
 	"fmt"
+	"net/url"
+	"strings"
 
 	"github.com/Rhaqim/buckt"
 	"github.com/Rhaqim/buckt/client/web/domain"
@@ -232,14 +234,32 @@ func (svc *WebService) DownloadFile(c *gin.Context) {
 	}
 
 	// serve the file
-	c.Header("Content-Disposition", "attachment; filename="+file.Name)
+	c.Header("Content-Disposition", webSafeContentDisposition("attachment", file.Name))
 	c.Header("Content-Type", file.ContentType)
+	c.Header("X-Content-Type-Options", "nosniff")
 	c.Data(200, file.ContentType, file.Data)
 }
 
 // MoveFile implements domain.WebService.
 func (svc *WebService) MoveFile(c *gin.Context) {
-	panic("unimplemented")
+	fileID := c.Param("file_id")
+	if fileID == "" {
+		c.AbortWithStatusJSON(400, response.Error("file_id is required", ""))
+		return
+	}
+
+	newParentID := c.PostForm("new_parent_id")
+	if newParentID == "" {
+		c.AbortWithStatusJSON(400, response.Error("new_parent_id is required", ""))
+		return
+	}
+
+	if err := svc.client.MoveFile(fileID, newParentID); err != nil {
+		c.AbortWithStatusJSON(500, response.WrapError("failed to move file", err))
+		return
+	}
+
+	c.Redirect(302, "/web/folder/"+newParentID)
 }
 
 // DeleteFile implements domain.WebService.
@@ -253,13 +273,11 @@ func (svc *WebService) DeleteFile(c *gin.Context) {
 	}
 
 	// delete the file
-	parent_id, err := svc.client.DeleteFile(fileID)
+	_, err := svc.client.DeleteFile(fileID)
 	if err != nil {
 		c.AbortWithStatusJSON(500, response.WrapError("failed to delete file", err))
 		return
 	}
-
-	fmt.Println("parent_id", parent_id)
 
 	c.JSON(200, response.Success("file deleted"))
 }
@@ -273,13 +291,19 @@ func (svc *WebService) DeleteFilePermanently(c *gin.Context) {
 	}
 
 	// delete the file
-	parent_id, err := svc.client.DeleteFilePermanently(fileID)
+	_, err := svc.client.DeleteFilePermanently(fileID)
 	if err != nil {
 		c.AbortWithStatusJSON(500, response.WrapError("failed to delete file", err))
 		return
 	}
 
-	fmt.Println("parent_id", parent_id)
 
 	c.JSON(200, response.Success("file deleted"))
+}
+
+func webSafeContentDisposition(disposition, filename string) string {
+	filename = strings.ReplaceAll(filename, "/", "_")
+	filename = strings.ReplaceAll(filename, "\\", "_")
+	encoded := url.PathEscape(filename)
+	return fmt.Sprintf(`%s; filename*=UTF-8''%s`, disposition, encoded)
 }

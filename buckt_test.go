@@ -708,6 +708,7 @@ func TestNewAppServices(t *testing.T) {
 	t.Run("returns valid FolderService and FileService", func(t *testing.T) {
 		folderService, fileService := newAppServices(
 			true,
+			DefaultMaxFileSize,
 			db,
 			mockLogger,
 			mockCacheManager,
@@ -720,6 +721,7 @@ func TestNewAppServices(t *testing.T) {
 	t.Run("returns different instances for FolderService and FileService", func(t *testing.T) {
 		folderService, fileService := newAppServices(
 			false,
+			DefaultMaxFileSize,
 			db,
 			mockLogger,
 			mockCacheManager,

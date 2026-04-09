@@ -150,5 +150,10 @@ func (db *DB) Migrate() error {
 	}
 	db.log.GetLogger().Println("✅ FileModel migrated")
 
+	if err := db.AutoMigrate(&model.MigrationModel{}); err != nil {
+		return db.log.WrapErrorf("❌ failed to migrate MigrationModel: %w", err)
+	}
+	db.log.GetLogger().Println("✅ MigrationModel migrated")
+
 	return nil
 }

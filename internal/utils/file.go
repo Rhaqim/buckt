@@ -5,6 +5,7 @@ import (
 	"io"
 	"mime/multipart"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"unicode"
 
@@ -45,6 +46,12 @@ func GenerateThumbnail(inputPath, outputPath string, width uint) error {
 }
 
 func GenerateVideoPreview(inputPath, outputPath string) error {
+	if err := validateExecPath(inputPath); err != nil {
+		return fmt.Errorf("invalid input path: %w", err)
+	}
+	if err := validateExecPath(outputPath); err != nil {
+		return fmt.Errorf("invalid output path: %w", err)
+	}
 	cmd := exec.Command("ffmpeg", "-i", inputPath, "-ss", "00:00:02", "-vframes", "1", outputPath)
 	err := cmd.Run()
 	if err != nil {
@@ -54,6 +61,12 @@ func GenerateVideoPreview(inputPath, outputPath string) error {
 }
 
 func GeneratePDFPreview(inputPath, outputPath string) error {
+	if err := validateExecPath(inputPath); err != nil {
+		return fmt.Errorf("invalid input path: %w", err)
+	}
+	if err := validateExecPath(outputPath); err != nil {
+		return fmt.Errorf("invalid output path: %w", err)
+	}
 	cmd := exec.Command("convert", "-density", "150", inputPath+"[0]", "-quality", "90", outputPath)
 	err := cmd.Run()
 	if err != nil {
@@ -112,4 +125,17 @@ func isValidFolderPath(s string) bool {
 		}
 	}
 	return true
+}
+
+// validateExecPath ensures a path is clean, absolute, and doesn't contain
+// characters that could be misinterpreted as flags by external commands.
+func validateExecPath(path string) error {
+	cleaned := filepath.Clean(path)
+	if !filepath.IsAbs(cleaned) {
+		return fmt.Errorf("path must be absolute, got: %s", path)
+	}
+	if strings.HasPrefix(filepath.Base(cleaned), "-") {
+		return fmt.Errorf("path basename must not start with a dash: %s", path)
+	}
+	return nil
 }

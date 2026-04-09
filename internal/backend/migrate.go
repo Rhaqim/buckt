@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"sync"
+	"sync/atomic"
 
 	"github.com/Rhaqim/buckt/internal/domain"
 )
@@ -14,12 +16,18 @@ type MigrationBackendService struct {
 	primaryBackend   domain.FileBackend
 	secondaryBackend domain.FileBackend
 
-	// migrating atomic.Bool // indicates an active migration
-	// stats     migrationStats
+	migrating atomic.Bool
+	stats     migrationStats
+}
+
+type migrationStats struct {
+	mu        sync.Mutex
+	completed int64
+	total     int64
 }
 
 func NewMigrationBackend(bucktLogger domain.BucktLogger, primary domain.FileBackend, secondary domain.FileBackend) domain.MigratableBackend {
-	bucktLogger.Info("🚀 Initialising local file system backend")
+	bucktLogger.Info("🚀 Initialising migration backend: " + primary.Name() + " -> " + secondary.Name())
 	return &MigrationBackendService{
 		logger:           bucktLogger,
 		primaryBackend:   primary,
@@ -31,138 +39,183 @@ func (d *MigrationBackendService) Name() string {
 	return d.primaryBackend.Name() + "->" + d.secondaryBackend.Name()
 }
 
-// Put implements domain.FileBackend.
+// Put writes to both backends. Primary failure is a hard error.
+// Secondary failure is logged but does not fail the operation.
 func (d *MigrationBackendService) Put(ctx context.Context, path string, data []byte) error {
-	// Try to put the file in the primary backend
+	// Write to primary first — this is the source of truth
 	if err := d.primaryBackend.Put(ctx, path, data); err != nil {
-		d.logger.Errorf("Failed to put file in primary backend: %v", err)
+		return fmt.Errorf("primary backend put failed: %w", err)
 	}
 
-	// If the primary backend fails, try the secondary backend
+	// Mirror to secondary (best-effort during migration)
 	if err := d.secondaryBackend.Put(ctx, path, data); err != nil {
-		d.logger.Errorf("⚠️ Failed to mirror to secondary: %v", err)
-		return err
+		d.logger.Errorf("⚠️ Failed to mirror to secondary backend: %v", err)
 	}
 	return nil
 }
 
-// Get implements domain.FileBackend.
+// Get reads from primary first, falls back to secondary.
 func (d *MigrationBackendService) Get(ctx context.Context, path string) ([]byte, error) {
-	// Try to get the file from the primary backend
 	data, err := d.primaryBackend.Get(ctx, path)
 	if err != nil {
-		d.logger.Errorf("Failed to get file from primary backend: %v", err)
-		// If the primary backend fails, try the secondary backend
+		d.logger.Errorf("Primary backend get failed, trying secondary: %v", err)
 		data, err = d.secondaryBackend.Get(ctx, path)
 		if err != nil {
-			d.logger.Errorf("Failed to get file from secondary backend: %v", err)
-			return nil, err
+			return nil, fmt.Errorf("both backends failed to get %s: %w", path, err)
+		}
+		// Lazy migration: copy to primary since it was missing
+		if putErr := d.primaryBackend.Put(ctx, path, data); putErr != nil {
+			d.logger.Errorf("⚠️ Failed to lazy-migrate %s to primary: %v", path, putErr)
 		}
 	}
 	return data, nil
 }
 
-// List implements domain.FileBackend.
+// List lists from primary first, falls back to secondary.
 func (d *MigrationBackendService) List(ctx context.Context, prefix string) ([]string, error) {
-	// Try to list files from the primary backend
 	paths, err := d.primaryBackend.List(ctx, prefix)
 	if err != nil {
-		d.logger.Errorf("Failed to list files from primary backend: %v", err)
-		// If the primary backend fails, try the secondary backend
+		d.logger.Errorf("Primary backend list failed, trying secondary: %v", err)
 		paths, err = d.secondaryBackend.List(ctx, prefix)
 		if err != nil {
-			d.logger.Errorf("Failed to list files from secondary backend: %v", err)
-			return nil, err
+			return nil, fmt.Errorf("both backends failed to list %s: %w", prefix, err)
 		}
 	}
 	return paths, nil
 }
 
-// Stream implements domain.FileBackend.
+// Stream streams from primary first, falls back to secondary.
 func (d *MigrationBackendService) Stream(ctx context.Context, path string) (io.ReadCloser, error) {
-	// Try to stream the file from the primary backend
 	reader, err := d.primaryBackend.Stream(ctx, path)
 	if err != nil {
-		d.logger.Errorf("Failed to stream file from primary backend: %v", err)
-		// If the primary backend fails, try the secondary backend
+		d.logger.Errorf("Primary backend stream failed, trying secondary: %v", err)
 		reader, err = d.secondaryBackend.Stream(ctx, path)
 		if err != nil {
-			d.logger.Errorf("Failed to stream file from secondary backend: %v", err)
-			return nil, err
+			return nil, fmt.Errorf("both backends failed to stream %s: %w", path, err)
 		}
 	}
 	return reader, nil
 }
 
-// Move implements domain.FileBackend.
+// Move moves in both backends.
 func (d *MigrationBackendService) Move(ctx context.Context, oldPath string, newPath string) error {
-	// Try to move the file in the primary backend
 	if err := d.primaryBackend.Move(ctx, oldPath, newPath); err != nil {
-		d.logger.Errorf("Failed to move file in primary backend: %v", err)
-		// If the primary backend fails, try the secondary backend
-		if err := d.secondaryBackend.Move(ctx, oldPath, newPath); err != nil {
-			d.logger.Errorf("Failed to move file in secondary backend: %v", err)
-			return err
-		}
+		return fmt.Errorf("primary backend move failed: %w", err)
+	}
+	if err := d.secondaryBackend.Move(ctx, oldPath, newPath); err != nil {
+		d.logger.Errorf("⚠️ Failed to move in secondary backend: %v", err)
 	}
 	return nil
 }
 
-// Exists implements domain.FileBackend.
+// Exists checks primary first, then secondary.
 func (d *MigrationBackendService) Exists(ctx context.Context, path string) (bool, error) {
-	// Check if the file exists in the primary backend
 	exists, err := d.primaryBackend.Exists(ctx, path)
 	if err != nil {
-		d.logger.Errorf("Failed to check existence in primary backend: %v", err)
-		// If the primary backend fails, try the secondary backend
+		d.logger.Errorf("Primary backend exists check failed, trying secondary: %v", err)
 		exists, err = d.secondaryBackend.Exists(ctx, path)
 		if err != nil {
-			d.logger.Errorf("Failed to check existence in secondary backend: %v", err)
-			return false, err
+			return false, fmt.Errorf("both backends failed exists check for %s: %w", path, err)
 		}
 	}
 	return exists, nil
 }
 
-// Delete implements domain.FileBackend.
+// Delete deletes from both backends. Primary failure is a hard error.
 func (d *MigrationBackendService) Delete(ctx context.Context, path string) error {
-	// Try to delete the file in the primary backend
 	if err := d.primaryBackend.Delete(ctx, path); err != nil {
-		d.logger.Errorf("Failed to delete file in primary backend: %v", err)
-		// If the primary backend fails, try the secondary backend
-		if err := d.secondaryBackend.Delete(ctx, path); err != nil {
-			d.logger.Errorf("Failed to delete file in secondary backend: %v", err)
-			return err
-		}
+		return fmt.Errorf("primary backend delete failed: %w", err)
+	}
+	if err := d.secondaryBackend.Delete(ctx, path); err != nil {
+		d.logger.Errorf("⚠️ Failed to delete from secondary backend: %v", err)
 	}
 	return nil
 }
 
-// DeleteFolder implements domain.FileBackend.
+// DeleteFolder deletes from both backends.
 func (d *MigrationBackendService) DeleteFolder(ctx context.Context, prefix string) error {
-	// Try to delete the folder in the primary backend
 	if err := d.primaryBackend.DeleteFolder(ctx, prefix); err != nil {
-		d.logger.Errorf("Failed to delete folder in primary backend: %v", err)
-		// If the primary backend fails, try the secondary backend
-		if err := d.secondaryBackend.DeleteFolder(ctx, prefix); err != nil {
-			d.logger.Errorf("Failed to delete folder in secondary backend: %v", err)
-			return err
-		}
+		return fmt.Errorf("primary backend delete folder failed: %w", err)
+	}
+	if err := d.secondaryBackend.DeleteFolder(ctx, prefix); err != nil {
+		d.logger.Errorf("⚠️ Failed to delete folder from secondary backend: %v", err)
 	}
 	return nil
 }
 
-// MigrateAll implements domain.MigratableBackend.
-func (d *MigrationBackendService) MigrateAll(ctx context.Context) error {
-	return fmt.Errorf("MigrateAll not implemented")
-}
-
-// MigrateFile implements domain.MigratableBackend.
+// MigrateFile copies a single file from primary to secondary.
 func (d *MigrationBackendService) MigrateFile(ctx context.Context, path string) error {
-	return fmt.Errorf("MigrateFile not implemented")
+	data, err := d.primaryBackend.Get(ctx, path)
+	if err != nil {
+		return fmt.Errorf("failed to read %s from primary: %w", path, err)
+	}
+
+	if err := d.secondaryBackend.Put(ctx, path, data); err != nil {
+		return fmt.Errorf("failed to write %s to secondary: %w", path, err)
+	}
+
+	d.stats.mu.Lock()
+	d.stats.completed++
+	d.stats.mu.Unlock()
+
+	return nil
 }
 
-// MigrationStatus implements domain.MigratableBackend.
+// MigrateAll copies all files from primary to secondary in the background.
+func (d *MigrationBackendService) MigrateAll(ctx context.Context) error {
+	if d.migrating.Load() {
+		return fmt.Errorf("migration already in progress")
+	}
+	d.migrating.Store(true)
+
+	// List all files from primary
+	files, err := d.primaryBackend.List(ctx, "")
+	if err != nil {
+		d.migrating.Store(false)
+		return fmt.Errorf("failed to list files from primary: %w", err)
+	}
+
+	d.stats.mu.Lock()
+	d.stats.total = int64(len(files))
+	d.stats.completed = 0
+	d.stats.mu.Unlock()
+
+	// Run migration in a goroutine
+	go func() {
+		defer d.migrating.Store(false)
+
+		for _, path := range files {
+			select {
+			case <-ctx.Done():
+				d.logger.Errorf("Migration cancelled: %v", ctx.Err())
+				return
+			default:
+			}
+
+			// Skip if already exists in secondary
+			exists, err := d.secondaryBackend.Exists(ctx, path)
+			if err == nil && exists {
+				d.stats.mu.Lock()
+				d.stats.completed++
+				d.stats.mu.Unlock()
+				continue
+			}
+
+			if err := d.MigrateFile(ctx, path); err != nil {
+				d.logger.Errorf("Failed to migrate %s: %v", path, err)
+				// Continue with other files
+			}
+		}
+
+		d.logger.Info("✅ Migration complete")
+	}()
+
+	return nil
+}
+
+// MigrationStatus returns the current migration progress.
 func (d *MigrationBackendService) MigrationStatus(ctx context.Context) (completed int64, total int64) {
-	return 0, 0
+	d.stats.mu.Lock()
+	defer d.stats.mu.Unlock()
+	return d.stats.completed, d.stats.total
 }

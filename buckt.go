@@ -28,6 +28,7 @@ type Client struct {
 
 	flatnameSpaces bool
 	silence        bool
+	maxFileSize    int64
 
 	logger   domain.BucktLogger
 	lruCache domain.LRUCache
@@ -75,9 +76,16 @@ func New(conf Config, opts ...ConfigFunc) (*Client, error) {
 	// Initialise Backend
 	var backend domain.FileBackend = resolveBackend(conf.MediaDir, conf.Backend, bucktLog, lruCache)
 
+	// Resolve max file size
+	maxFileSize := conf.MaxFileSize
+	if maxFileSize <= 0 {
+		maxFileSize = DefaultMaxFileSize
+	}
+
 	// Initialize the app services
 	folderService, fileService := newAppServices(
 		conf.FlatNameSpaces,
+		maxFileSize,
 		db,
 		bucktLog,
 		cacheManager,
@@ -91,6 +99,7 @@ func New(conf Config, opts ...ConfigFunc) (*Client, error) {
 		lruCache:       lruCache,
 		flatnameSpaces: conf.FlatNameSpaces,
 		silence:        logConf.Silence,
+		maxFileSize:    maxFileSize,
 		fileService:    fileService,
 		folderService:  folderService,
 	}
@@ -494,25 +503,29 @@ func (b *Client) UploadFileContext(ctx context.Context, user_id string, parent_i
 //   - string: The ID of the newly created file.
 //   - error: An error if the file upload fails, otherwise nil.
 func (b *Client) UploadFileFromReaderContext(ctx context.Context, user_id string, parent_id string, file_name string, content_type string, file_data io.Reader) (string, error) {
+	// Try to use Seeker for efficiency if available
+	if seeker, ok := file_data.(io.Seeker); ok {
+		fileSize, err := seeker.Seek(0, io.SeekEnd)
+		if err != nil {
+			return "", err
+		}
+		if _, err = seeker.Seek(0, io.SeekStart); err != nil {
+			return "", err
+		}
 
-	// Get the file size
-	file_info, err := file_data.(io.Seeker).Seek(0, io.SeekEnd)
+		file_bytes := make([]byte, fileSize)
+		if _, err = io.ReadFull(file_data, file_bytes); err != nil {
+			return "", err
+		}
+		return b.fileService.CreateFile(ctx, user_id, parent_id, file_name, content_type, file_bytes)
+	}
+
+	// Fallback: read all bytes for non-seekable readers
+	file_bytes, err := io.ReadAll(file_data)
 	if err != nil {
 		return "", err
 	}
-	_, err = file_data.(io.Seeker).Seek(0, io.SeekStart)
-	if err != nil {
-		return "", err
-	}
 
-	// Read the file data
-	file_bytes := make([]byte, file_info)
-	_, err = io.ReadFull(file_data, file_bytes)
-	if err != nil {
-		return "", err
-	}
-
-	// Upload the file
 	return b.fileService.CreateFile(ctx, user_id, parent_id, file_name, content_type, file_bytes)
 }
 
@@ -638,6 +651,7 @@ func initializeCache(conf CacheConfig, bucktLog domain.BucktLogger) (domain.Cach
 
 func newAppServices(
 	flatNameSpaces bool,
+	maxFileSize int64,
 	db *database.DB,
 	logger domain.BucktLogger,
 	cacheManager domain.CacheManager,
@@ -649,7 +663,7 @@ func newAppServices(
 
 	// initialize the services
 	var folderService domain.FolderService = service.NewFolderService(logger, cacheManager, folderRepository, activeBackend)
-	var fileService domain.FileService = service.NewFileService(logger, cacheManager, fileRepository, folderService, activeBackend, flatNameSpaces)
+	var fileService domain.FileService = service.NewFileService(logger, cacheManager, fileRepository, folderService, activeBackend, flatNameSpaces, maxFileSize)
 
 	logger.Info("✅ Initialized app services")
 

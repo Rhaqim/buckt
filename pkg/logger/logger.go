@@ -48,11 +48,11 @@ func NewLogger(logFile string, logTerminal, silence bool, opts ...LogFunc) domai
 			logWriter = infoLogFile
 		}
 	} else {
-		// If no log file and silenceging, silence logs; otherwise, use stdout
+		// If no log file, use stdout for terminal output or discard if silenced
 		if logTerminal && !silence {
-			logWriter = io.Discard // Silence terminal logs
-		} else {
 			logWriter = os.Stdout
+		} else {
+			logWriter = io.Discard
 		}
 	}
 

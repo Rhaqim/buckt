@@ -12,6 +12,7 @@ type FolderRepository interface {
 	GetFolder(ctx context.Context, folder_id uuid.UUID) (*model.FolderModel, error)
 	GetRootFolder(ctx context.Context, user_id string) (*model.FolderModel, error)
 	GetFolders(ctx context.Context, parent_id uuid.UUID) ([]model.FolderModel, error)
+	GetFoldersPaginated(ctx context.Context, parent_id uuid.UUID, page model.Pagination) ([]model.FolderModel, error)
 	MoveFolder(ctx context.Context, folder_id, new_parent_id uuid.UUID) error
 	RenameFolder(ctx context.Context, user_id string, folder_id uuid.UUID, new_name string) error
 	DeleteFolder(ctx context.Context, folder_id uuid.UUID) (parent_id string, err error)
@@ -22,6 +23,7 @@ type FileRepository interface {
 	Create(ctx context.Context, file *model.FileModel) error
 	GetFile(ctx context.Context, id uuid.UUID) (*model.FileModel, error)
 	GetFiles(ctx context.Context, parent_id uuid.UUID) ([]*model.FileModel, error)
+	GetFilesPaginated(ctx context.Context, parent_id uuid.UUID, page model.Pagination) ([]*model.FileModel, error)
 	MoveFile(ctx context.Context, file_id, new_parent_id uuid.UUID) (string, string, error)
 	RenameFile(ctx context.Context, file_id uuid.UUID, new_name string) error
 	RestoreFile(ctx context.Context, parent_id uuid.UUID, name string) (*model.FileModel, error)
