@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/Rhaqim/buckt"
@@ -19,6 +20,11 @@ func main() {
 	awsBackend, err := aws.NewBackend(cloudConfig)
 	if err != nil {
 		fmt.Println("Failed to create AWS backend:", err)
+		return
+	}
+
+	if err := awsBackend.Ping(context.Background()); err != nil {
+		fmt.Println("Failed to connect to AWS backend:", err)
 		return
 	}
 

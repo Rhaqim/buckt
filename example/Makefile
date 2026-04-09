@@ -13,6 +13,9 @@ direct:
 aws:
 	$(CMD) $(CLOUD_ROOT)/aws/$(MAIN)
 
+cloudflare:
+	$(CMD) $(CLOUD_ROOT)/cloudflare/$(MAIN)
+
 gcp:
 	$(CMD) $(CLOUD_ROOT)/gcp/$(MAIN)
 

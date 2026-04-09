@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/Rhaqim/buckt"
@@ -17,6 +18,11 @@ func main() {
 	gcpBackend, err := gcp.NewBackend(cloudConfig)
 	if err != nil {
 		fmt.Println("Failed to create GCP backend:", err)
+		return
+	}
+
+	if err := gcpBackend.Ping(context.Background()); err != nil {
+		fmt.Println("Failed to connect to GCP backend:", err)
 		return
 	}
 

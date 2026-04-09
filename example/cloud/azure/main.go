@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/Rhaqim/buckt"
@@ -18,6 +19,11 @@ func main() {
 	azureBackend, err := azure.NewBackend(cloudConfig)
 	if err != nil {
 		fmt.Println("Failed to create Azure backend:", err)
+		return
+	}
+
+	if err := azureBackend.Ping(context.Background()); err != nil {
+		fmt.Println("Failed to connect to Azure backend:", err)
 		return
 	}
 
