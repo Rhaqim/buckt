@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"path/filepath"
+	"strings"
 
 	"github.com/Rhaqim/buckt/internal/domain"
 	"github.com/Rhaqim/buckt/internal/model"
@@ -110,7 +111,7 @@ func (f *FileService) CreateFile(ctx context.Context, user_id, parent_id, file_n
 	// Create the file
 	err = f.repo.Create(ctx, file)
 	if err != nil {
-		if err.Error() == "UNIQUE constraint failed: file_models.name, file_models.parent_id" {
+		if strings.Contains(err.Error(), "UNIQUE constraint failed") || strings.Contains(err.Error(), "duplicate key") {
 			file, err = f.repo.RestoreFile(ctx, file.ParentID, file.Name)
 			if err != nil {
 				return "", f.logger.WrapError("failed to restore file", err)

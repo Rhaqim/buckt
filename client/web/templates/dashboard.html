@@ -221,15 +221,18 @@
 	function allowDrop(e) { e.preventDefault(); }
 
 	function dragStart(e) {
+		const card = e.target.closest("[data-id]");
+		if (!card) return;
 		e.dataTransfer.setData("text/plain", JSON.stringify({
-			id: e.target.dataset.id,
-			type: e.target.dataset.type || "folder"
+			id: card.dataset.id,
+			type: card.dataset.type || "folder"
 		}));
-		e.target.style.opacity = "0.5";
+		card.style.opacity = "0.5";
 	}
 
 	function dragEnd(e) {
-		e.target.style.opacity = "1";
+		const card = e.target.closest("[data-id]");
+		if (card) card.style.opacity = "1";
 	}
 
 	function dragEnter(e) {

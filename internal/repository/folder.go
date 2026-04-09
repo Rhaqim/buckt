@@ -66,6 +66,45 @@ func (f *FolderRepository) GetRootFolder(ctx context.Context, user_id string) (*
 	return &root, nil
 }
 
+// RestoreFolder finds a soft-deleted folder by original name and restores it.
+// Handles both mangled names (new deletes) and unmangled names (legacy deletes).
+func (f *FolderRepository) RestoreFolder(ctx context.Context, user_id string, parent_id uuid.UUID, name string) (*model.FolderModel, error) {
+	var folder model.FolderModel
+
+	// Try mangled name first (new-style soft-delete)
+	err := f.db.DB.WithContext(ctx).Unscoped().
+		Where("user_id = ? AND parent_id = ? AND name LIKE ? AND deleted_at IS NOT NULL", user_id, parent_id, name+".__deleted_%").
+		First(&folder).Error
+
+	if err != nil {
+		// Fall back to exact name match (legacy soft-delete without mangling)
+		err = f.db.DB.WithContext(ctx).Unscoped().
+			Where("user_id = ? AND parent_id = ? AND name = ? AND deleted_at IS NOT NULL", user_id, parent_id, name).
+			First(&folder).Error
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	// Restore: ensure name and path are the clean originals
+	suffix := ".__deleted_" + folder.ID.String()
+	originalName := strings.TrimSuffix(folder.Name, suffix)
+	originalPath := strings.TrimSuffix(folder.Path, suffix)
+
+	err = f.db.DB.WithContext(ctx).Unscoped().Model(&folder).Updates(map[string]interface{}{
+		"deleted_at": nil,
+		"name":       originalName,
+		"path":       originalPath,
+	}).Error
+	if err != nil {
+		return nil, err
+	}
+
+	folder.Name = originalName
+	folder.Path = originalPath
+	return &folder, nil
+}
+
 // GetFolders implements domain.FolderRepository.
 func (f *FolderRepository) GetFolders(ctx context.Context, parent_id uuid.UUID) ([]model.FolderModel, error) {
 	var folders []model.FolderModel
@@ -194,12 +233,28 @@ func (f *FolderRepository) DeleteFolder(ctx context.Context, folder_id uuid.UUID
 		return "", err
 	}
 
-	// delete the folder
-	if err := f.db.DB.WithContext(ctx).Delete(&folder).Error; err != nil {
-		return "", err
+	suffix := ".__deleted_" + folder.ID.String()
+
+	txErr := f.db.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		// Mangle name and path to free unique constraints (user_id, parent_id, name) and (path)
+		if err := tx.Model(&folder).Updates(map[string]interface{}{
+			"name": folder.Name + suffix,
+			"path": folder.Path + suffix,
+		}).Error; err != nil {
+			return err
+		}
+
+		// Soft-delete
+		return tx.Delete(&folder).Error
+	})
+	if txErr != nil {
+		return "", txErr
 	}
 
-	return folder.ParentID.String(), nil
+	if folder.ParentID != nil {
+		return folder.ParentID.String(), nil
+	}
+	return "", nil
 }
 
 // ScrubFolder implements domain.FolderRepository.
@@ -217,5 +272,8 @@ func (f *FolderRepository) ScrubFolder(ctx context.Context, user_id string, fold
 		return "", err
 	}
 
-	return folder.ParentID.String(), nil
+	if folder.ParentID != nil {
+		return folder.ParentID.String(), nil
+	}
+	return "", nil
 }

@@ -13,6 +13,7 @@ type FolderRepository interface {
 	GetRootFolder(ctx context.Context, user_id string) (*model.FolderModel, error)
 	GetFolders(ctx context.Context, parent_id uuid.UUID) ([]model.FolderModel, error)
 	GetFoldersPaginated(ctx context.Context, parent_id uuid.UUID, page model.Pagination) ([]model.FolderModel, error)
+	RestoreFolder(ctx context.Context, user_id string, parent_id uuid.UUID, name string) (*model.FolderModel, error)
 	MoveFolder(ctx context.Context, folder_id, new_parent_id uuid.UUID) error
 	RenameFolder(ctx context.Context, user_id string, folder_id uuid.UUID, new_name string) error
 	DeleteFolder(ctx context.Context, folder_id uuid.UUID) (parent_id string, err error)

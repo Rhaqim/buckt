@@ -139,42 +139,49 @@ func (svc *WebService) RenameFolder(c *gin.Context) {
 
 // DeleteFolder implements domain.WebService.
 func (svc *WebService) DeleteFolder(c *gin.Context) {
-	// get the folder_id from the request
 	folderID := c.Param("folder_id")
 	if folderID == "" {
 		c.AbortWithStatusJSON(400, response.Error("folder_id is required", ""))
 		return
 	}
 
-	// ge tthe folder with content
-	parent_id, err := svc.client.DeleteFolder(folderID)
+	_, err := svc.client.DeleteFolder(folderID)
 	if err != nil {
 		c.AbortWithStatusJSON(500, response.WrapError("failed to delete folder", err))
 		return
 	}
 
-	c.Redirect(302, "/web/folder/"+parent_id)
+	// HTMX requests: return empty body so hx-swap="outerHTML" removes the element
+	if c.GetHeader("HX-Request") == "true" {
+		c.String(200, "")
+		return
+	}
+
+	c.JSON(200, response.Success("folder deleted"))
 }
 
 // DeleteFolderPermanently implements domain.WebService.
 func (svc *WebService) DeleteFolderPermanently(c *gin.Context) {
 	user_id := c.GetString("owner_id")
 
-	// get the folder_id from the request
 	folderID := c.Param("folder_id")
 	if folderID == "" {
 		c.AbortWithStatusJSON(400, response.Error("folder_id is required", ""))
 		return
 	}
 
-	// ge tthe folder with content
-	parent_id, err := svc.client.DeleteFolderPermanently(user_id, folderID)
+	_, err := svc.client.DeleteFolderPermanently(user_id, folderID)
 	if err != nil {
 		c.AbortWithStatusJSON(500, response.WrapError("failed to delete folder", err))
 		return
 	}
 
-	c.Redirect(302, "/web/folder/"+parent_id)
+	if c.GetHeader("HX-Request") == "true" {
+		c.String(200, "")
+		return
+	}
+
+	c.JSON(200, response.Success("folder deleted"))
 
 }
 
@@ -272,17 +279,21 @@ func (svc *WebService) MoveFile(c *gin.Context) {
 // DeleteFile implements domain.WebService.
 // Subtle: this method shadows the method (FileService).DeleteFile of WebService.FileService.
 func (svc *WebService) DeleteFile(c *gin.Context) {
-	// get the file_id from the request
 	fileID := c.Param("file_id")
 	if fileID == "" {
 		c.AbortWithStatusJSON(400, response.Error("file_id is required", ""))
 		return
 	}
 
-	// delete the file
 	_, err := svc.client.DeleteFile(fileID)
 	if err != nil {
 		c.AbortWithStatusJSON(500, response.WrapError("failed to delete file", err))
+		return
+	}
+
+	// HTMX: return empty body so the element is removed
+	if c.GetHeader("HX-Request") == "true" {
+		c.String(200, "")
 		return
 	}
 

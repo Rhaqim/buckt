@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"path/filepath"
+	"strings"
 
 	"github.com/Rhaqim/buckt/internal/constant"
 	"github.com/Rhaqim/buckt/internal/domain"
@@ -70,6 +71,15 @@ func (f *FolderService) CreateFolder(ctx context.Context, user_id, parent_id, fo
 
 	new_folder_id, err := f.repo.Create(ctx, folder)
 	if err != nil {
+		// If a unique constraint fails, try to restore a soft-deleted folder with the same name
+		if strings.Contains(err.Error(), "UNIQUE constraint failed") || strings.Contains(err.Error(), "duplicate key") {
+			restored, restoreErr := f.repo.RestoreFolder(ctx, user_id, parentFolder.ID, folder_name)
+			if restoreErr == nil {
+				return restored.ID.String(), nil
+			}
+			// No soft-deleted folder to restore — the name is taken by a live folder
+			return "", f.logger.WrapError("a folder with this name already exists", err)
+		}
 		return "", f.logger.WrapError("failed to create folder", err)
 	}
 

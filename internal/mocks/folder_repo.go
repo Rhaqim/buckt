@@ -34,6 +34,11 @@ func (m *FolderRepository) GetFolder(ctx context.Context, id uuid.UUID) (*model.
 	return args.Get(0).(*model.FolderModel), args.Error(1)
 }
 
+func (m *FolderRepository) RestoreFolder(ctx context.Context, user_id string, parent_id uuid.UUID, name string) (*model.FolderModel, error) {
+	args := m.Called(user_id, parent_id, name)
+	return args.Get(0).(*model.FolderModel), args.Error(1)
+}
+
 func (m *FolderRepository) GetFolders(ctx context.Context, parentID uuid.UUID) ([]model.FolderModel, error) {
 	args := m.Called(parentID)
 	return args.Get(0).([]model.FolderModel), args.Error(1)
