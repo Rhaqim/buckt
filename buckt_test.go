@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/Rhaqim/buckt/internal/backend"
+	"github.com/Rhaqim/buckt/internal/domain"
 	"github.com/Rhaqim/buckt/internal/database"
 	"github.com/Rhaqim/buckt/internal/mocks"
 	"github.com/Rhaqim/buckt/internal/model"
@@ -643,19 +644,28 @@ func TestResolveBackend(t *testing.T) {
 		assert.True(t, ok)
 	})
 
-	t.Run("Source only", func(t *testing.T) {
-		source := &mocks.Backend{NameVal: "local"}
+	t.Run("Source only - placeholder", func(t *testing.T) {
+		source := &domain.PlaceholderBackend{Title: "local"}
 		bc := BackendConfig{
 			Source: source,
 		}
 		result := resolveBackend(mediaDir, bc, mockLogger, mockLRU)
-		// Should instantiate local backend
+		// Placeholder should be replaced with real local backend
 		_, ok := result.(*backend.LocalFileSystemService)
 		assert.True(t, ok)
 	})
 
-	t.Run("Target only", func(t *testing.T) {
-		target := &mocks.Backend{NameVal: "local"}
+	t.Run("Source only - real backend passes through", func(t *testing.T) {
+		source := &mocks.Backend{NameVal: "s3"}
+		bc := BackendConfig{
+			Source: source,
+		}
+		result := resolveBackend(mediaDir, bc, mockLogger, mockLRU)
+		assert.Equal(t, source, result)
+	})
+
+	t.Run("Target only - placeholder", func(t *testing.T) {
+		target := &domain.PlaceholderBackend{Title: "local"}
 		bc := BackendConfig{
 			Target: target,
 		}
@@ -672,21 +682,21 @@ func TestResolveBackend(t *testing.T) {
 	})
 }
 
-func TestInstantiateIfLocal(t *testing.T) {
+func TestResolveIfPlaceholder(t *testing.T) {
 	mockLogger := &mocks.NoopLogger{}
 	mockLRU := &mocks.NoopLRUCache{}
 	mediaDir := "media"
 
-	t.Run("Returns LocalFileSystemService if backend name is local", func(t *testing.T) {
-		b := &mocks.Backend{NameVal: "local"}
-		result := instantiateIfLocal(b, mediaDir, mockLogger, mockLRU)
+	t.Run("Returns LocalFileSystemService if backend is a PlaceholderBackend", func(t *testing.T) {
+		b := &domain.PlaceholderBackend{Title: "local"}
+		result := resolveIfPlaceholder(b, mediaDir, mockLogger, mockLRU)
 		_, ok := result.(*backend.LocalFileSystemService)
 		assert.True(t, ok)
 	})
 
-	t.Run("Returns backend as is if name is not local", func(t *testing.T) {
+	t.Run("Returns backend as is if it is not a PlaceholderBackend", func(t *testing.T) {
 		b := &mocks.Backend{NameVal: "mock"}
-		result := instantiateIfLocal(b, mediaDir, mockLogger, mockLRU)
+		result := resolveIfPlaceholder(b, mediaDir, mockLogger, mockLRU)
 		assert.Equal(t, b, result)
 	})
 }

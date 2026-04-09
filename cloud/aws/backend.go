@@ -69,6 +69,18 @@ func (s *S3Backend) Name() string {
 	return NAME
 }
 
+// Ping verifies connectivity to the S3 bucket by performing a lightweight HeadBucket call.
+// Call this after NewBackend to catch credential or network issues early.
+func (s *S3Backend) Ping(ctx context.Context) error {
+	_, err := s.client.HeadBucket(ctx, &s3.HeadBucketInput{
+		Bucket: aws.String(s.bucketName),
+	})
+	if err != nil {
+		return fmt.Errorf("S3 connectivity check failed for bucket %q: %w", s.bucketName, err)
+	}
+	return nil
+}
+
 func (s *S3Backend) Put(ctx context.Context, path string, data []byte) error {
 	err := withRetry(ctx, 3, func() error {
 		_, err := s.client.PutObject(ctx, &s3.PutObjectInput{
@@ -195,20 +207,15 @@ func (s3b *S3Backend) Move(ctx context.Context, oldPath, newPath string) error {
 		return fmt.Errorf("failed to copy object: %w", err)
 	}
 
-	// Asynchronous best-effort delete
-	go func(bucket, key string) {
-		delCtx, cancel := context.WithTimeout(context.Background(), MOVE_TIMEOUT)
-		defer cancel()
-
-		_, delErr := s3b.client.DeleteObject(delCtx, &s3.DeleteObjectInput{
-			Bucket: aws.String(bucket),
-			Key:    aws.String(key),
-		})
-		if delErr != nil {
-			log.Printf("async delete failed for %s: %v\n", key, delErr)
-			// Optionally enqueue for retry
-		}
-	}(s3b.bucketName, oldPath)
+	// Delete the old object synchronously to ensure consistency
+	_, err = s3b.client.DeleteObject(ctx, &s3.DeleteObjectInput{
+		Bucket: aws.String(s3b.bucketName),
+		Key:    aws.String(oldPath),
+	})
+	if err != nil {
+		// Log but don't fail — the copy succeeded, old object is just orphaned
+		log.Printf("warning: failed to delete old object %s after move: %v\n", oldPath, err)
+	}
 
 	return nil
 }

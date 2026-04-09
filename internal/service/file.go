@@ -82,10 +82,10 @@ func (f *FileService) CreateFile(ctx context.Context, user_id, parent_id, file_n
 	// Get the file path
 	path := filepath.Join(parentFolder.Path, file_name)
 
-	// if flat namespaces is enabled save files with user_id prefix and uuid name
+	// if flat namespaces is enabled save files in root with uuid as name
 	if f.flatNameSpaces {
 		ext := filepath.Ext(file_name)
-		path = filepath.Join(user_id, uuid.New().String()+ext)
+		path = uuid.New().String() + ext
 	}
 
 	// Calculate the file hash from content only (not path)

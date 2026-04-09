@@ -676,7 +676,7 @@ func resolveBackend(mediaDir string, bc BackendConfig, log domain.BucktLogger, l
 
 		// Fallback logic for source
 		if bc.Source != nil {
-			source = instantiateIfLocal(bc.Source, mediaDir, log, lru)
+			source = resolveIfPlaceholder(bc.Source, mediaDir, log, lru)
 		} else {
 			log.Warn("⚠️ Migration enabled but source backend missing — falling back to local as source")
 			source = backend.NewLocalFileSystemService(log, mediaDir, lru)
@@ -684,7 +684,7 @@ func resolveBackend(mediaDir string, bc BackendConfig, log domain.BucktLogger, l
 
 		// Fallback logic for target
 		if bc.Target != nil {
-			target = instantiateIfLocal(bc.Target, mediaDir, log, lru)
+			target = resolveIfPlaceholder(bc.Target, mediaDir, log, lru)
 		} else {
 			log.Warn("⚠️ Migration enabled but target backend missing — falling back to local as target")
 			target = backend.NewLocalFileSystemService(log, mediaDir, lru)
@@ -696,8 +696,9 @@ func resolveBackend(mediaDir string, bc BackendConfig, log domain.BucktLogger, l
 			return backend.NewLocalFileSystemService(log, mediaDir, lru)
 		}
 
-		if source == target {
-			log.Errorf("❌ Migration enabled but source and target backends are the same instance — disabling migration and falling back to a single backend")
+		// Compare by name rather than pointer identity to catch same-bucket configs
+		if source.Name() == target.Name() {
+			log.Errorf("❌ Migration enabled but source and target backends have the same name (%s) — disabling migration and using source only", source.Name())
 			return source
 		}
 
@@ -708,11 +709,11 @@ func resolveBackend(mediaDir string, bc BackendConfig, log domain.BucktLogger, l
 	// Non-migration modes
 	switch {
 	case bc.Source != nil:
-		return instantiateIfLocal(bc.Source, mediaDir, log, lru)
+		return resolveIfPlaceholder(bc.Source, mediaDir, log, lru)
 
 	case bc.Target != nil:
 		log.Warn("⚠️ Using target backend as primary because source is missing")
-		return instantiateIfLocal(bc.Target, mediaDir, log, lru)
+		return resolveIfPlaceholder(bc.Target, mediaDir, log, lru)
 
 	default:
 		log.Warn("⚠️ No backend configured, falling back to local")
@@ -720,8 +721,11 @@ func resolveBackend(mediaDir string, bc BackendConfig, log domain.BucktLogger, l
 	}
 }
 
-func instantiateIfLocal(b Backend, mediaDir string, log domain.BucktLogger, lru domain.LRUCache) Backend {
-	if b.Name() == "local" {
+// resolveIfPlaceholder checks if the backend is a PlaceholderBackend (e.g. from
+// buckt.LocalBackend()) and replaces it with a real local backend instance.
+// User-provided cloud backends pass through unchanged.
+func resolveIfPlaceholder(b Backend, mediaDir string, log domain.BucktLogger, lru domain.LRUCache) Backend {
+	if _, ok := b.(*domain.PlaceholderBackend); ok {
 		return backend.NewLocalFileSystemService(log, mediaDir, lru)
 	}
 	return b

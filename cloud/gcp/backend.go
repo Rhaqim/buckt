@@ -39,9 +39,20 @@ func (g *GCPBackend) Name() string {
 	return "gcp"
 }
 
+// Ping verifies connectivity to the GCS bucket by checking its attributes.
+func (g *GCPBackend) Ping(ctx context.Context) error {
+	_, err := g.client.Bucket(g.bucketName).Attrs(ctx)
+	if err != nil {
+		return fmt.Errorf("GCS connectivity check failed for bucket %q: %w", g.bucketName, err)
+	}
+	return nil
+}
+
 func (g *GCPBackend) Put(ctx context.Context, path string, data []byte) error {
 	w := g.client.Bucket(g.bucketName).Object(path).NewWriter(ctx)
 	if _, err := w.Write(data); err != nil {
+		// Cancel the upload by closing the writer — GCS will discard the incomplete object
+		_ = w.Close()
 		return fmt.Errorf("failed to write object: %w", err)
 	}
 	if err := w.Close(); err != nil {
