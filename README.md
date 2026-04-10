@@ -4,7 +4,7 @@
 
 [![Go Report Card](https://goreportcard.com/badge/github.com/Rhaqim/buckt)](https://goreportcard.com/report/github.com/Rhaqim/buckt)
 [![GoDoc](https://godoc.org/github.com/Rhaqim/buckt?status.svg)](https://pkg.go.dev/github.com/Rhaqim/buckt)
-[![License](https://img.shields.io/github/license/Rhaqim/buckt)](LICENSE)
+[![License](https://img.shields.io/github/license/Rhaqim/buckt)](LICENCE)
 
 Buckt is a media storage package for Go applications that need to upload, organize, and serve files without rewriting storage logic for every project. It works out of the box with the local filesystem and SQLite, and scales up to S3, GCS, Azure Blob, and Cloudflare R2 with a single line of config.
 
