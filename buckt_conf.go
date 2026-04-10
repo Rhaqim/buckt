@@ -230,7 +230,57 @@ func FlatNameSpaces(flat bool) ConfigFunc {
 	}
 }
 
+// MigrationConfig describes a dual-write migration between two backends.
+// Files are written to From (source of truth) and mirrored to To. Reads fall
+// back to To if From doesn't have the file, with lazy migration on access.
+type MigrationConfig struct {
+	// From is the current backend in use, treated as the source of truth.
+	From Backend
+
+	// To is the destination backend that From is being migrated to.
+	To Backend
+}
+
+// WithBackend configures a single storage backend.
+//
+// For migration scenarios (writing to two backends and gradually moving data),
+// use WithMigration instead.
+//
+// Example:
+//
+//	s3, _ := aws.NewBackend(awsConfig)
+//	client, _ := buckt.Default(buckt.WithBackend(s3))
+func WithBackend(backend Backend) ConfigFunc {
+	return func(c *Config) {
+		c.Backend.Source = backend
+		c.Backend.Target = nil
+		c.Backend.MigrationEnabled = false
+	}
+}
+
+// WithMigration configures dual-write migration between two backends.
+// Writes go to both backends (with From as the source of truth); reads fall
+// back to To if From is missing the file. Use this when migrating from one
+// storage backend to another.
+//
+// Example:
+//
+//	s3, _ := aws.NewBackend(awsConfig)
+//	client, _ := buckt.Default(buckt.WithMigration(buckt.MigrationConfig{
+//		From: buckt.LocalBackend(),
+//		To:   s3,
+//	}))
+func WithMigration(mc MigrationConfig) ConfigFunc {
+	return func(c *Config) {
+		c.Backend.Source = mc.From
+		c.Backend.Target = mc.To
+		c.Backend.MigrationEnabled = true
+	}
+}
+
 // RegisterPrimaryBackend registers the primary backend for the Buckt application.
+//
+// Deprecated: Use WithBackend instead.
 func RegisterPrimaryBackend(backend Backend) ConfigFunc {
 	return func(c *Config) {
 		c.Backend.Source = backend
@@ -238,6 +288,9 @@ func RegisterPrimaryBackend(backend Backend) ConfigFunc {
 }
 
 // RegisterSecondaryBackend registers the secondary backend for the Buckt application.
+//
+// Deprecated: Use WithMigration instead, which bundles the source, target, and
+// migration enable flag into a single call.
 func RegisterSecondaryBackend(backend Backend) ConfigFunc {
 	return func(c *Config) {
 		c.Backend.Target = backend
@@ -245,6 +298,9 @@ func RegisterSecondaryBackend(backend Backend) ConfigFunc {
 }
 
 // EnableMigration enables dual-write migration mode in the Buckt application.
+//
+// Deprecated: Use WithMigration instead, which bundles the source, target, and
+// migration enable flag into a single call.
 func EnableMigration() ConfigFunc {
 	return func(c *Config) {
 		c.Backend.MigrationEnabled = true

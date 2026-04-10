@@ -28,9 +28,7 @@ func main() {
 		return
 	}
 
-	backend := buckt.RegisterPrimaryBackend(awsBackend)
-
-	client, err := buckt.Default(buckt.WithLog(buckt.LogConfig{}), backend)
+	client, err := buckt.Default(buckt.WithLog(buckt.LogConfig{}), buckt.WithBackend(awsBackend))
 	if err != nil {
 		fmt.Println(err)
 		return

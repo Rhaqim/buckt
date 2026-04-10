@@ -1,16 +1,9 @@
-// Package main demonstrates migration from local filesystem to AWS S3 storage using the buckt library.
-// This example shows how to configure and initialize a buckt client with AWS S3 as a secondary backend
-// for cloud storage migration scenarios.
+// Package main demonstrates migration from local filesystem to AWS S3 storage.
 //
-// The program sets up an AWS S3 backend with the necessary credentials and configuration,
-// registers it as a secondary backend with buckt, and initializes a default client
-// with logging capabilities enabled.
-//
-// Usage:
-//   - Replace the placeholder AWS credentials with actual values
-//   - Ensure the specified S3 bucket exists and is accessible
-//   - Pass in the enabled migration configuration to support dual-write operations
-//   - Run the program to establish a connection to AWS S3 through buckt
+// This example shows how to set up a dual-write migration: writes go to both
+// the local filesystem and S3, and reads fall back to S3 when the local copy
+// is missing. This is useful when transitioning an existing local deployment
+// to cloud storage without downtime.
 //
 // Prerequisites:
 //   - Valid AWS credentials (Access Key and Secret Key)
@@ -27,7 +20,6 @@ import (
 )
 
 func main() {
-
 	cloudConfig := aws.Config{
 		AccessKey: "accessKey",
 		SecretKey: "secretKey",
@@ -35,32 +27,30 @@ func main() {
 		Bucket:    "my-bucket",
 	}
 
-	// Initialize AWS S3 backend
 	awsBackend, err := aws.NewBackend(cloudConfig)
 	if err != nil {
 		fmt.Println("Failed to create AWS backend:", err)
 		return
 	}
 
-	// Ping the AWS backend to ensure connectivity before proceeding
 	if err := awsBackend.Ping(context.Background()); err != nil {
 		fmt.Println("Failed to connect to AWS backend:", err)
 		return
 	}
 
-	// Enable migration mode
-	migration := buckt.EnableMigration()
-
-	// Register AWS S3 as the secondary backend for migration target
-	backend := buckt.RegisterSecondaryBackend(awsBackend)
-
-	client, err := buckt.Default(buckt.WithLog(buckt.LogConfig{}), backend, migration)
+	// Configure dual-write migration: local -> S3
+	client, err := buckt.Default(
+		buckt.WithLog(buckt.LogConfig{}),
+		buckt.WithMigration(buckt.MigrationConfig{
+			From: buckt.LocalBackend(),
+			To:   awsBackend,
+		}),
+	)
 	if err != nil {
 		fmt.Println(err)
 		return
 	}
-
 	defer client.Close()
 
-	fmt.Println("Buckt Client initialized successfully")
+	fmt.Println("Buckt Client initialized successfully (migration mode: local -> S3)")
 }

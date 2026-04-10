@@ -26,7 +26,7 @@ func main() {
 		return
 	}
 
-	backend := buckt.RegisterPrimaryBackend(gcpBackend)
+	backend := buckt.WithBackend(gcpBackend)
 
 	client, err := buckt.Default(buckt.WithLog(buckt.LogConfig{}), backend)
 	if err != nil {

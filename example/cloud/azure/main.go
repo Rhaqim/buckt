@@ -27,7 +27,7 @@ func main() {
 		return
 	}
 
-	backend := buckt.RegisterPrimaryBackend(azureBackend)
+	backend := buckt.WithBackend(azureBackend)
 
 	client, err := buckt.Default(buckt.WithLog(buckt.LogConfig{}), backend)
 	if err != nil {
