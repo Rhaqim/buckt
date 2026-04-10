@@ -158,6 +158,12 @@ func (db *DB) Migrate(migrationEnabled bool) error {
 	}
 	db.log.GetLogger().Println("✅ FileModel migrated")
 
+	// Backfill file_models.user_id from the parent folder for any legacy rows
+	// that were created before the user_id column existed.
+	if err := db.backfillFileUserIDs(); err != nil {
+		db.log.Warn("file user_id backfill skipped: " + err.Error())
+	}
+
 	if migrationEnabled {
 		if err := db.AutoMigrate(&model.MigrationModel{}); err != nil {
 			return db.log.WrapErrorf("❌ failed to migrate MigrationModel: %w", err)
@@ -165,6 +171,46 @@ func (db *DB) Migrate(migrationEnabled bool) error {
 		db.log.GetLogger().Println("✅ MigrationModel migrated")
 	}
 
+	return nil
+}
+
+// backfillFileUserIDs populates file_models.user_id from the parent folder's
+// user_id for any rows where user_id is empty. This handles legacy data from
+// before the user_id column existed on file_models.
+func (db *DB) backfillFileUserIDs() error {
+	if !db.Migrator().HasColumn(&model.FileModel{}, "user_id") {
+		return nil
+	}
+
+	// Count first so we only log when there's actually work to do
+	var count int64
+	if err := db.Model(&model.FileModel{}).Where("user_id = ? OR user_id IS NULL", "").Count(&count).Error; err != nil {
+		return err
+	}
+	if count == 0 {
+		return nil
+	}
+
+	db.log.Infof("🔧 Backfilling user_id for %d legacy file rows...", count)
+
+	// Update via subquery — works on both SQLite and Postgres
+	err := db.Exec(`
+		UPDATE file_models
+		SET user_id = (
+			SELECT folder_models.user_id
+			FROM folder_models
+			WHERE folder_models.id = file_models.parent_id
+		)
+		WHERE (user_id = '' OR user_id IS NULL)
+		  AND EXISTS (
+			SELECT 1 FROM folder_models WHERE folder_models.id = file_models.parent_id
+		  )
+	`).Error
+	if err != nil {
+		return err
+	}
+
+	db.log.GetLogger().Println("✅ Backfilled file user_id from parent folders")
 	return nil
 }
 

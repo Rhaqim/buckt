@@ -119,6 +119,17 @@ func (f *FileRepository) DeleteFile(ctx context.Context, id uuid.UUID) (oldPath,
 
 	oldPath = file.Path
 
+	// Defense in depth: if user_id is empty (legacy data not yet backfilled),
+	// derive it from the parent folder so we don't move files into a phantom
+	// "empty user" trash bin.
+	if file.UserID == "" {
+		var parent model.FolderModel
+		if err := f.db.DB.WithContext(ctx).Select("user_id").First(&parent, file.ParentID).Error; err == nil && parent.UserID != "" {
+			file.UserID = parent.UserID
+			_ = f.db.DB.WithContext(ctx).Model(&file).Update("user_id", parent.UserID).Error
+		}
+	}
+
 	// Lookup or create the user's trash folder
 	trash, err := getOrCreateTrashFolder(ctx, f.db.DB, file.UserID)
 	if err != nil {

@@ -121,8 +121,12 @@ func (f *FolderRepository) GetFoldersPaginated(ctx context.Context, parent_id uu
 
 // MoveFolder implements domain.FolderRepository.
 func (f *FolderRepository) MoveFolder(ctx context.Context, folder_id uuid.UUID, new_parent_id uuid.UUID) error {
-	var newParentFolder model.FolderModel
+	// Reject self-move outright
+	if folder_id == new_parent_id {
+		return fmt.Errorf("invalid move: cannot move a folder into itself")
+	}
 
+	var newParentFolder model.FolderModel
 	if err := f.db.DB.WithContext(ctx).Where("id = ?", new_parent_id).First(&newParentFolder).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return fmt.Errorf("parent folder not found")
@@ -138,7 +142,12 @@ func (f *FolderRepository) MoveFolder(ctx context.Context, folder_id uuid.UUID, 
 		return err
 	}
 
-	// Prevent moving into its own subfolder
+	// Reject move into self by path equality (defense in depth)
+	if newParentFolder.Path == folder.Path {
+		return fmt.Errorf("invalid move: cannot move a folder into itself")
+	}
+
+	// Prevent moving into its own subfolder (descendant)
 	if strings.HasPrefix(newParentFolder.Path, folder.Path+"/") {
 		return fmt.Errorf("invalid move: cannot move a folder into its own subfolder")
 	}

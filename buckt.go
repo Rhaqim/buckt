@@ -66,9 +66,10 @@ func New(conf Config, opts ...ConfigFunc) (*Client, error) {
 		return nil, bucktLog.WrapErrorf("failed to initialize database", err)
 	}
 
-	// Migrate the database
+	// Migrate the database — fail fast on schema errors so we don't run
+	// against an incompatible schema and corrupt data.
 	if err = db.Migrate(conf.Backend.MigrationEnabled); err != nil {
-		bucktLog.WrapErrorf("failed to migrate database", err)
+		return nil, bucktLog.WrapErrorf("failed to migrate database", err)
 	}
 
 	// Initialize cache

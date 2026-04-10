@@ -54,19 +54,31 @@ func (d *MigrationBackendService) Put(ctx context.Context, path string, data []b
 	return nil
 }
 
-// Get reads from primary first, falls back to secondary.
+// Get reads from primary (source of truth) first. If the primary has the
+// file, it lazy-migrates forward to the secondary. If the primary is missing
+// the file, it falls back to the secondary (assumes the file was already
+// migrated forward and the primary has been cleaned up).
+//
+// Lazy migration is always primary -> secondary; we never write back to the
+// primary because that would risk overwriting authoritative data with stale
+// secondary data.
 func (d *MigrationBackendService) Get(ctx context.Context, path string) ([]byte, error) {
 	data, err := d.primaryBackend.Get(ctx, path)
+	if err == nil {
+		// Lazy forward migration: ensure secondary has a copy.
+		// Best-effort and async-style — we don't fail the Get if mirroring fails.
+		if exists, _ := d.secondaryBackend.Exists(ctx, path); !exists {
+			if putErr := d.secondaryBackend.Put(ctx, path, data); putErr != nil {
+				d.logger.Errorf("⚠️ Failed to lazy-migrate %s to secondary: %v", path, putErr)
+			}
+		}
+		return data, nil
+	}
+
+	d.logger.Errorf("Primary backend get failed, trying secondary: %v", err)
+	data, err = d.secondaryBackend.Get(ctx, path)
 	if err != nil {
-		d.logger.Errorf("Primary backend get failed, trying secondary: %v", err)
-		data, err = d.secondaryBackend.Get(ctx, path)
-		if err != nil {
-			return nil, fmt.Errorf("both backends failed to get %s: %w", path, err)
-		}
-		// Lazy migration: copy to primary since it was missing
-		if putErr := d.primaryBackend.Put(ctx, path, data); putErr != nil {
-			d.logger.Errorf("⚠️ Failed to lazy-migrate %s to primary: %v", path, putErr)
-		}
+		return nil, fmt.Errorf("both backends failed to get %s: %w", path, err)
 	}
 	return data, nil
 }

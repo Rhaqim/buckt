@@ -9,7 +9,7 @@ import (
 
 type FileModel struct {
 	ID          uuid.UUID `gorm:"type:uuid;primaryKey" json:"id"`                                       // File ID
-	UserID      string    `gorm:"index;default:''" json:"user_id"`                                      // Owner of the file
+	UserID      string    `gorm:"not null;index;default:''" json:"user_id"`                             // Owner of the file
 	Name        string    `gorm:"not null;uniqueIndex:idx_file_parent_name" json:"name"`                // File name
 	Path        string    `gorm:"not null;unique" json:"path"`                                          // File path
 	ContentType string    `gorm:"not null" json:"content_type"`                                         // MIME type (e.g., image/png, application/pdf)

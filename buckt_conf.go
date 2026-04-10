@@ -141,7 +141,8 @@ func LocalBackend() Backend {
 //	Log: Configuration for logging.
 //	MediaDir: Path to the directory where media files are stored.
 //	FlatNameSpaces: Flag indicating whether the application should use flat namespaces when storing files.
-// DefaultMaxFileSize is 100MB
+// DefaultMaxFileSize is a suggested file-size limit (100MB).
+// It is NOT applied automatically — pass it to WithMaxFileSize to opt in.
 const DefaultMaxFileSize int64 = 100 * 1024 * 1024
 
 type Config struct {
@@ -308,7 +309,15 @@ func EnableMigration() ConfigFunc {
 }
 
 // WithMaxFileSize sets the maximum allowed file size in bytes.
-// Default is 100MB if not set or set to 0.
+//
+// If unset or set to 0, no limit is enforced (backward-compatible default).
+// The DefaultMaxFileSize constant (100MB) is provided as a sensible value
+// to pass when you want a limit.
+//
+// Example:
+//
+//	buckt.WithMaxFileSize(buckt.DefaultMaxFileSize) // 100MB
+//	buckt.WithMaxFileSize(50 * 1024 * 1024)         // 50MB
 func WithMaxFileSize(size int64) ConfigFunc {
 	return func(c *Config) {
 		c.MaxFileSize = size
