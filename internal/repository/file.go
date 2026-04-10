@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -146,13 +147,29 @@ func (f *FileRepository) DeleteFile(ctx context.Context, id uuid.UUID) (oldPath,
 
 	// Move file into trash with a unique name
 	newName := uniqueFileTrashName(ctx, f.db.DB, trash.ID, file.Name)
-	newPath = trash.Path + "/" + newName
 
-	if err := f.db.DB.WithContext(ctx).Model(&file).Updates(map[string]interface{}{
+	// In flat-namespace mode the path is just "<uuid>.ext" with no directory
+	// component, and the storage backend stores files at that flat path. We
+	// must NOT rewrite the path to put it under the trash folder — the blob
+	// would still live at the original flat path on the backend, and any later
+	// read or permanent delete would fail. Detect flat mode by checking if the
+	// path has a directory component.
+	isFlatPath := !strings.Contains(file.Path, "/")
+
+	updates := map[string]interface{}{
 		"name":      newName,
-		"path":      newPath,
 		"parent_id": trash.ID,
-	}).Error; err != nil {
+	}
+	if !isFlatPath {
+		newPath = trash.Path + "/" + newName
+		updates["path"] = newPath
+	} else {
+		// Path stays the same in flat mode; signal "no backend move needed"
+		// by returning the same value for old and new.
+		newPath = file.Path
+	}
+
+	if err := f.db.DB.WithContext(ctx).Model(&file).Updates(updates).Error; err != nil {
 		return "", "", err
 	}
 	return oldPath, newPath, nil
@@ -174,7 +191,7 @@ func getOrCreateTrashFolder(ctx context.Context, db *gorm.DB, user_id string) (*
 	if err == nil {
 		return &trash, nil
 	}
-	if err != gorm.ErrRecordNotFound && err.Error() != "record not found" {
+	if !errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, err
 	}
 

@@ -423,22 +423,20 @@ func (f *FileService) DeleteFile(ctx context.Context, file_id string) (string, e
 	}
 
 	// Coordinate the backend with what happened in the DB
-	if newPath == "" {
-		// Permanent deletion (was already in trash) — remove from backend
-		if !f.flatNameSpaces {
-			if err := f.fileBackend.Delete(ctx, oldPath); err != nil {
-				f.logger.Warn("failed to delete file from backend: " + err.Error())
-			}
-		} else {
-			// In flat-namespace mode the path is just <uuid>.ext, no folder structure
-			if err := f.fileBackend.Delete(ctx, oldPath); err != nil {
-				f.logger.Warn("failed to delete file from backend: " + err.Error())
-			}
+	switch {
+	case newPath == "":
+		// Permanent deletion (file was already in trash). Remove the blob
+		// from the backend at its current path. This works in both flat
+		// and nested modes because oldPath always reflects the actual
+		// stored location.
+		if err := f.fileBackend.Delete(ctx, oldPath); err != nil {
+			f.logger.Warn("failed to delete file from backend: " + err.Error())
 		}
-	} else if !f.flatNameSpaces {
-		// Moved to trash — physically move on the backend so the file
-		// follows its new logical path. In flat-namespace mode the path
-		// doesn't reflect folder structure, so no backend move is needed.
+	case oldPath == newPath:
+		// Flat-namespace mode: only the parent_id changed in the DB.
+		// The blob's location on disk is unchanged, so no backend op needed.
+	default:
+		// Nested mode: the blob's logical path changed, physically move it.
 		if err := f.fileBackend.Move(ctx, oldPath, newPath); err != nil {
 			f.logger.Warn("failed to move file on backend: " + err.Error())
 		}

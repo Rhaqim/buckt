@@ -12,6 +12,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"math"
 
 	"github.com/Rhaqim/buckt/internal/backend"
 	"github.com/Rhaqim/buckt/internal/cache"
@@ -519,12 +520,6 @@ func (b *Client) UploadFileContext(ctx context.Context, user_id string, parent_i
 //   - string: The ID of the newly created file.
 //   - error: An error if the file upload fails, otherwise nil.
 func (b *Client) UploadFileFromReaderContext(ctx context.Context, user_id string, parent_id string, file_name string, content_type string, file_data io.Reader) (string, error) {
-	// Wrap reader with size limit if configured to prevent OOM on large uploads
-	reader := file_data
-	if b.maxFileSize > 0 {
-		reader = io.LimitReader(file_data, b.maxFileSize+1) // +1 to detect overflow
-	}
-
 	// Try to use Seeker for efficiency if available
 	if seeker, ok := file_data.(io.Seeker); ok {
 		fileSize, err := seeker.Seek(0, io.SeekEnd)
@@ -535,11 +530,15 @@ func (b *Client) UploadFileFromReaderContext(ctx context.Context, user_id string
 		if b.maxFileSize > 0 && fileSize > b.maxFileSize {
 			return "", fmt.Errorf("file size %d exceeds maximum allowed size %d bytes", fileSize, b.maxFileSize)
 		}
+		// Guard against int64 -> int overflow on 32-bit platforms
+		if fileSize < 0 || fileSize > int64(math.MaxInt) {
+			return "", fmt.Errorf("file size %d out of range for int allocation", fileSize)
+		}
 		if _, err = seeker.Seek(0, io.SeekStart); err != nil {
 			return "", err
 		}
 
-		file_bytes := make([]byte, fileSize)
+		file_bytes := make([]byte, int(fileSize))
 		if _, err = io.ReadFull(file_data, file_bytes); err != nil {
 			return "", err
 		}
@@ -547,6 +546,10 @@ func (b *Client) UploadFileFromReaderContext(ctx context.Context, user_id string
 	}
 
 	// Fallback: read with bounded reader for non-seekable streams
+	reader := file_data
+	if b.maxFileSize > 0 {
+		reader = io.LimitReader(file_data, b.maxFileSize+1) // +1 to detect overflow
+	}
 	file_bytes, err := io.ReadAll(reader)
 	if err != nil {
 		return "", err

@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -47,7 +48,7 @@ func (f *FolderRepository) GetRootFolder(ctx context.Context, user_id string) (*
 	err := f.db.DB.WithContext(ctx).Preload("Folders").Preload("Files").
 		Where("name = ? AND user_id = ?", constant.ROOT_FOLDER_NAME, user_id).First(&root).Error
 	if err != nil {
-		if err.Error() != "record not found" {
+		if !errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, err
 		}
 
@@ -78,7 +79,7 @@ func (f *FolderRepository) GetTrashFolder(ctx context.Context, user_id string) (
 	if err == nil {
 		return &trash, nil
 	}
-	if err.Error() != "record not found" {
+	if !errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, err
 	}
 

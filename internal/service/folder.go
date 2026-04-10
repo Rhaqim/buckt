@@ -3,12 +3,14 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"path/filepath"
 
 	"github.com/Rhaqim/buckt/internal/constant"
 	"github.com/Rhaqim/buckt/internal/domain"
 	"github.com/Rhaqim/buckt/internal/model"
 	"github.com/google/uuid"
+	"gorm.io/gorm"
 )
 
 type FolderService struct {
@@ -112,7 +114,7 @@ func (f *FolderService) GetFolder(ctx context.Context, user_id, folder_id string
 	// If not found in cache, fetch from database
 	folderPtr, err := f.repo.GetFolder(ctx, id)
 	if err != nil {
-		if err.Error() == "record not found" {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
 			folderPtr, err = f.repo.GetRootFolder(ctx, user_id)
 			if err != nil {
 				return nil, err
