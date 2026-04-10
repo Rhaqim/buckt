@@ -153,16 +153,17 @@ func (db *DB) Migrate(migrationEnabled bool) error {
 	}
 	db.log.GetLogger().Println("✅ FolderModel migrated")
 
+	// Pre-migration: backfill file_models.user_id BEFORE AutoMigrate tries to
+	// enforce NOT NULL on the column. On Postgres, AutoMigrate would fail if any
+	// existing rows had NULL user_id values.
+	if err := db.preBackfillFileUserIDs(); err != nil {
+		db.log.Warn("file user_id pre-backfill skipped: " + err.Error())
+	}
+
 	if err := db.AutoMigrate(&model.FileModel{}); err != nil {
 		return db.log.WrapErrorf("❌ failed to migrate FileModel: %w", err)
 	}
 	db.log.GetLogger().Println("✅ FileModel migrated")
-
-	// Backfill file_models.user_id from the parent folder for any legacy rows
-	// that were created before the user_id column existed.
-	if err := db.backfillFileUserIDs(); err != nil {
-		db.log.Warn("file user_id backfill skipped: " + err.Error())
-	}
 
 	if migrationEnabled {
 		if err := db.AutoMigrate(&model.MigrationModel{}); err != nil {
@@ -172,6 +173,31 @@ func (db *DB) Migrate(migrationEnabled bool) error {
 	}
 
 	return nil
+}
+
+// preBackfillFileUserIDs handles the case where the file_models table exists
+// but file_models.user_id is missing or has NULL/empty values. Runs before
+// AutoMigrate so the subsequent NOT NULL enforcement doesn't fail on Postgres.
+//
+// Steps:
+//  1. If file_models doesn't exist yet, nothing to do (fresh install)
+//  2. If user_id column doesn't exist, add it as nullable so we can backfill
+//  3. Backfill from parent folder's user_id where empty/null
+//
+// AutoMigrate will then upgrade the column to NOT NULL with default ''.
+func (db *DB) preBackfillFileUserIDs() error {
+	if !db.Migrator().HasTable(&model.FileModel{}) {
+		return nil // fresh install — nothing to backfill
+	}
+
+	if !db.Migrator().HasColumn(&model.FileModel{}, "user_id") {
+		// Add the column as nullable so the backfill can populate it
+		if err := db.Exec("ALTER TABLE file_models ADD COLUMN user_id TEXT").Error; err != nil {
+			return fmt.Errorf("failed to add user_id column: %w", err)
+		}
+	}
+
+	return db.backfillFileUserIDs()
 }
 
 // backfillFileUserIDs populates file_models.user_id from the parent folder's
