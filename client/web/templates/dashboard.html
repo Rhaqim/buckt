@@ -190,24 +190,70 @@
 		const idField = type === "folder" ? "folder_id" : "file_id";
 		const action = type === "folder" ? "/web/move-folder" : "/web/move-file/" + id;
 
-		mc.innerHTML = `
-			<div class="p-6">
-				<h3 class="text-lg font-semibold text-gray-800 mb-4">Move "${name}"</h3>
-				<form method="post" action="${action}">
-					<div class="mb-4">
-						<label class="block text-sm font-medium text-gray-600 mb-1">Target folder ID</label>
-						<input type="text" name="new_parent_id" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none" placeholder="Paste folder ID here" required>
-						<p class="text-xs text-gray-400 mt-1">Copy the target folder's ID from the URL bar</p>
-					</div>
-					<input type="hidden" name="${idField}" value="${id}">
+		mc.innerHTML = "";
 
-					<div class="flex justify-end space-x-2">
-						<button type="button" class="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200" onclick="closeModal()">Cancel</button>
-						<button type="submit" class="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700">Move</button>
-					</div>
-				</form>
-			</div>`;
+		const wrapper = document.createElement("div");
+		wrapper.className = "p-6";
 
+		const heading = document.createElement("h3");
+		heading.className = "text-lg font-semibold text-gray-800 mb-4";
+		heading.textContent = `Move "${name}"`;
+
+		const form = document.createElement("form");
+		form.method = "post";
+		form.action = action;
+
+		const fieldWrapper = document.createElement("div");
+		fieldWrapper.className = "mb-4";
+
+		const label = document.createElement("label");
+		label.className = "block text-sm font-medium text-gray-600 mb-1";
+		label.textContent = "Target folder ID";
+
+		const input = document.createElement("input");
+		input.type = "text";
+		input.name = "new_parent_id";
+		input.className = "w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none";
+		input.placeholder = "Paste folder ID here";
+		input.required = true;
+
+		const helpText = document.createElement("p");
+		helpText.className = "text-xs text-gray-400 mt-1";
+		helpText.textContent = "Copy the target folder's ID from the URL bar";
+
+		fieldWrapper.appendChild(label);
+		fieldWrapper.appendChild(input);
+		fieldWrapper.appendChild(helpText);
+
+		const hiddenInput = document.createElement("input");
+		hiddenInput.type = "hidden";
+		hiddenInput.name = idField;
+		hiddenInput.value = id;
+
+		const buttonRow = document.createElement("div");
+		buttonRow.className = "flex justify-end space-x-2";
+
+		const cancelButton = document.createElement("button");
+		cancelButton.type = "button";
+		cancelButton.className = "px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200";
+		cancelButton.textContent = "Cancel";
+		cancelButton.onclick = closeModal;
+
+		const submitButton = document.createElement("button");
+		submitButton.type = "submit";
+		submitButton.className = "px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700";
+		submitButton.textContent = "Move";
+
+		buttonRow.appendChild(cancelButton);
+		buttonRow.appendChild(submitButton);
+
+		form.appendChild(fieldWrapper);
+		form.appendChild(hiddenInput);
+		form.appendChild(buttonRow);
+
+		wrapper.appendChild(heading);
+		wrapper.appendChild(form);
+		mc.appendChild(wrapper);
 		m.classList.remove("hidden");
 		m.classList.add("flex");
 	}
