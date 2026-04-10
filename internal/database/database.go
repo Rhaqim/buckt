@@ -140,6 +140,14 @@ func (db *DB) Close() error {
 func (db *DB) Migrate(migrationEnabled bool) error {
 	db.log.Info("🚀 Running migrations...")
 
+	// Backward-compat: if upgrading from a version that used soft-deletes via
+	// deleted_at, the column may still exist with rows that should remain hidden.
+	// Hard-delete those rows so they don't suddenly reappear after we removed
+	// the gorm.DeletedAt field from the model.
+	if err := db.cleanupLegacySoftDeletes(); err != nil {
+		db.log.Warn("legacy soft-delete cleanup skipped: " + err.Error())
+	}
+
 	if err := db.AutoMigrate(&model.FolderModel{}); err != nil {
 		return db.log.WrapErrorf("❌ failed to migrate FolderModel: %w", err)
 	}
@@ -155,6 +163,38 @@ func (db *DB) Migrate(migrationEnabled bool) error {
 			return db.log.WrapErrorf("❌ failed to migrate MigrationModel: %w", err)
 		}
 		db.log.GetLogger().Println("✅ MigrationModel migrated")
+	}
+
+	return nil
+}
+
+// cleanupLegacySoftDeletes hard-deletes any rows that were soft-deleted under
+// the previous deleted_at scheme. Safe to call when the column doesn't exist
+// (errors are ignored at the call site). This must run BEFORE AutoMigrate so
+// that the deleted_at column hasn't been dropped yet.
+func (db *DB) cleanupLegacySoftDeletes() error {
+	hasFileCol := db.Migrator().HasColumn(&model.FileModel{}, "deleted_at")
+	hasFolderCol := db.Migrator().HasColumn(&model.FolderModel{}, "deleted_at")
+
+	if hasFileCol {
+		if err := db.Exec("DELETE FROM file_models WHERE deleted_at IS NOT NULL").Error; err != nil {
+			return err
+		}
+		db.log.GetLogger().Println("✅ Purged legacy soft-deleted files")
+		// Drop the column so it doesn't linger
+		if err := db.Migrator().DropColumn(&model.FileModel{}, "deleted_at"); err != nil {
+			db.log.Warn("could not drop file_models.deleted_at column: " + err.Error())
+		}
+	}
+
+	if hasFolderCol {
+		if err := db.Exec("DELETE FROM folder_models WHERE deleted_at IS NOT NULL").Error; err != nil {
+			return err
+		}
+		db.log.GetLogger().Println("✅ Purged legacy soft-deleted folders")
+		if err := db.Migrator().DropColumn(&model.FolderModel{}, "deleted_at"); err != nil {
+			db.log.Warn("could not drop folder_models.deleted_at column: " + err.Error())
+		}
 	}
 
 	return nil

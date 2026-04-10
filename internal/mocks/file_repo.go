@@ -42,12 +42,6 @@ func (m *FileRepository) GetFile(ctx context.Context, fileID uuid.UUID) (*model.
 	return args.Get(0).(*model.FileModel), args.Error(1)
 }
 
-// RestoreFileByPath implements domain.FileRepository.
-func (m *FileRepository) RestoreFile(ctx context.Context, parent_id uuid.UUID, name string) (*model.FileModel, error) {
-	args := m.Called(parent_id, name)
-	return args.Get(0).(*model.FileModel), args.Error(1)
-}
-
 func (m *FileRepository) GetFiles(ctx context.Context, parentID uuid.UUID) ([]*model.FileModel, error) {
 	args := m.Called(parentID)
 	return args.Get(0).([]*model.FileModel), args.Error(1)
@@ -63,9 +57,9 @@ func (m *FileRepository) Update(ctx context.Context, file *model.FileModel) erro
 	return args.Error(0)
 }
 
-func (m *FileRepository) DeleteFile(ctx context.Context, fileID uuid.UUID) error {
+func (m *FileRepository) DeleteFile(ctx context.Context, fileID uuid.UUID) (string, string, error) {
 	args := m.Called(fileID)
-	return args.Error(0)
+	return args.String(0), args.String(1), args.Error(2)
 }
 
 func (m *FileRepository) ScrubFile(ctx context.Context, fileID uuid.UUID) error {

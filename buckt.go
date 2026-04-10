@@ -10,6 +10,7 @@ package buckt
 
 import (
 	"context"
+	"fmt"
 	"io"
 
 	"github.com/Rhaqim/buckt/internal/backend"
@@ -234,6 +235,18 @@ func (b *Client) DeleteFolder(folder_id string) (string, error) {
 //   - error: An error object if the deletion fails, otherwise nil.
 func (b *Client) DeleteFolderPermanently(user_id, folder_id string) (string, error) {
 	return b.DeleteFolderPermanentlyContext(context.Background(), user_id, folder_id)
+}
+
+// GetTrashFolder returns the user's trash folder with its contents preloaded.
+//
+// Parameters:
+//   - user_id: The ID of the user.
+//
+// Returns:
+//   - *model.FolderModel: The trash folder model with its contents.
+//   - error: An error if the trash folder could not be retrieved.
+func (b *Client) GetTrashFolder(user_id string) (*model.FolderModel, error) {
+	return b.GetTrashFolderContext(context.Background(), user_id)
 }
 
 /* File Methods */
@@ -467,6 +480,11 @@ func (b *Client) DeleteFolderPermanentlyContext(ctx context.Context, user_id, fo
 	return b.folderService.ScrubFolder(ctx, user_id, folder_id)
 }
 
+// GetTrashFolderContext returns the user's trash folder with its contents preloaded.
+func (b *Client) GetTrashFolderContext(ctx context.Context, user_id string) (*model.FolderModel, error) {
+	return b.folderService.GetTrashFolder(ctx, user_id)
+}
+
 /* File Methods */
 
 // UploadFileContext uploads a file to the specified user's bucket.
@@ -500,11 +518,21 @@ func (b *Client) UploadFileContext(ctx context.Context, user_id string, parent_i
 //   - string: The ID of the newly created file.
 //   - error: An error if the file upload fails, otherwise nil.
 func (b *Client) UploadFileFromReaderContext(ctx context.Context, user_id string, parent_id string, file_name string, content_type string, file_data io.Reader) (string, error) {
+	// Wrap reader with size limit if configured to prevent OOM on large uploads
+	reader := file_data
+	if b.maxFileSize > 0 {
+		reader = io.LimitReader(file_data, b.maxFileSize+1) // +1 to detect overflow
+	}
+
 	// Try to use Seeker for efficiency if available
 	if seeker, ok := file_data.(io.Seeker); ok {
 		fileSize, err := seeker.Seek(0, io.SeekEnd)
 		if err != nil {
 			return "", err
+		}
+		// Reject before allocating if we know the size upfront
+		if b.maxFileSize > 0 && fileSize > b.maxFileSize {
+			return "", fmt.Errorf("file size %d exceeds maximum allowed size %d bytes", fileSize, b.maxFileSize)
 		}
 		if _, err = seeker.Seek(0, io.SeekStart); err != nil {
 			return "", err
@@ -517,10 +545,13 @@ func (b *Client) UploadFileFromReaderContext(ctx context.Context, user_id string
 		return b.fileService.CreateFile(ctx, user_id, parent_id, file_name, content_type, file_bytes)
 	}
 
-	// Fallback: read all bytes for non-seekable readers
-	file_bytes, err := io.ReadAll(file_data)
+	// Fallback: read with bounded reader for non-seekable streams
+	file_bytes, err := io.ReadAll(reader)
 	if err != nil {
 		return "", err
+	}
+	if b.maxFileSize > 0 && int64(len(file_bytes)) > b.maxFileSize {
+		return "", fmt.Errorf("file size exceeds maximum allowed size %d bytes", b.maxFileSize)
 	}
 
 	return b.fileService.CreateFile(ctx, user_id, parent_id, file_name, content_type, file_bytes)
@@ -659,7 +690,7 @@ func newAppServices(
 	var fileRepository domain.FileRepository = repository.NewFileRepository(db)
 
 	// initialize the services
-	var folderService domain.FolderService = service.NewFolderService(logger, cacheManager, folderRepository, activeBackend)
+	var folderService domain.FolderService = service.NewFolderService(logger, cacheManager, folderRepository, activeBackend, flatNameSpaces)
 	var fileService domain.FileService = service.NewFileService(logger, cacheManager, fileRepository, folderService, activeBackend, flatNameSpaces, maxFileSize)
 
 	logger.Info("✅ Initialized app services")

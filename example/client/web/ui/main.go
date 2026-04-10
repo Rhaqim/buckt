@@ -35,7 +35,7 @@ func main() {
 		config = buckt.WithDB(buckt.Postgres, db)
 	}
 
-	client, err := buckt.Default(buckt.FlatNameSpaces(true), config)
+	client, err := buckt.Default(buckt.FlatNameSpaces(false), config)
 	if err != nil {
 		log.Fatalf("Failed to initialize Buckt: %v", err)
 	}

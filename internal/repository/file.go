@@ -3,9 +3,9 @@ package repository
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/Rhaqim/buckt/internal/database"
-	"strings"
 	"github.com/Rhaqim/buckt/internal/domain"
 	"github.com/Rhaqim/buckt/internal/model"
 	"github.com/google/uuid"
@@ -21,48 +21,8 @@ func NewFileRepository(db *database.DB) domain.FileRepository {
 }
 
 // Create implements domain.FileRepository.
-// Subtle: this method shadows the method (*DB).Create of FileRepository.DB.WithContext(ctx).
 func (f *FileRepository) Create(ctx context.Context, file *model.FileModel) error {
 	return f.db.DB.WithContext(ctx).Create(file).Error
-}
-
-// RestoreFile finds a soft-deleted file by its original name and restores it.
-// Handles both mangled names (new deletes) and unmangled names (legacy deletes).
-func (f *FileRepository) RestoreFile(ctx context.Context, parent_id uuid.UUID, name string) (*model.FileModel, error) {
-	var file model.FileModel
-
-	// Try mangled name first (new-style soft-delete)
-	err := f.db.DB.WithContext(ctx).Unscoped().
-		Where("parent_id = ? AND name LIKE ? AND deleted_at IS NOT NULL", parent_id, name+".__deleted_%").
-		First(&file).Error
-
-	if err != nil {
-		// Fall back to exact name match (legacy soft-delete without mangling)
-		err = f.db.DB.WithContext(ctx).Unscoped().
-			Where("parent_id = ? AND name = ? AND deleted_at IS NOT NULL", parent_id, name).
-			First(&file).Error
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	// Restore: ensure name and path are the clean originals
-	suffix := ".__deleted_" + file.ID.String()
-	originalName := strings.TrimSuffix(file.Name, suffix)
-	originalPath := strings.TrimSuffix(file.Path, suffix)
-
-	err = f.db.DB.WithContext(ctx).Unscoped().Model(&file).Updates(map[string]interface{}{
-		"deleted_at": nil,
-		"name":       originalName,
-		"path":       originalPath,
-	}).Error
-	if err != nil {
-		return nil, err
-	}
-
-	file.Name = originalName
-	file.Path = originalPath
-	return &file, nil
 }
 
 // GetFile implements domain.FileRepository.
@@ -93,7 +53,7 @@ func (f *FileRepository) GetFilesPaginated(ctx context.Context, parent_id uuid.U
 }
 
 // MoveFile implements domain.FileRepository.
-func (f *FileRepository) MoveFile(ctx context.Context, file_id uuid.UUID, new_parent_id uuid.UUID) (string, string, error) { // TODO: MOdify function to accept file_id, new_parent_id, and new_name
+func (f *FileRepository) MoveFile(ctx context.Context, file_id uuid.UUID, new_parent_id uuid.UUID) (string, string, error) {
 	var newParentFolder model.FolderModel
 
 	if err := f.db.DB.WithContext(ctx).Where("id = ?", new_parent_id).First(&newParentFolder).Error; err != nil {
@@ -139,33 +99,110 @@ func (f *FileRepository) RenameFile(ctx context.Context, file_id uuid.UUID, new_
 }
 
 // Update implements domain.FileRepository.
-// Subtle: this method shadows the method (*DB).Update of FileRepository.DB.WithContext(ctx).
 func (f *FileRepository) Update(ctx context.Context, file *model.FileModel) error {
 	return f.db.DB.WithContext(ctx).Save(file).Error
 }
 
-// DeleteFile implements domain.FileRepository.
-func (f *FileRepository) DeleteFile(ctx context.Context, id uuid.UUID) error {
-	return f.db.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		var file model.FileModel
-		if err := tx.First(&file, id).Error; err != nil {
-			return err
-		}
+// DeleteFile moves the file to the user's trash folder. If the file is already
+// in trash, it is permanently deleted instead.
+//
+// Returns the file's old and new paths so the caller can move the underlying
+// data on the storage backend. If newPath is empty, the file was permanently
+// deleted (already in trash) and no backend move is needed — the caller should
+// call backend.Delete instead.
+func (f *FileRepository) DeleteFile(ctx context.Context, id uuid.UUID) (oldPath, newPath string, err error) {
+	var file model.FileModel
+	if err := f.db.DB.WithContext(ctx).First(&file, id).Error; err != nil {
+		return "", "", err
+	}
 
-		// Mangle path and name to free unique constraints for future files with the same name
-		suffix := ".__deleted_" + file.ID.String()
-		if err := tx.Model(&file).Updates(map[string]any{
-			"path": file.Path + suffix,
-			"name": file.Name + suffix,
-		}).Error; err != nil {
-			return err
-		}
+	oldPath = file.Path
 
-		return tx.Delete(&file).Error
-	})
+	// Lookup or create the user's trash folder
+	trash, err := getOrCreateTrashFolder(ctx, f.db.DB, file.UserID)
+	if err != nil {
+		return "", "", err
+	}
+
+	// If the file is already in trash, permanently delete it
+	if file.ParentID == trash.ID {
+		if err := f.db.DB.WithContext(ctx).Delete(&model.FileModel{}, id).Error; err != nil {
+			return "", "", err
+		}
+		return oldPath, "", nil
+	}
+
+	// Move file into trash with a unique name
+	newName := uniqueFileTrashName(ctx, f.db.DB, trash.ID, file.Name)
+	newPath = trash.Path + "/" + newName
+
+	if err := f.db.DB.WithContext(ctx).Model(&file).Updates(map[string]interface{}{
+		"name":      newName,
+		"path":      newPath,
+		"parent_id": trash.ID,
+	}).Error; err != nil {
+		return "", "", err
+	}
+	return oldPath, newPath, nil
 }
 
-// ScrubFile implements domain.FileRepository.
+// ScrubFile permanently deletes a file regardless of its location.
 func (f *FileRepository) ScrubFile(ctx context.Context, id uuid.UUID) error {
-	return f.db.DB.WithContext(ctx).Unscoped().Delete(&model.FileModel{}, id).Error
+	return f.db.DB.WithContext(ctx).Delete(&model.FileModel{}, id).Error
+}
+
+// getOrCreateTrashFolder returns the user's trash folder, creating it if missing.
+// This duplicates the FolderRepository logic to avoid a cross-repo dependency.
+func getOrCreateTrashFolder(ctx context.Context, db *gorm.DB, user_id string) (*model.FolderModel, error) {
+	const trashName = "__trash__"
+	var trash model.FolderModel
+
+	err := db.WithContext(ctx).
+		Where("name = ? AND user_id = ?", trashName, user_id).First(&trash).Error
+	if err == nil {
+		return &trash, nil
+	}
+	if err != gorm.ErrRecordNotFound && err.Error() != "record not found" {
+		return nil, err
+	}
+
+	path := "/" + user_id + "/" + trashName
+	trash = model.FolderModel{
+		UserID:      user_id,
+		Name:        trashName,
+		Description: "Trash",
+		Path:        path,
+	}
+	if err := db.WithContext(ctx).Create(&trash).Error; err != nil {
+		return nil, err
+	}
+	return &trash, nil
+}
+
+// uniqueFileTrashName returns a name that doesn't collide with existing files in the trash folder.
+func uniqueFileTrashName(ctx context.Context, db *gorm.DB, trashID uuid.UUID, name string) string {
+	var count int64
+	db.WithContext(ctx).Model(&model.FileModel{}).
+		Where("parent_id = ? AND name = ?", trashID, name).Count(&count)
+	if count == 0 {
+		return name
+	}
+
+	// Split into base and extension to insert the suffix sensibly
+	ext := ""
+	base := name
+	if idx := strings.LastIndex(name, "."); idx > 0 {
+		ext = name[idx:]
+		base = name[:idx]
+	}
+
+	for i := 2; i < 10000; i++ {
+		candidate := fmt.Sprintf("%s (%d)%s", base, i, ext)
+		db.WithContext(ctx).Model(&model.FileModel{}).
+			Where("parent_id = ? AND name = ?", trashID, candidate).Count(&count)
+		if count == 0 {
+			return candidate
+		}
+	}
+	return base + "-" + uuid.New().String()[:8] + ext
 }

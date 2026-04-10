@@ -142,7 +142,7 @@ func TestDeleteFile(t *testing.T) {
 
 	mockSetUp.backend.On("Delete", "/parent/folder/file.txt").Return(nil)
 
-	mockSetUp.fileRepository.On("DeleteFile", fileID).Return(nil)
+	mockSetUp.fileRepository.On("DeleteFile", fileID).Return("/parent/folder/file.txt", "", nil)
 
 	_, err := mockSetUp.fileService.DeleteFile(ctx, fileID.String())
 	assert.NoError(t, err)

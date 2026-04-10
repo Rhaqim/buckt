@@ -8,7 +8,6 @@ import (
 	"io"
 	"net/http"
 	"path/filepath"
-	"strings"
 
 	"github.com/Rhaqim/buckt/internal/domain"
 	"github.com/Rhaqim/buckt/internal/model"
@@ -109,19 +108,11 @@ func (f *FileService) CreateFile(ctx context.Context, user_id, parent_id, file_n
 	}
 
 	// Create the file
-	err = f.repo.Create(ctx, file)
-	if err != nil {
-		if strings.Contains(err.Error(), "UNIQUE constraint failed") || strings.Contains(err.Error(), "duplicate key") {
-			file, err = f.repo.RestoreFile(ctx, file.ParentID, file.Name)
-			if err != nil {
-				return "", f.logger.WrapError("failed to restore file", err)
-			}
-		} else {
-			return "", f.logger.WrapError("failed to create file", err)
-		}
+	if err = f.repo.Create(ctx, file); err != nil {
+		return "", f.logger.WrapError("failed to create file", err)
 	}
 
-	// Always write the file to the backend (including on restore, to update content)
+	// Write the file to the backend
 	if err := f.fileBackend.Put(ctx, file.Path, file_data); err != nil {
 		return "", err
 	}
@@ -425,9 +416,32 @@ func (f *FileService) DeleteFile(ctx context.Context, file_id string) (string, e
 		}
 	}
 
-	// Delete the file
-	if err := f.repo.DeleteFile(ctx, fileID); err != nil {
+	// Delete the file (moves to trash, or hard-deletes if already in trash)
+	oldPath, newPath, err := f.repo.DeleteFile(ctx, fileID)
+	if err != nil {
 		return parentID, f.logger.WrapError("failed to delete file", err)
+	}
+
+	// Coordinate the backend with what happened in the DB
+	if newPath == "" {
+		// Permanent deletion (was already in trash) — remove from backend
+		if !f.flatNameSpaces {
+			if err := f.fileBackend.Delete(ctx, oldPath); err != nil {
+				f.logger.Warn("failed to delete file from backend: " + err.Error())
+			}
+		} else {
+			// In flat-namespace mode the path is just <uuid>.ext, no folder structure
+			if err := f.fileBackend.Delete(ctx, oldPath); err != nil {
+				f.logger.Warn("failed to delete file from backend: " + err.Error())
+			}
+		}
+	} else if !f.flatNameSpaces {
+		// Moved to trash — physically move on the backend so the file
+		// follows its new logical path. In flat-namespace mode the path
+		// doesn't reflect folder structure, so no backend move is needed.
+		if err := f.fileBackend.Move(ctx, oldPath, newPath); err != nil {
+			f.logger.Warn("failed to move file on backend: " + err.Error())
+		}
 	}
 
 	return file.ParentID.String(), nil

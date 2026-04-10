@@ -126,24 +126,62 @@
 		const action = type === "folder" ? "/web/rename-folder" : "/web/rename-file";
 		const idField = type === "folder" ? "folder_id" : "file_id";
 
-		mc.innerHTML = `
-			<div class="p-6">
-				<h3 class="text-lg font-semibold text-gray-800 mb-4">Rename ${type}</h3>
-				<form method="post" action="${action}">
-					<div class="mb-4">
-						<label class="block text-sm font-medium text-gray-600 mb-1">New name</label>
-						<input type="text" name="new_name" value="${currentName}" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none" required autofocus>
-					</div>
-					<input type="hidden" name="${idField}" value="${id}">
-					<div class="flex justify-end space-x-2">
-						<button type="button" class="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200" onclick="closeModal()">Cancel</button>
-						<button type="submit" class="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700">Rename</button>
-					</div>
-				</form>
-			</div>`;
+		// Build modal with DOM APIs to avoid XSS from user-controlled names
+		mc.innerHTML = "";
+		const wrapper = document.createElement("div");
+		wrapper.className = "p-6";
+
+		const heading = document.createElement("h3");
+		heading.className = "text-lg font-semibold text-gray-800 mb-4";
+		heading.textContent = "Rename " + type;
+		wrapper.appendChild(heading);
+
+		const form = document.createElement("form");
+		form.method = "post";
+		form.action = action;
+
+		const fieldDiv = document.createElement("div");
+		fieldDiv.className = "mb-4";
+		const label = document.createElement("label");
+		label.className = "block text-sm font-medium text-gray-600 mb-1";
+		label.textContent = "New name";
+		const input = document.createElement("input");
+		input.type = "text";
+		input.name = "new_name";
+		input.value = currentName;
+		input.required = true;
+		input.className = "w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none";
+		fieldDiv.appendChild(label);
+		fieldDiv.appendChild(input);
+		form.appendChild(fieldDiv);
+
+		const hidden = document.createElement("input");
+		hidden.type = "hidden";
+		hidden.name = idField;
+		hidden.value = id;
+		form.appendChild(hidden);
+
+		const btnRow = document.createElement("div");
+		btnRow.className = "flex justify-end space-x-2";
+		const cancelBtn = document.createElement("button");
+		cancelBtn.type = "button";
+		cancelBtn.className = "px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200";
+		cancelBtn.textContent = "Cancel";
+		cancelBtn.addEventListener("click", closeModal);
+		const submitBtn = document.createElement("button");
+		submitBtn.type = "submit";
+		submitBtn.className = "px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700";
+		submitBtn.textContent = "Rename";
+		btnRow.appendChild(cancelBtn);
+		btnRow.appendChild(submitBtn);
+		form.appendChild(btnRow);
+
+		wrapper.appendChild(form);
+		mc.appendChild(wrapper);
 
 		m.classList.remove("hidden");
 		m.classList.add("flex");
+		input.focus();
 	}
 
 	function openMoveModal(type, id, name) {
@@ -217,6 +255,25 @@
 		document.querySelectorAll(".context-menu").forEach(el => el.classList.add("hidden"));
 	});
 
+	/* Action buttons — read name from data-name on the card, not inline JS */
+	document.addEventListener("click", function(e) {
+		const renameBtn = e.target.closest(".action-rename");
+		if (renameBtn) {
+			const card = document.getElementById((renameBtn.dataset.type === "folder" ? "folder-" : "file-") + renameBtn.dataset.id);
+			const name = card ? card.dataset.name : "";
+			openRenameModal(renameBtn.dataset.type, renameBtn.dataset.id, name);
+			return;
+		}
+
+		const moveBtn = e.target.closest(".action-move");
+		if (moveBtn) {
+			const card = document.getElementById((moveBtn.dataset.type === "folder" ? "folder-" : "file-") + moveBtn.dataset.id);
+			const name = card ? card.dataset.name : "";
+			openMoveModal(moveBtn.dataset.type, moveBtn.dataset.id, name);
+			return;
+		}
+	});
+
 	/* DRAG AND DROP */
 	function allowDrop(e) { e.preventDefault(); }
 
@@ -258,19 +315,24 @@
 		if (data.id === targetId) return; // Can't drop on self
 
 		if (data.type === "file") {
-			// Move file via form submission
 			const form = document.createElement("form");
 			form.method = "POST";
-			form.action = "/web/move-file/" + data.id;
-			form.innerHTML = `<input type="hidden" name="new_parent_id" value="${targetId}">`;
+			form.action = "/web/move-file/" + encodeURIComponent(data.id);
+			const inp = document.createElement("input");
+			inp.type = "hidden"; inp.name = "new_parent_id"; inp.value = targetId;
+			form.appendChild(inp);
 			document.body.appendChild(form);
 			form.submit();
 		} else {
-			// Move folder
 			const form = document.createElement("form");
 			form.method = "POST";
 			form.action = "/web/move-folder";
-			form.innerHTML = `<input type="hidden" name="folder_id" value="${data.id}"><input type="hidden" name="new_parent_id" value="${targetId}">`;
+			const inp1 = document.createElement("input");
+			inp1.type = "hidden"; inp1.name = "folder_id"; inp1.value = data.id;
+			const inp2 = document.createElement("input");
+			inp2.type = "hidden"; inp2.name = "new_parent_id"; inp2.value = targetId;
+			form.appendChild(inp1);
+			form.appendChild(inp2);
 			document.body.appendChild(form);
 			form.submit();
 		}

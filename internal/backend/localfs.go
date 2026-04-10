@@ -41,11 +41,22 @@ func (bfs *LocalFileSystemService) Name() string {
 }
 
 func (bfs *LocalFileSystemService) resolve(path string) (string, error) {
-	full := filepath.Join(bfs.mediaDir, filepath.Clean("/"+path))
-	cleanBase := filepath.Clean(bfs.mediaDir)
-	if !strings.HasPrefix(full, cleanBase+string(os.PathSeparator)) && full != cleanBase {
+	// Strip leading slashes to make the path relative, then clean
+	cleaned := filepath.Clean(strings.TrimLeft(path, "/\\"))
+
+	// Reject paths that escape upward after cleaning
+	if cleaned == ".." || strings.HasPrefix(cleaned, ".."+string(os.PathSeparator)) {
 		return "", ErrPathTraversal
 	}
+
+	full := filepath.Join(bfs.mediaDir, cleaned)
+
+	// Final safety check: ensure the resolved path is under mediaDir
+	cleanBase := filepath.Clean(bfs.mediaDir) + string(os.PathSeparator)
+	if !strings.HasPrefix(filepath.Clean(full)+string(os.PathSeparator), cleanBase) {
+		return "", ErrPathTraversal
+	}
+
 	return full, nil
 }
 

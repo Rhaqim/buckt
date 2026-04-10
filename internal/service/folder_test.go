@@ -26,7 +26,7 @@ func setupFolderTest() MockFolderServices {
 	mockFolderRepo := new(mocks.FolderRepository)
 	mockFileSystemService := new(mocks.LocalFileSystemService)
 
-	folderService := NewFolderService(mockLogger, mockCache, mockFolderRepo, mockFileSystemService)
+	folderService := NewFolderService(mockLogger, mockCache, mockFolderRepo, mockFileSystemService, true)
 
 	return MockFolderServices{
 		folderService:    folderService,
@@ -142,7 +142,7 @@ func TestDeleteFolder(t *testing.T) {
 	folderID := uuid.MustParse("550e8400-e29b-41d4-a716-446655440000")
 	parentID := uuid.MustParse("550e8400-e29b-41d4-a716-446655440001")
 
-	mockSetUp.folderRepository.On("DeleteFolder", folderID).Return(parentID.String(), nil)
+	mockSetUp.folderRepository.On("DeleteFolder", folderID).Return(parentID.String(), "", "", nil)
 
 	returnedParentID, err := mockSetUp.folderService.DeleteFolder(ctx, folderID.String())
 	assert.NoError(t, err)

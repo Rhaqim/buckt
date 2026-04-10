@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"path/filepath"
-	"strings"
 
 	"github.com/Rhaqim/buckt/internal/constant"
 	"github.com/Rhaqim/buckt/internal/domain"
@@ -19,7 +18,8 @@ type FolderService struct {
 
 	repo domain.FolderRepository
 
-	backend domain.FileBackend
+	backend        domain.FileBackend
+	flatNameSpaces bool
 }
 
 func NewFolderService(
@@ -27,13 +27,15 @@ func NewFolderService(
 	cacheManager domain.CacheManager,
 	folderRepository domain.FolderRepository,
 	backend domain.FileBackend,
+	flatNameSpaces bool,
 ) domain.FolderService {
 	bucktLogger.Info("🚀 Initialising folder services")
 	return &FolderService{
-		logger:  bucktLogger,
-		cache:   cacheManager,
-		repo:    folderRepository,
-		backend: backend,
+		logger:         bucktLogger,
+		cache:          cacheManager,
+		repo:           folderRepository,
+		backend:        backend,
+		flatNameSpaces: flatNameSpaces,
 	}
 }
 
@@ -71,15 +73,6 @@ func (f *FolderService) CreateFolder(ctx context.Context, user_id, parent_id, fo
 
 	new_folder_id, err := f.repo.Create(ctx, folder)
 	if err != nil {
-		// If a unique constraint fails, try to restore a soft-deleted folder with the same name
-		if strings.Contains(err.Error(), "UNIQUE constraint failed") || strings.Contains(err.Error(), "duplicate key") {
-			restored, restoreErr := f.repo.RestoreFolder(ctx, user_id, parentFolder.ID, folder_name)
-			if restoreErr == nil {
-				return restored.ID.String(), nil
-			}
-			// No soft-deleted folder to restore — the name is taken by a live folder
-			return "", f.logger.WrapError("a folder with this name already exists", err)
-		}
 		return "", f.logger.WrapError("failed to create folder", err)
 	}
 
@@ -150,6 +143,18 @@ func (f *FolderService) GetRootFolder(ctx context.Context, user_id string) (*mod
 	return rootFolder, nil
 }
 
+// GetTrashFolder implements domain.FolderService.
+// Returns the user's trash folder with its current contents preloaded.
+func (f *FolderService) GetTrashFolder(ctx context.Context, user_id string) (*model.FolderModel, error) {
+	trash, err := f.repo.GetTrashFolder(ctx, user_id)
+	if err != nil {
+		return nil, f.logger.WrapError("failed to get trash folder", err)
+	}
+
+	// Preload contents
+	return f.repo.GetFolder(ctx, trash.ID)
+}
+
 // GetFolders implements domain.FolderService.
 // Subtle: this method shadows the method (FolderRepository).GetFolders of FolderService.repo.
 func (f *FolderService) GetFolders(ctx context.Context, parent_id string) ([]model.FolderModel, error) {
@@ -202,15 +207,34 @@ func (f *FolderService) RenameFolder(ctx context.Context, user_id string, folder
 }
 
 // DeleteFolder implements domain.FolderService.
+// Moves the folder to trash (or hard-deletes if already in trash) and
+// coordinates the storage backend so files physically follow their new paths.
 func (f *FolderService) DeleteFolder(ctx context.Context, folder_id string) (string, error) {
 	folderID, err := uuid.Parse(folder_id)
 	if err != nil {
 		return "", f.logger.WrapError("failed to parse uuid", err)
 	}
 
-	parent_id, err := f.repo.DeleteFolder(ctx, folderID)
+	parent_id, oldPath, newPath, fileMoves, err := f.repo.DeleteFolder(ctx, folderID)
 	if err != nil {
 		return "", f.logger.WrapError("failed to delete folder", err)
+	}
+
+	// Coordinate the backend (only when paths actually represent disk layout)
+	if !f.flatNameSpaces {
+		if newPath == "" {
+			// Permanent deletion — remove the whole prefix from backend
+			if err := f.backend.DeleteFolder(ctx, oldPath); err != nil {
+				f.logger.Warn("failed to delete folder from backend: " + err.Error())
+			}
+		} else {
+			// Move every file under the folder to its new path
+			for _, mv := range fileMoves {
+				if err := f.backend.Move(ctx, mv.Old, mv.New); err != nil {
+					f.logger.Warn("failed to move file on backend: " + err.Error())
+				}
+			}
+		}
 	}
 
 	return parent_id, nil

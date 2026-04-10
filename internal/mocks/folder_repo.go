@@ -24,6 +24,12 @@ func (m *FolderRepository) GetRootFolder(ctx context.Context, user_id string) (*
 	return args.Get(0).(*model.FolderModel), args.Error(1)
 }
 
+// GetTrashFolder implements domain.FolderRepository.
+func (m *FolderRepository) GetTrashFolder(ctx context.Context, user_id string) (*model.FolderModel, error) {
+	args := m.Called(user_id)
+	return args.Get(0).(*model.FolderModel), args.Error(1)
+}
+
 func (m *FolderRepository) Create(ctx context.Context, folder *model.FolderModel) (string, error) {
 	args := m.Called(folder)
 	return args.Get(0).(string), args.Error(1)
@@ -31,11 +37,6 @@ func (m *FolderRepository) Create(ctx context.Context, folder *model.FolderModel
 
 func (m *FolderRepository) GetFolder(ctx context.Context, id uuid.UUID) (*model.FolderModel, error) {
 	args := m.Called(id)
-	return args.Get(0).(*model.FolderModel), args.Error(1)
-}
-
-func (m *FolderRepository) RestoreFolder(ctx context.Context, user_id string, parent_id uuid.UUID, name string) (*model.FolderModel, error) {
-	args := m.Called(user_id, parent_id, name)
 	return args.Get(0).(*model.FolderModel), args.Error(1)
 }
 
@@ -60,9 +61,9 @@ func (m *FolderRepository) RenameFolder(ctx context.Context, user_id string, fol
 }
 
 // DeleteFolder implements domain.FolderRepository.
-func (m *FolderRepository) DeleteFolder(ctx context.Context, folder_id uuid.UUID) (parent_id string, err error) {
+func (m *FolderRepository) DeleteFolder(ctx context.Context, folder_id uuid.UUID) (parent_id, oldPath, newPath string, fileMoves []model.PathMove, err error) {
 	args := m.Called(folder_id)
-	return args.String(0), args.Error(1)
+	return args.String(0), args.String(1), args.String(2), nil, args.Error(3)
 }
 
 // ScrubFolder implements domain.FolderRepository.
