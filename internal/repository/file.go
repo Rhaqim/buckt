@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/Rhaqim/buckt/internal/constant"
 	"github.com/Rhaqim/buckt/internal/database"
 	"github.com/Rhaqim/buckt/internal/domain"
 	"github.com/Rhaqim/buckt/internal/model"
@@ -154,7 +155,7 @@ func (f *FileRepository) ScrubFile(ctx context.Context, id uuid.UUID) error {
 // getOrCreateTrashFolder returns the user's trash folder, creating it if missing.
 // This duplicates the FolderRepository logic to avoid a cross-repo dependency.
 func getOrCreateTrashFolder(ctx context.Context, db *gorm.DB, user_id string) (*model.FolderModel, error) {
-	const trashName = "__trash__"
+	const trashName = constant.TRASH_FOLDER_NAME
 	var trash model.FolderModel
 
 	err := db.WithContext(ctx).
