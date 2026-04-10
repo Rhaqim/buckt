@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"io"
 	"mime/multipart"
+	"net/url"
+	"strings"
 )
 
 // ProcessFile reads a multipart file header into memory and returns the filename and bytes.
@@ -40,4 +42,22 @@ func ProcessFileWithLimit(file *multipart.FileHeader, maxSize int64) (string, []
 	}
 
 	return file.Filename, data, nil
+}
+
+
+// SafeContentDisposition builds a Content-Disposition header value that is
+// safe against header injection. It sanitizes path separators from the
+// filename and percent-encodes the result using RFC 5987 / 6266 filename*
+// syntax so that non-ASCII characters are preserved without breaking the
+// header.
+//
+// Example:
+//
+//	c.Header("Content-Disposition", fileutil.SafeContentDisposition("attachment", file.Name))
+func SafeContentDisposition(disposition, filename string) string {
+	// Sanitize path separators so the filename is always a single component
+	filename = strings.ReplaceAll(filename, "/", "_")
+	filename = strings.ReplaceAll(filename, "\\", "_")
+	encoded := url.PathEscape(filename)
+	return fmt.Sprintf("%s; filename*=UTF-8''%s", disposition, encoded)
 }

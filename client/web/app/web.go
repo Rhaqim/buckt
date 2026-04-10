@@ -1,10 +1,6 @@
 package app
 
 import (
-	"fmt"
-	"net/url"
-	"strings"
-
 	"github.com/Rhaqim/buckt"
 	"github.com/Rhaqim/buckt/client/web/domain"
 	"github.com/Rhaqim/buckt/pkg/fileutil"
@@ -248,7 +244,7 @@ func (svc *WebService) DownloadFile(c *gin.Context) {
 	}
 
 	// serve the file
-	c.Header("Content-Disposition", webSafeContentDisposition("attachment", file.Name))
+	c.Header("Content-Disposition", fileutil.SafeContentDisposition("attachment", file.Name))
 	c.Header("Content-Type", file.ContentType)
 	c.Header("X-Content-Type-Options", "nosniff")
 	c.Data(200, file.ContentType, file.Data)
@@ -321,11 +317,4 @@ func (svc *WebService) DeleteFilePermanently(c *gin.Context) {
 	}
 
 	c.JSON(200, response.Success("file deleted"))
-}
-
-func webSafeContentDisposition(disposition, filename string) string {
-	filename = strings.ReplaceAll(filename, "/", "_")
-	filename = strings.ReplaceAll(filename, "\\", "_")
-	encoded := url.PathEscape(filename)
-	return fmt.Sprintf(`%s; filename*=UTF-8''%s`, disposition, encoded)
 }

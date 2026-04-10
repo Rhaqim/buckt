@@ -3,7 +3,6 @@ package app
 import (
 	"fmt"
 	"io"
-	"net/url"
 	"strconv"
 	"strings"
 
@@ -272,7 +271,7 @@ func (svc *APIService) DownloadFile(c *gin.Context) {
 
 	// Set headers
 	c.Header("Cache-Control", "public, max-age=86400")
-	c.Header("Content-Disposition", safeContentDisposition("attachment", file.Name))
+	c.Header("Content-Disposition", fileutil.SafeContentDisposition("attachment", file.Name))
 	c.Header("Content-Type", file.ContentType)
 	c.Header("Content-Length", fmt.Sprintf("%d", file.Size))
 	c.Header("X-Content-Type-Options", "nosniff")
@@ -304,7 +303,7 @@ func (svc *APIService) ServeFile(c *gin.Context) {
 
 	// Set headers
 	c.Header("Cache-Control", "public, max-age=86400")
-	c.Header("Content-Disposition", safeContentDisposition("inline", file.Name))
+	c.Header("Content-Disposition", fileutil.SafeContentDisposition("inline", file.Name))
 	c.Header("Content-Type", file.ContentType)
 	c.Header("Content-Length", fmt.Sprintf("%d", file.Size))
 	c.Header("X-Content-Type-Options", "nosniff")
@@ -329,7 +328,7 @@ func (svc *APIService) StreamFile(c *gin.Context) {
 	defer stream.Close()
 
 	// Set headers
-	c.Header("Content-Disposition", safeContentDisposition("attachment", file.Name))
+	c.Header("Content-Disposition", fileutil.SafeContentDisposition("attachment", file.Name))
 	c.Header("Content-Type", file.ContentType)
 	c.Header("Content-Length", fmt.Sprintf("%d", file.Size))
 	c.Header("X-Content-Type-Options", "nosniff")
@@ -439,17 +438,6 @@ func (svc *APIService) DeleteFilePermanently(c *gin.Context) {
 
 func (f *APIService) constructURL(s string) string {
 	return fmt.Sprintf("/serve/%s", s)
-}
-
-// safeContentDisposition builds a Content-Disposition header value that is safe
-// against header injection. It percent-encodes the filename per RFC 6266.
-func safeContentDisposition(disposition, filename string) string {
-	// Sanitize: remove path separators
-	filename = strings.ReplaceAll(filename, "/", "_")
-	filename = strings.ReplaceAll(filename, "\\", "_")
-	// Use RFC 5987 encoding for the filename
-	encoded := url.PathEscape(filename)
-	return fmt.Sprintf(`%s; filename*=UTF-8''%s`, disposition, encoded)
 }
 
 func parseRange(rangeHeader string, fileSize int64) (start, end int64, err error) {

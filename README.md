@@ -526,4 +526,4 @@ Every method has a `*Context` variant that takes an explicit `context.Context` f
 
 ## License
 
-MIT — see [LICENSE](LICENCE) for details.
+MIT — see [LICENCE](LICENCE) for details.

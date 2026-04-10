@@ -59,7 +59,7 @@ func (f *FileRepository) MoveFile(ctx context.Context, file_id uuid.UUID, new_pa
 	var newParentFolder model.FolderModel
 
 	if err := f.db.DB.WithContext(ctx).Where("id = ?", new_parent_id).First(&newParentFolder).Error; err != nil {
-		if err == gorm.ErrRecordNotFound {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return "", "", fmt.Errorf("parent folder not found")
 		}
 		return "", "", err
@@ -67,7 +67,7 @@ func (f *FileRepository) MoveFile(ctx context.Context, file_id uuid.UUID, new_pa
 
 	var file model.FileModel
 	if err := f.db.DB.WithContext(ctx).First(&file, file_id).Error; err != nil {
-		if err == gorm.ErrRecordNotFound {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return "", "", fmt.Errorf("file not found")
 		}
 		return "", "", err
@@ -89,7 +89,7 @@ func (f *FileRepository) MoveFile(ctx context.Context, file_id uuid.UUID, new_pa
 func (f *FileRepository) RenameFile(ctx context.Context, file_id uuid.UUID, new_name string) error {
 	var file model.FileModel
 	if err := f.db.DB.WithContext(ctx).First(&file, file_id).Error; err != nil {
-		if err == gorm.ErrRecordNotFound {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return fmt.Errorf("file not found")
 		}
 		return err
@@ -153,8 +153,9 @@ func (f *FileRepository) DeleteFile(ctx context.Context, id uuid.UUID) (oldPath,
 	// must NOT rewrite the path to put it under the trash folder — the blob
 	// would still live at the original flat path on the backend, and any later
 	// read or permanent delete would fail. Detect flat mode by checking if the
-	// path has a directory component.
-	isFlatPath := !strings.Contains(file.Path, "/")
+	// path has any directory separator (either / or \\, since filepath.Join
+	// on Windows can produce backslashes).
+	isFlatPath := !strings.ContainsAny(file.Path, "/\\")
 
 	updates := map[string]interface{}{
 		"name":      newName,

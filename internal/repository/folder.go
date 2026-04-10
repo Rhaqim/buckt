@@ -129,7 +129,7 @@ func (f *FolderRepository) MoveFolder(ctx context.Context, folder_id uuid.UUID, 
 
 	var newParentFolder model.FolderModel
 	if err := f.db.DB.WithContext(ctx).Where("id = ?", new_parent_id).First(&newParentFolder).Error; err != nil {
-		if err == gorm.ErrRecordNotFound {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return fmt.Errorf("parent folder not found")
 		}
 		return err
@@ -137,7 +137,7 @@ func (f *FolderRepository) MoveFolder(ctx context.Context, folder_id uuid.UUID, 
 
 	var folder model.FolderModel
 	if err := f.db.DB.WithContext(ctx).Where("id = ?", folder_id).First(&folder).Error; err != nil {
-		if err == gorm.ErrRecordNotFound {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return fmt.Errorf("folder not found")
 		}
 		return err
@@ -192,7 +192,7 @@ func (f *FolderRepository) MoveFolder(ctx context.Context, folder_id uuid.UUID, 
 func (f *FolderRepository) RenameFolder(ctx context.Context, user_id string, folder_id uuid.UUID, new_name string) error {
 	var folder model.FolderModel
 	if err := f.db.DB.WithContext(ctx).Where("id = ? AND user_id = ?", folder_id, user_id).First(&folder).Error; err != nil {
-		if err == gorm.ErrRecordNotFound {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return fmt.Errorf("folder not found")
 		}
 		return err
@@ -318,12 +318,11 @@ func (f *FolderRepository) DeleteFolder(ctx context.Context, folder_id uuid.UUID
 	return parent_id, oldPath, newPath, fileMoves, nil
 }
 
-
 // ScrubFolder permanently deletes a folder and all its contents.
 func (f *FolderRepository) ScrubFolder(ctx context.Context, user_id string, folder_id uuid.UUID) (parent_id string, err error) {
 	var folder model.FolderModel
 	if err := f.db.DB.WithContext(ctx).Where("id = ? AND user_id = ?", folder_id, user_id).First(&folder).Error; err != nil {
-		if err == gorm.ErrRecordNotFound {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return "", fmt.Errorf("folder not found")
 		}
 		return "", err
