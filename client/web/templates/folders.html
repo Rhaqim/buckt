@@ -32,7 +32,8 @@
 			<button type="button" class="action-rename w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50" data-type="folder" data-id="{{ .ID }}">Rename</button>
 			<button type="button" class="action-move w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50" data-type="folder" data-id="{{ .ID }}">Move</button>
 			<hr class="my-1">
-			<button type="button" hx-delete="/web/folder/{{ .ID }}" hx-target="#folder-{{ .ID }}" hx-swap="outerHTML" hx-confirm="Delete this folder?" class="w-full text-left px-3 py-2 text-sm text-red-600 hover:bg-red-50">Delete</button>
+			<button type="button" hx-delete="/web/folder/{{ .ID }}" hx-target="#folder-{{ .ID }}" hx-swap="outerHTML" hx-confirm="Move this folder to trash?" class="w-full text-left px-3 py-2 text-sm text-red-600 hover:bg-red-50">Move to Trash</button>
+			<button type="button" hx-delete="/web/scrub-folder/{{ .ID }}" hx-target="#folder-{{ .ID }}" hx-swap="outerHTML" hx-confirm="Permanently delete this folder and all its contents? This cannot be undone." class="w-full text-left px-3 py-2 text-sm text-red-700 hover:bg-red-50 font-semibold">Delete Permanently</button>
 		</div>
 	</div>
 </div>

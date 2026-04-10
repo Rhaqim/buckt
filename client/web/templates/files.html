@@ -45,7 +45,8 @@
 			<a href="/web/file/{{ .ID }}" class="block px-3 py-2 text-sm text-gray-700 hover:bg-gray-50">Download</a>
 			<button type="button" class="action-move w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50" data-type="file" data-id="{{ .ID }}">Move</button>
 			<hr class="my-1">
-			<button type="button" hx-delete="/web/file/{{ .ID }}" hx-target="#file-{{ .ID }}" hx-swap="outerHTML" hx-confirm="Delete this file?" class="w-full text-left px-3 py-2 text-sm text-red-600 hover:bg-red-50">Delete</button>
+			<button type="button" hx-delete="/web/file/{{ .ID }}" hx-target="#file-{{ .ID }}" hx-swap="outerHTML" hx-confirm="Move this file to trash?" class="w-full text-left px-3 py-2 text-sm text-red-600 hover:bg-red-50">Move to Trash</button>
+			<button type="button" hx-delete="/web/scrub/{{ .ID }}" hx-target="#file-{{ .ID }}" hx-swap="outerHTML" hx-confirm="Permanently delete this file? This cannot be undone." class="w-full text-left px-3 py-2 text-sm text-red-700 hover:bg-red-50 font-semibold">Delete Permanently</button>
 		</div>
 	</div>
 </div>

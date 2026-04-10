@@ -176,6 +176,7 @@ func (svc *WebService) DeleteFolderPermanently(c *gin.Context) {
 		return
 	}
 
+	// HTMX requests: return empty body so hx-swap="outerHTML" removes the element
 	if c.GetHeader("HX-Request") == "true" {
 		c.String(200, "")
 		return
@@ -301,20 +302,23 @@ func (svc *WebService) DeleteFile(c *gin.Context) {
 }
 
 func (svc *WebService) DeleteFilePermanently(c *gin.Context) {
-	// get the file_id from the request
 	fileID := c.Param("file_id")
 	if fileID == "" {
 		c.AbortWithStatusJSON(400, response.Error("file_id is required", ""))
 		return
 	}
 
-	// delete the file
 	_, err := svc.client.DeleteFilePermanently(fileID)
 	if err != nil {
 		c.AbortWithStatusJSON(500, response.WrapError("failed to delete file", err))
 		return
 	}
 
+	// HTMX requests: return empty body so hx-swap="outerHTML" removes the element
+	if c.GetHeader("HX-Request") == "true" {
+		c.String(200, "")
+		return
+	}
 
 	c.JSON(200, response.Success("file deleted"))
 }
