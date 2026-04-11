@@ -728,9 +728,14 @@ func resolveBackend(mediaDir string, bc BackendConfig, log domain.BucktLogger, l
 			return backend.NewLocalFileSystemService(log, mediaDir, lru)
 		}
 
-		// Compare by name rather than pointer identity to catch same-bucket configs
-		if source.Name() == target.Name() {
-			log.Errorf("❌ Migration enabled but source and target backends have the same name (%s) — disabling migration and using source only", source.Name())
+		// Compare by pointer identity — only reject if the caller passed the
+		// exact same backend instance for both source and target. Two distinct
+		// backends with the same Name() (e.g. two S3 buckets) are legitimate
+		// migration targets and should not be rejected here. Users are responsible
+		// for ensuring their source and target point to different underlying
+		// storage locations.
+		if source == target {
+			log.Errorf("❌ Migration enabled but source and target are the same instance — disabling migration and using source only")
 			return source
 		}
 

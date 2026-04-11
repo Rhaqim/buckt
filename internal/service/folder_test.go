@@ -21,12 +21,16 @@ type MockFolderServices struct {
 }
 
 func setupFolderTest() MockFolderServices {
+	return setupFolderTestWithMode(true)
+}
+
+func setupFolderTestWithMode(flatNamespaces bool) MockFolderServices {
 	mockLogger := logger.NewLogger("", true, false)
 	mockCache := new(mocks.CacheManager)
 	mockFolderRepo := new(mocks.FolderRepository)
 	mockFileSystemService := new(mocks.LocalFileSystemService)
 
-	folderService := NewFolderService(mockLogger, mockCache, mockFolderRepo, mockFileSystemService, true)
+	folderService := NewFolderService(mockLogger, mockCache, mockFolderRepo, mockFileSystemService, flatNamespaces)
 
 	return MockFolderServices{
 		folderService:    folderService,
@@ -142,12 +146,73 @@ func TestDeleteFolder(t *testing.T) {
 	folderID := uuid.MustParse("550e8400-e29b-41d4-a716-446655440000")
 	parentID := uuid.MustParse("550e8400-e29b-41d4-a716-446655440001")
 
-	mockSetUp.folderRepository.On("DeleteFolder", folderID).Return(parentID.String(), "", "", nil)
+	mockSetUp.folderRepository.On("DeleteFolder", folderID).Return(parentID.String(), "", "", nil, nil)
 
 	returnedParentID, err := mockSetUp.folderService.DeleteFolder(ctx, folderID.String())
 	assert.NoError(t, err)
 	assert.Equal(t, parentID.String(), returnedParentID)
 	mockSetUp.folderRepository.AssertExpectations(t)
+}
+
+// TestDeleteFolder_NestedMoveToTrash verifies that in nested-namespace mode,
+// the service physically moves every descendant file on the backend to
+// follow the DB path rewrite.
+func TestDeleteFolder_NestedMoveToTrash(t *testing.T) {
+	mockSetUp := setupFolderTestWithMode(false) // nested mode
+	ctx := t.Context()
+
+	folderID := uuid.MustParse("550e8400-e29b-41d4-a716-446655440000")
+	parentID := uuid.MustParse("550e8400-e29b-41d4-a716-446655440001")
+
+	oldPath := "/user/photos"
+	newPath := "/user/__trash__/photos"
+
+	fileMoves := []model.PathMove{
+		{Old: "/user/photos/sunset.jpg", New: "/user/__trash__/photos/sunset.jpg"},
+		{Old: "/user/photos/beach.jpg", New: "/user/__trash__/photos/beach.jpg"},
+	}
+
+	mockSetUp.folderRepository.On("DeleteFolder", folderID).
+		Return(parentID.String(), oldPath, newPath, fileMoves, nil)
+
+	// Each descendant file should be physically moved on the backend
+	for _, mv := range fileMoves {
+		mockSetUp.backend.On("Move", mv.Old, mv.New).Return(nil)
+	}
+
+	returnedParentID, err := mockSetUp.folderService.DeleteFolder(ctx, folderID.String())
+	assert.NoError(t, err)
+	assert.Equal(t, parentID.String(), returnedParentID)
+
+	for _, mv := range fileMoves {
+		mockSetUp.backend.AssertCalled(t, "Move", mv.Old, mv.New)
+	}
+	mockSetUp.backend.AssertNotCalled(t, "DeleteFolder", mock.Anything)
+}
+
+// TestDeleteFolder_NestedPermanentDelete verifies that when the repo
+// returns newPath == "" (already in trash -> hard delete), the service
+// calls backend.DeleteFolder on the old prefix.
+func TestDeleteFolder_NestedPermanentDelete(t *testing.T) {
+	mockSetUp := setupFolderTestWithMode(false) // nested mode
+	ctx := t.Context()
+
+	folderID := uuid.MustParse("550e8400-e29b-41d4-a716-446655440000")
+	parentID := uuid.MustParse("550e8400-e29b-41d4-a716-446655440001")
+
+	oldPath := "/user/__trash__/photos"
+
+	// newPath == "" signals permanent delete
+	mockSetUp.folderRepository.On("DeleteFolder", folderID).
+		Return(parentID.String(), oldPath, "", nil, nil)
+
+	mockSetUp.backend.On("DeleteFolder", oldPath).Return(nil)
+
+	returnedParentID, err := mockSetUp.folderService.DeleteFolder(ctx, folderID.String())
+	assert.NoError(t, err)
+	assert.Equal(t, parentID.String(), returnedParentID)
+	mockSetUp.backend.AssertCalled(t, "DeleteFolder", oldPath)
+	mockSetUp.backend.AssertNotCalled(t, "Move", mock.Anything, mock.Anything)
 }
 
 func TestScrubFolder(t *testing.T) {

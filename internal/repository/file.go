@@ -131,6 +131,13 @@ func (f *FileRepository) DeleteFile(ctx context.Context, id uuid.UUID) (oldPath,
 		}
 	}
 
+	// If we still don't have a user_id, refuse to delete. Continuing would
+	// create a shared "empty user" trash folder that could mix unrelated
+	// legacy rows and misplace files.
+	if file.UserID == "" {
+		return "", "", fmt.Errorf("cannot delete file %s: unable to resolve owner user_id (legacy row with missing user_id and no parent folder user_id)", id)
+	}
+
 	// Lookup or create the user's trash folder
 	trash, err := getOrCreateTrashFolder(ctx, f.db.DB, file.UserID)
 	if err != nil {

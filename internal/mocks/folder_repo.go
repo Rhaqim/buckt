@@ -63,7 +63,11 @@ func (m *FolderRepository) RenameFolder(ctx context.Context, user_id string, fol
 // DeleteFolder implements domain.FolderRepository.
 func (m *FolderRepository) DeleteFolder(ctx context.Context, folder_id uuid.UUID) (parent_id, oldPath, newPath string, fileMoves []model.PathMove, err error) {
 	args := m.Called(folder_id)
-	return args.String(0), args.String(1), args.String(2), nil, args.Error(3)
+	var moves []model.PathMove
+	if v := args.Get(3); v != nil {
+		moves, _ = v.([]model.PathMove)
+	}
+	return args.String(0), args.String(1), args.String(2), moves, args.Error(4)
 }
 
 // ScrubFolder implements domain.FolderRepository.

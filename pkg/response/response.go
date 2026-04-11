@@ -6,8 +6,8 @@ type APIResponse[T any] struct {
 }
 
 type APIError struct {
-	Message string `json:"message"` // User-facing error message
-	Details string `json:"details"` // Developer debug info (optional)
+	Message string `json:"message"`                   // User-facing error message
+	Details string `json:"details,omitempty"`         // Developer debug info (omitted when empty)
 }
 
 // Success response
@@ -15,7 +15,9 @@ func Success[T any](data T) APIResponse[T] {
 	return APIResponse[T]{Data: data, Error: nil}
 }
 
-// User-friendly error response
+// Error builds an error response with both a user-facing message and
+// optional developer details. Pass an empty string for devMsg to omit the
+// details field from the JSON output entirely.
 func Error(userMsg, devMsg string) APIResponse[any] {
 	return APIResponse[any]{
 		Data: nil,
@@ -34,8 +36,9 @@ func WrapError(userMsg string, err error) APIResponse[any] {
 	return Error(userMsg, err.Error())
 }
 
-// WrapErrorSafe wraps an error but strips the internal details from the response.
-// Use this for public-facing APIs where internal errors should not be exposed.
+// WrapErrorSafe wraps an error but omits the internal details from the
+// response. Use this for public-facing APIs where internal errors should not
+// be exposed. The "details" field is omitted from the JSON output entirely.
 func WrapErrorSafe(userMsg string, err error) APIResponse[any] {
 	if err == nil {
 		return Success[any](nil)

@@ -1,8 +1,10 @@
 package response
 
 import (
+	"encoding/json"
 	"errors"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -103,5 +105,43 @@ func TestWrapErrorUsageWithoutErr(t *testing.T) {
 
 	if result.Error != nil {
 		t.Errorf("WrapError() = %v, want %v", result.Error, nil)
+	}
+}
+
+
+func TestWrapErrorSafe_OmitsDetailsInJSON(t *testing.T) {
+	result := WrapErrorSafe("user error", errors.New("internal secret"))
+
+	data, err := json.Marshal(result)
+	if err != nil {
+		t.Fatalf("failed to marshal: %v", err)
+	}
+
+	output := string(data)
+
+	// The details field should be omitted entirely, not serialized as empty string
+	if strings.Contains(output, "\"details\"") {
+		t.Errorf("WrapErrorSafe JSON should not contain \"details\" field, got: %s", output)
+	}
+	if !strings.Contains(output, "user error") {
+		t.Errorf("WrapErrorSafe JSON should contain user message, got: %s", output)
+	}
+	if strings.Contains(output, "internal secret") {
+		t.Errorf("WrapErrorSafe JSON should not leak internal error message, got: %s", output)
+	}
+}
+
+func TestWrapError_IncludesDetailsInJSON(t *testing.T) {
+	result := WrapError("user error", errors.New("internal detail"))
+
+	data, err := json.Marshal(result)
+	if err != nil {
+		t.Fatalf("failed to marshal: %v", err)
+	}
+
+	output := string(data)
+
+	if !strings.Contains(output, "internal detail") {
+		t.Errorf("WrapError JSON should include details, got: %s", output)
 	}
 }
