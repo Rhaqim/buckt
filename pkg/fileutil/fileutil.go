@@ -16,7 +16,8 @@ func ProcessFile(file *multipart.FileHeader) (string, []byte, error) {
 // ProcessFileWithLimit reads a multipart file with a size limit.
 // If maxSize is 0, no limit is enforced.
 func ProcessFileWithLimit(file *multipart.FileHeader, maxSize int64) (string, []byte, error) {
-	// Reject early based on the Content-Length header
+	// Reject early using the per-part size reported by multipart parsing
+	// (this is the size of the form field, not the request's Content-Length)
 	if maxSize > 0 && file.Size > maxSize {
 		return "", nil, fmt.Errorf("file size %d exceeds maximum allowed %d bytes", file.Size, maxSize)
 	}

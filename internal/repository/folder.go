@@ -267,7 +267,10 @@ func (f *FolderRepository) DeleteFolder(ctx context.Context, folder_id uuid.UUID
 	}
 
 	// Move folder into trash, with a unique name to avoid collisions
-	newName := uniqueTrashName(ctx, f.db.DB, trash.ID, folder.Name)
+	newName, err := uniqueTrashName(ctx, f.db.DB, trash.ID, folder.Name)
+	if err != nil {
+		return parent_id, "", "", nil, err
+	}
 	newPath = trash.Path + "/" + newName
 
 	txErr := f.db.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
@@ -338,25 +341,37 @@ func (f *FolderRepository) ScrubFolder(ctx context.Context, user_id string, fold
 	return "", nil
 }
 
-// uniqueTrashName returns a name that doesn't collide with existing items in the trash folder.
-// If "photo.png" exists, returns "photo (2).png", "photo (3).png", etc.
-func uniqueTrashName(ctx context.Context, db *gorm.DB, trashID uuid.UUID, name string) string {
-	var count int64
-	db.WithContext(ctx).Model(&model.FolderModel{}).
-		Where("parent_id = ? AND name = ?", trashID, name).Count(&count)
+// uniqueTrashName returns a folder name that doesn't collide with existing
+// folders in the trash. If "Photos" already exists, it returns "Photos (2)",
+// "Photos (3)", etc. Folder names are not split on extensions since folders
+// don't have them.
+func uniqueTrashName(ctx context.Context, db *gorm.DB, trashID uuid.UUID, name string) (string, error) {
+	count, err := countFolderName(ctx, db, trashID, name)
+	if err != nil {
+		return "", err
+	}
 	if count == 0 {
-		return name
+		return name, nil
 	}
 
 	// Try suffixes until we find one that's free
 	for i := 2; i < 10000; i++ {
 		candidate := fmt.Sprintf("%s (%d)", name, i)
-		db.WithContext(ctx).Model(&model.FolderModel{}).
-			Where("parent_id = ? AND name = ?", trashID, candidate).Count(&count)
+		count, err := countFolderName(ctx, db, trashID, candidate)
+		if err != nil {
+			return "", err
+		}
 		if count == 0 {
-			return candidate
+			return candidate, nil
 		}
 	}
 	// Fallback: use a random uuid suffix
-	return name + "-" + uuid.New().String()[:8]
+	return name + "-" + uuid.New().String()[:8], nil
+}
+
+func countFolderName(ctx context.Context, db *gorm.DB, parentID uuid.UUID, name string) (int64, error) {
+	var count int64
+	err := db.WithContext(ctx).Model(&model.FolderModel{}).
+		Where("parent_id = ? AND name = ?", parentID, name).Count(&count).Error
+	return count, err
 }

@@ -146,7 +146,10 @@ func (f *FileRepository) DeleteFile(ctx context.Context, id uuid.UUID) (oldPath,
 	}
 
 	// Move file into trash with a unique name
-	newName := uniqueFileTrashName(ctx, f.db.DB, trash.ID, file.Name)
+	newName, err := uniqueFileTrashName(ctx, f.db.DB, trash.ID, file.Name)
+	if err != nil {
+		return "", "", err
+	}
 
 	// In flat-namespace mode the path is just "<uuid>.ext" with no directory
 	// component, and the storage backend stores files at that flat path. We
@@ -209,13 +212,16 @@ func getOrCreateTrashFolder(ctx context.Context, db *gorm.DB, user_id string) (*
 	return &trash, nil
 }
 
-// uniqueFileTrashName returns a name that doesn't collide with existing files in the trash folder.
-func uniqueFileTrashName(ctx context.Context, db *gorm.DB, trashID uuid.UUID, name string) string {
-	var count int64
-	db.WithContext(ctx).Model(&model.FileModel{}).
-		Where("parent_id = ? AND name = ?", trashID, name).Count(&count)
+// uniqueFileTrashName returns a file name that doesn't collide with existing
+// files in the trash folder. If "photo.png" already exists, it returns
+// "photo (2).png", "photo (3).png", etc., preserving the extension.
+func uniqueFileTrashName(ctx context.Context, db *gorm.DB, trashID uuid.UUID, name string) (string, error) {
+	count, err := countFileName(ctx, db, trashID, name)
+	if err != nil {
+		return "", err
+	}
 	if count == 0 {
-		return name
+		return name, nil
 	}
 
 	// Split into base and extension to insert the suffix sensibly
@@ -228,11 +234,20 @@ func uniqueFileTrashName(ctx context.Context, db *gorm.DB, trashID uuid.UUID, na
 
 	for i := 2; i < 10000; i++ {
 		candidate := fmt.Sprintf("%s (%d)%s", base, i, ext)
-		db.WithContext(ctx).Model(&model.FileModel{}).
-			Where("parent_id = ? AND name = ?", trashID, candidate).Count(&count)
+		count, err := countFileName(ctx, db, trashID, candidate)
+		if err != nil {
+			return "", err
+		}
 		if count == 0 {
-			return candidate
+			return candidate, nil
 		}
 	}
-	return base + "-" + uuid.New().String()[:8] + ext
+	return base + "-" + uuid.New().String()[:8] + ext, nil
+}
+
+func countFileName(ctx context.Context, db *gorm.DB, parentID uuid.UUID, name string) (int64, error) {
+	var count int64
+	err := db.WithContext(ctx).Model(&model.FileModel{}).
+		Where("parent_id = ? AND name = ?", parentID, name).Count(&count).Error
+	return count, err
 }

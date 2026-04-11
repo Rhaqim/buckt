@@ -55,19 +55,24 @@ func (d *MigrationBackendService) Put(ctx context.Context, path string, data []b
 }
 
 // Get reads from primary (source of truth) first. If the primary has the
-// file, it lazy-migrates forward to the secondary. If the primary is missing
-// the file, it falls back to the secondary (assumes the file was already
-// migrated forward and the primary has been cleaned up).
+// file, it lazy-migrates forward to the secondary. If the primary is
+// confirmed to not have the file (via Exists), it falls back to the secondary
+// (assumes the file was already migrated forward and the primary cleaned up).
+//
+// Transient primary errors (network, permission, etc.) are propagated without
+// falling back to secondary, so callers don't silently get stale data when
+// the source of truth is temporarily unreachable.
 //
 // Lazy migration is always primary -> secondary; we never write back to the
 // primary because that would risk overwriting authoritative data with stale
 // secondary data.
 func (d *MigrationBackendService) Get(ctx context.Context, path string) ([]byte, error) {
+	// Fast path: try primary directly
 	data, err := d.primaryBackend.Get(ctx, path)
 	if err == nil {
 		// Lazy forward migration: ensure secondary has a copy.
-		// Best-effort and async-style — we don't fail the Get if mirroring fails.
-		if exists, _ := d.secondaryBackend.Exists(ctx, path); !exists {
+		// Best-effort — we don't fail the Get if mirroring fails.
+		if exists, existsErr := d.secondaryBackend.Exists(ctx, path); existsErr == nil && !exists {
 			if putErr := d.secondaryBackend.Put(ctx, path, data); putErr != nil {
 				d.logger.Errorf("⚠️ Failed to lazy-migrate %s to secondary: %v", path, putErr)
 			}
@@ -75,7 +80,22 @@ func (d *MigrationBackendService) Get(ctx context.Context, path string) ([]byte,
 		return data, nil
 	}
 
-	d.logger.Errorf("Primary backend get failed, trying secondary: %v", err)
+	// Primary Get failed. Check whether it's a "not found" vs. a transient
+	// error by asking the primary explicitly. If Exists says the file isn't
+	// there, fall back to the secondary. Otherwise propagate the original
+	// error so we don't serve stale data on transient failures.
+	exists, existsErr := d.primaryBackend.Exists(ctx, path)
+	if existsErr != nil {
+		return nil, fmt.Errorf("primary backend unreachable for %s: %w", path, err)
+	}
+	if exists {
+		// Primary has the file but Get still failed — this is a transient
+		// error on the primary, not a missing file. Don't fall back.
+		return nil, fmt.Errorf("primary backend get failed for %s: %w", path, err)
+	}
+
+	// Confirmed missing from primary — try secondary
+	d.logger.Infof("Primary missing %s, falling back to secondary", path)
 	data, err = d.secondaryBackend.Get(ctx, path)
 	if err != nil {
 		return nil, fmt.Errorf("both backends failed to get %s: %w", path, err)
