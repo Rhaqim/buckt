@@ -30,7 +30,7 @@ func setupFolderTestWithMode(flatNamespaces bool) MockFolderServices {
 	mockFolderRepo := new(mocks.FolderRepository)
 	mockFileSystemService := new(mocks.LocalFileSystemService)
 
-	folderService := NewFolderService(mockLogger, mockCache, mockFolderRepo, mockFileSystemService, flatNamespaces)
+	folderService := NewFolderService(mockLogger, mockCache, mockFolderRepo, mockFileSystemService, flatNamespaces, 0, 0)
 
 	return MockFolderServices{
 		folderService:    folderService,

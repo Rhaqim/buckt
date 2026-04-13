@@ -719,6 +719,8 @@ func TestNewAppServices(t *testing.T) {
 		folderService, fileService := newAppServices(
 			true,
 			DefaultMaxFileSize,
+			DefaultMaxTrashBatchSize,
+			DefaultBackendOpTimeout,
 			db,
 			mockLogger,
 			mockCacheManager,
@@ -732,6 +734,8 @@ func TestNewAppServices(t *testing.T) {
 		folderService, fileService := newAppServices(
 			false,
 			DefaultMaxFileSize,
+			DefaultMaxTrashBatchSize,
+			DefaultBackendOpTimeout,
 			db,
 			mockLogger,
 			mockCacheManager,

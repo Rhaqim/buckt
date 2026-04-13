@@ -3,9 +3,11 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"time"
 	"fmt"
 	"errors"
 	"path/filepath"
+	"strings"
 
 	"github.com/Rhaqim/buckt/internal/constant"
 	"github.com/Rhaqim/buckt/internal/domain"
@@ -21,8 +23,10 @@ type FolderService struct {
 
 	repo domain.FolderRepository
 
-	backend        domain.FileBackend
-	flatNameSpaces bool
+	backend           domain.FileBackend
+	flatNameSpaces    bool
+	maxTrashBatchSize int
+	backendOpTimeout  time.Duration
 }
 
 func NewFolderService(
@@ -31,19 +35,27 @@ func NewFolderService(
 	folderRepository domain.FolderRepository,
 	backend domain.FileBackend,
 	flatNameSpaces bool,
+	maxTrashBatchSize int,
+	backendOpTimeout time.Duration,
 ) domain.FolderService {
 	bucktLogger.Info("🚀 Initialising folder services")
 	return &FolderService{
-		logger:         bucktLogger,
-		cache:          cacheManager,
-		repo:           folderRepository,
-		backend:        backend,
-		flatNameSpaces: flatNameSpaces,
+		logger:            bucktLogger,
+		cache:             cacheManager,
+		repo:              folderRepository,
+		backend:           backend,
+		flatNameSpaces:    flatNameSpaces,
+		maxTrashBatchSize: maxTrashBatchSize,
+		backendOpTimeout:  backendOpTimeout,
 	}
 }
 
 // CreateFolder implements domain.FolderService.
 func (f *FolderService) CreateFolder(ctx context.Context, user_id, parent_id, folder_name, description string) (string, error) {
+	if err := validateFolderName(folder_name); err != nil {
+		return "", f.logger.WrapError("invalid folder name", err)
+	}
+
 	var err error
 	var parentFolder *model.FolderModel
 
@@ -197,6 +209,9 @@ func (f *FolderService) MoveFolder(ctx context.Context, folder_id string, new_pa
 // RenameFolder implements domain.FolderService.
 // Subtle: this method shadows the method (FolderRepository).RenameFolder of FolderService.repo.
 func (f *FolderService) RenameFolder(ctx context.Context, user_id string, folder_id string, new_name string) error {
+	if err := validateFolderName(new_name); err != nil {
+		return f.logger.WrapError("invalid folder name", err)
+	}
 	folderID, err := uuid.Parse(folder_id)
 	if err != nil {
 		return f.logger.WrapError("failed to parse uuid", err)
@@ -221,21 +236,36 @@ func (f *FolderService) DeleteFolder(ctx context.Context, folder_id string) (str
 	}
 
 	parent_id, _, _, _, err := f.repo.DeleteFolder(ctx, folderID, func(oldPath, newPath string, fileMoves []model.PathMove) error {
+		// Refuse oversized batches before doing any work — protects against
+		// runaway operations on large folder trees that would tie up the DB
+		// transaction and storage backend with thousands of sequential moves.
+		if f.maxTrashBatchSize > 0 && len(fileMoves) > f.maxTrashBatchSize {
+			return fmt.Errorf("folder contains %d files which exceeds the max trash batch size of %d; delete subtrees first", len(fileMoves), f.maxTrashBatchSize)
+		}
+
 		// In flat-namespace mode the paths don't reflect disk layout, so no
 		// backend op is needed.
 		if f.flatNameSpaces {
 			return nil
 		}
 
+		// Bound the total time spent on backend I/O so the DB transaction
+		// can't stay open indefinitely waiting on slow storage.
+		opCtx, cancel := f.backendCtx(ctx)
+		defer cancel()
+
 		if newPath == "" {
 			// Permanent deletion — remove the whole prefix from backend
-			return f.backend.DeleteFolder(ctx, oldPath)
+			return f.backend.DeleteFolder(opCtx, oldPath)
 		}
 
 		// Move every file under the folder to its new path. If any move
 		// fails, returning an error rolls back the entire DB transaction.
 		for _, mv := range fileMoves {
-			if err := f.backend.Move(ctx, mv.Old, mv.New); err != nil {
+			if err := opCtx.Err(); err != nil {
+				return fmt.Errorf("backend op timed out: %w", err)
+			}
+			if err := f.backend.Move(opCtx, mv.Old, mv.New); err != nil {
 				return fmt.Errorf("failed to move %s to %s: %w", mv.Old, mv.New, err)
 			}
 		}
@@ -272,4 +302,27 @@ func (f *FolderService) ScrubFolder(ctx context.Context, user_id, folder_id stri
 	}
 
 	return parent_id, nil
+}
+
+// backendCtx returns a context with backendOpTimeout applied (if positive).
+func (f *FolderService) backendCtx(parent context.Context) (context.Context, context.CancelFunc) {
+	if f.backendOpTimeout <= 0 {
+		return parent, func() {}
+	}
+	return context.WithTimeout(parent, f.backendOpTimeout)
+}
+
+// validateFolderName rejects names that are empty, contain path separators,
+// or collide with reserved names (e.g., the trash folder).
+func validateFolderName(name string) error {
+	if name == "" {
+		return fmt.Errorf("folder name cannot be empty")
+	}
+	if name == constant.TRASH_FOLDER_NAME {
+		return fmt.Errorf("%q is a reserved folder name", name)
+	}
+	if strings.ContainsAny(name, "/\\") {
+		return fmt.Errorf("folder name cannot contain path separators")
+	}
+	return nil
 }

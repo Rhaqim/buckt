@@ -3,6 +3,7 @@ package buckt
 import (
 	"database/sql"
 	"log"
+	"time"
 
 	"github.com/Rhaqim/buckt/internal/domain"
 	"github.com/Rhaqim/buckt/internal/model"
@@ -145,10 +146,30 @@ func LocalBackend() Backend {
 // It is NOT applied automatically — pass it to WithMaxFileSize to opt in.
 const DefaultMaxFileSize int64 = 100 * 1024 * 1024
 
+// DefaultMaxTrashBatchSize caps the number of descendant files that a single
+// trash/permanent-delete operation may touch. Operations that exceed this
+// limit are refused so a single API call cannot tie up the database
+// transaction or storage backend with thousands of sequential moves.
+const DefaultMaxTrashBatchSize = 5000
+
+// DefaultBackendOpTimeout bounds the total time a single delete operation
+// may spend on backend I/O. The DB transaction is held open for the duration,
+// so this also bounds the worst-case lock-contention window.
+const DefaultBackendOpTimeout = 5 * time.Minute
+
 type Config struct {
 	MediaDir       string
 	FlatNameSpaces bool
 	MaxFileSize    int64
+
+	// MaxTrashBatchSize caps the number of descendant files in a single
+	// folder delete. Defaults to DefaultMaxTrashBatchSize when zero.
+	MaxTrashBatchSize int
+
+	// BackendOpTimeout bounds backend I/O time during a delete operation.
+	// Defaults to DefaultBackendOpTimeout when zero. Set to a negative value
+	// to disable.
+	BackendOpTimeout time.Duration
 
 	DB      DBConfig
 	Cache   CacheConfig
@@ -305,6 +326,24 @@ func RegisterSecondaryBackend(backend Backend) ConfigFunc {
 func EnableMigration() ConfigFunc {
 	return func(c *Config) {
 		c.Backend.MigrationEnabled = true
+	}
+}
+
+// WithMaxTrashBatchSize sets the maximum number of descendant files a
+// single folder delete may touch. Operations exceeding this limit are
+// refused. Pass 0 to use DefaultMaxTrashBatchSize.
+func WithMaxTrashBatchSize(n int) ConfigFunc {
+	return func(c *Config) {
+		c.MaxTrashBatchSize = n
+	}
+}
+
+// WithBackendOpTimeout sets the maximum time a delete operation may spend
+// on backend I/O. Pass 0 to use DefaultBackendOpTimeout. Pass a negative
+// duration to disable the timeout.
+func WithBackendOpTimeout(d time.Duration) ConfigFunc {
+	return func(c *Config) {
+		c.BackendOpTimeout = d
 	}
 }
 

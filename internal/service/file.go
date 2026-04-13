@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"path/filepath"
+	"time"
 
 	"github.com/Rhaqim/buckt/internal/domain"
 	"github.com/Rhaqim/buckt/internal/model"
@@ -15,8 +16,9 @@ import (
 )
 
 type FileService struct {
-	flatNameSpaces bool
-	maxFileSize    int64
+	flatNameSpaces   bool
+	maxFileSize      int64
+	backendOpTimeout time.Duration
 
 	logger domain.BucktLogger
 
@@ -38,6 +40,7 @@ func NewFileService(
 
 	flatNameSpaces bool,
 	maxFileSize int64,
+	backendOpTimeout time.Duration,
 ) domain.FileService {
 	bucktLogger.Info("🚀 Initialising file services")
 	return &FileService{
@@ -50,8 +53,9 @@ func NewFileService(
 		folderService: folderService,
 		fileBackend:   fileBackend,
 
-		flatNameSpaces: flatNameSpaces,
-		maxFileSize:    maxFileSize,
+		flatNameSpaces:   flatNameSpaces,
+		maxFileSize:      maxFileSize,
+		backendOpTimeout: backendOpTimeout,
 	}
 }
 
@@ -417,21 +421,24 @@ func (f *FileService) DeleteFile(ctx context.Context, file_id string) (string, e
 	}
 
 	// Delete the file with backend coordination. The backend op runs INSIDE
-	// the DB transaction, so a failure rolls back the path rewrite — the DB
-	// and backend stay consistent.
+	// the DB transaction (so a backend failure rolls back the path rewrite),
+	// but is bounded by backendOpTimeout to cap how long the transaction can
+	// stay open while waiting on storage I/O.
 	_, _, err = f.repo.DeleteFile(ctx, fileID, func(oldPath, newPath string) error {
+		opCtx, cancel := f.backendCtx(ctx)
+		defer cancel()
 		switch {
 		case newPath == "":
 			// Permanent deletion (was already in trash). Remove the blob from
 			// the backend. Works in both flat and nested modes because oldPath
 			// always reflects the actual stored location.
-			return f.fileBackend.Delete(ctx, oldPath)
+			return f.fileBackend.Delete(opCtx, oldPath)
 		case oldPath == newPath:
 			// Flat mode — only parent_id changed, blob stays put.
 			return nil
 		default:
 			// Nested mode — physically move the blob to its new path.
-			return f.fileBackend.Move(ctx, oldPath, newPath)
+			return f.fileBackend.Move(opCtx, oldPath, newPath)
 		}
 	})
 	if err != nil {
@@ -484,4 +491,13 @@ func (f *FileService) ScrubFile(ctx context.Context, file_id string) (string, er
 	}
 
 	return file.ParentID.String(), nil
+}
+
+// backendCtx returns a context with backendOpTimeout applied (if positive).
+// Returns the original context unchanged if no timeout is configured.
+func (f *FileService) backendCtx(parent context.Context) (context.Context, context.CancelFunc) {
+	if f.backendOpTimeout <= 0 {
+		return parent, func() {}
+	}
+	return context.WithTimeout(parent, f.backendOpTimeout)
 }

@@ -69,13 +69,27 @@ func (f *FolderRepository) GetRootFolder(ctx context.Context, user_id string) (*
 	return &root, nil
 }
 
-// GetTrashFolder returns the user's trash folder, creating it if missing.
-// The trash folder is a top-level reserved folder where deleted items are moved.
+// GetTrashFolder returns the user's reserved top-level trash folder,
+// creating it if missing. The trash folder is uniquely identified by
+// (user_id, name=__trash__, parent_id IS NULL) so it cannot be confused
+// with a user-created nested folder of the same name.
+//
+// The lookup-then-insert is wrapped in a transaction with a re-check after
+// the insert attempt to handle concurrent creation races.
 func (f *FolderRepository) GetTrashFolder(ctx context.Context, user_id string) (*model.FolderModel, error) {
-	trash := model.FolderModel{}
+	return lookupOrCreateTrashFolder(ctx, f.db.DB, user_id)
+}
 
-	err := f.db.DB.WithContext(ctx).
-		Where("name = ? AND user_id = ?", constant.TRASH_FOLDER_NAME, user_id).First(&trash).Error
+// lookupOrCreateTrashFolder is the shared implementation used by both the
+// folder repository and the file repository (which can't depend on the
+// folder repo directly without a circular import).
+func lookupOrCreateTrashFolder(ctx context.Context, db *gorm.DB, user_id string) (*model.FolderModel, error) {
+	var trash model.FolderModel
+
+	// Fast path: try to find the existing reserved trash folder
+	err := db.WithContext(ctx).
+		Where("user_id = ? AND name = ? AND parent_id IS NULL", user_id, constant.TRASH_FOLDER_NAME).
+		First(&trash).Error
 	if err == nil {
 		return &trash, nil
 	}
@@ -83,17 +97,49 @@ func (f *FolderRepository) GetTrashFolder(ctx context.Context, user_id string) (
 		return nil, err
 	}
 
-	path := "/" + user_id + "/" + constant.TRASH_FOLDER_NAME
-	if err := f.db.DB.WithContext(ctx).Create(&model.FolderModel{
-		UserID:      user_id,
-		Name:        constant.TRASH_FOLDER_NAME,
-		Description: "Trash",
-		Path:        path,
-	}).Error; err != nil {
-		return nil, err
-	}
+	// Not found — create it inside a transaction so concurrent creators
+	// don't both insert duplicate rows. After the insert (or on any error),
+	// re-select to return whichever row actually won the race.
+	txErr := db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		// Re-check inside the transaction in case another writer raced ahead
+		var existing model.FolderModel
+		recheckErr := tx.
+			Where("user_id = ? AND name = ? AND parent_id IS NULL", user_id, constant.TRASH_FOLDER_NAME).
+			First(&existing).Error
+		if recheckErr == nil {
+			trash = existing
+			return nil
+		}
+		if !errors.Is(recheckErr, gorm.ErrRecordNotFound) {
+			return recheckErr
+		}
 
-	return f.GetTrashFolder(ctx, user_id)
+		path := "/" + user_id + "/" + constant.TRASH_FOLDER_NAME
+		newTrash := model.FolderModel{
+			UserID:      user_id,
+			Name:        constant.TRASH_FOLDER_NAME,
+			Description: "Trash",
+			Path:        path,
+		}
+		if err := tx.Create(&newTrash).Error; err != nil {
+			// Possible race: another transaction created it just now.
+			// Re-select and return that one.
+			var raced model.FolderModel
+			if rerr := tx.
+				Where("user_id = ? AND name = ? AND parent_id IS NULL", user_id, constant.TRASH_FOLDER_NAME).
+				First(&raced).Error; rerr == nil {
+				trash = raced
+				return nil
+			}
+			return err
+		}
+		trash = newTrash
+		return nil
+	})
+	if txErr != nil {
+		return nil, txErr
+	}
+	return &trash, nil
 }
 
 // GetFolders implements domain.FolderRepository.
@@ -255,9 +301,13 @@ func (f *FolderRepository) DeleteFolder(
 			parent_id = folder.ParentID.String()
 		}
 
-		// Get the user's trash folder (created if missing)
+		// Get the user's reserved top-level trash folder (created if missing).
+		// Scoped by parent_id IS NULL so it can't be confused with a user-
+		// created nested folder.
 		var trash model.FolderModel
-		trashErr := tx.Where("name = ? AND user_id = ?", constant.TRASH_FOLDER_NAME, folder.UserID).First(&trash).Error
+		trashErr := tx.
+			Where("user_id = ? AND name = ? AND parent_id IS NULL", folder.UserID, constant.TRASH_FOLDER_NAME).
+			First(&trash).Error
 		if errors.Is(trashErr, gorm.ErrRecordNotFound) {
 			trash = model.FolderModel{
 				UserID:      folder.UserID,
@@ -266,7 +316,15 @@ func (f *FolderRepository) DeleteFolder(
 				Path:        "/" + folder.UserID + "/" + constant.TRASH_FOLDER_NAME,
 			}
 			if err := tx.Create(&trash).Error; err != nil {
-				return err
+				// Concurrent creator may have won — re-select
+				var raced model.FolderModel
+				if rerr := tx.
+					Where("user_id = ? AND name = ? AND parent_id IS NULL", folder.UserID, constant.TRASH_FOLDER_NAME).
+					First(&raced).Error; rerr == nil {
+					trash = raced
+				} else {
+					return err
+				}
 			}
 		} else if trashErr != nil {
 			return trashErr

@@ -11,6 +11,7 @@ package buckt
 import (
 	"context"
 	"fmt"
+	"time"
 	"io"
 	"math"
 
@@ -28,9 +29,11 @@ import (
 type Client struct {
 	db *database.DB
 
-	flatnameSpaces bool
-	silence        bool
-	maxFileSize    int64
+	flatnameSpaces    bool
+	silence           bool
+	maxFileSize       int64
+	maxTrashBatchSize int
+	backendOpTimeout  time.Duration
 
 	logger   domain.BucktLogger
 	lruCache domain.LRUCache
@@ -82,10 +85,24 @@ func New(conf Config, opts ...ConfigFunc) (*Client, error) {
 	// Max file size: 0 means no limit (backward compatible)
 	maxFileSize := conf.MaxFileSize
 
+	// Trash batch limit: 0 -> default, negative -> unlimited (escape hatch)
+	maxTrashBatch := conf.MaxTrashBatchSize
+	if maxTrashBatch == 0 {
+		maxTrashBatch = DefaultMaxTrashBatchSize
+	}
+
+	// Backend op timeout: 0 -> default, negative -> disabled
+	backendTimeout := conf.BackendOpTimeout
+	if backendTimeout == 0 {
+		backendTimeout = DefaultBackendOpTimeout
+	}
+
 	// Initialize the app services
 	folderService, fileService := newAppServices(
 		conf.FlatNameSpaces,
 		maxFileSize,
+		maxTrashBatch,
+		backendTimeout,
 		db,
 		bucktLog,
 		cacheManager,
@@ -94,14 +111,16 @@ func New(conf Config, opts ...ConfigFunc) (*Client, error) {
 
 	// Initialize the Buckt instance
 	buckt := &Client{
-		db:             db,
-		logger:         bucktLog,
-		lruCache:       lruCache,
-		flatnameSpaces: conf.FlatNameSpaces,
-		silence:        logConf.Silence,
-		maxFileSize:    maxFileSize,
-		fileService:    fileService,
-		folderService:  folderService,
+		db:                db,
+		logger:            bucktLog,
+		lruCache:          lruCache,
+		flatnameSpaces:    conf.FlatNameSpaces,
+		silence:           logConf.Silence,
+		maxFileSize:       maxFileSize,
+		maxTrashBatchSize: maxTrashBatch,
+		backendOpTimeout:  backendTimeout,
+		fileService:       fileService,
+		folderService:     folderService,
 	}
 
 	bucktLog.Info("✅ Buckt initialized")
@@ -691,6 +710,8 @@ func initializeCache(conf CacheConfig, bucktLog domain.BucktLogger) (domain.Cach
 func newAppServices(
 	flatNameSpaces bool,
 	maxFileSize int64,
+	maxTrashBatch int,
+	backendOpTimeout time.Duration,
 	db *database.DB,
 	logger domain.BucktLogger,
 	cacheManager domain.CacheManager,
@@ -701,8 +722,8 @@ func newAppServices(
 	var fileRepository domain.FileRepository = repository.NewFileRepository(db)
 
 	// initialize the services
-	var folderService domain.FolderService = service.NewFolderService(logger, cacheManager, folderRepository, activeBackend, flatNameSpaces)
-	var fileService domain.FileService = service.NewFileService(logger, cacheManager, fileRepository, folderService, activeBackend, flatNameSpaces, maxFileSize)
+	var folderService domain.FolderService = service.NewFolderService(logger, cacheManager, folderRepository, activeBackend, flatNameSpaces, maxTrashBatch, backendOpTimeout)
+	var fileService domain.FileService = service.NewFileService(logger, cacheManager, fileRepository, folderService, activeBackend, flatNameSpaces, maxFileSize, backendOpTimeout)
 
 	logger.Info("✅ Initialized app services")
 

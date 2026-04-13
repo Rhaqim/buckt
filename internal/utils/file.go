@@ -127,14 +127,21 @@ func isValidFolderPath(s string) bool {
 	return true
 }
 
-// validateExecPath ensures a path is clean, absolute, and doesn't contain
-// characters that could be misinterpreted as flags by external commands.
+// validateExecPath ensures a path is clean (== filepath.Clean(path)),
+// absolute, and doesn't have a basename starting with a dash (which could
+// be misinterpreted as a flag by external commands like ffmpeg or convert).
+//
+// Callers must pass a path that is already in canonical form. This function
+// rejects non-canonical inputs rather than silently normalizing them so the
+// validated path matches exactly what gets passed to exec.Command.
 func validateExecPath(path string) error {
-	cleaned := filepath.Clean(path)
-	if !filepath.IsAbs(cleaned) {
+	if path != filepath.Clean(path) {
+		return fmt.Errorf("path must be in canonical form: %s", path)
+	}
+	if !filepath.IsAbs(path) {
 		return fmt.Errorf("path must be absolute, got: %s", path)
 	}
-	if strings.HasPrefix(filepath.Base(cleaned), "-") {
+	if strings.HasPrefix(filepath.Base(path), "-") {
 		return fmt.Errorf("path basename must not start with a dash: %s", path)
 	}
 	return nil
