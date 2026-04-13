@@ -16,7 +16,7 @@ type FolderRepository interface {
 	GetFoldersPaginated(ctx context.Context, parent_id uuid.UUID, page model.Pagination) ([]model.FolderModel, error)
 	MoveFolder(ctx context.Context, folder_id, new_parent_id uuid.UUID) error
 	RenameFolder(ctx context.Context, user_id string, folder_id uuid.UUID, new_name string) error
-	DeleteFolder(ctx context.Context, folder_id uuid.UUID) (parent_id, oldPath, newPath string, fileMoves []model.PathMove, err error)
+	DeleteFolder(ctx context.Context, folder_id uuid.UUID, beforeCommit func(oldPath, newPath string, fileMoves []model.PathMove) error) (parent_id, oldPath, newPath string, fileMoves []model.PathMove, err error)
 	ScrubFolder(ctx context.Context, user_id string, folder_id uuid.UUID) (parent_id string, err error)
 }
 
@@ -28,6 +28,6 @@ type FileRepository interface {
 	MoveFile(ctx context.Context, file_id, new_parent_id uuid.UUID) (string, string, error)
 	RenameFile(ctx context.Context, file_id uuid.UUID, new_name string) error
 	Update(ctx context.Context, file *model.FileModel) error
-	DeleteFile(ctx context.Context, id uuid.UUID) (oldPath, newPath string, err error)
+	DeleteFile(ctx context.Context, id uuid.UUID, beforeCommit func(oldPath, newPath string) error) (oldPath, newPath string, err error)
 	ScrubFile(ctx context.Context, id uuid.UUID) error
 }

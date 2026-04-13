@@ -233,47 +233,73 @@ func (f *FolderRepository) RenameFolder(ctx context.Context, user_id string, fol
 // already inside the trash, it is permanently deleted instead.
 //
 // Returns the parent_id, the (oldPath, newPath) of the folder itself, and a
-// list of (oldPath, newPath) pairs for every file under the folder so the
-// caller can physically move them on the storage backend. If newPath is empty,
-// the folder was permanently deleted and the caller should delete the prefix
-// from the backend instead.
-func (f *FolderRepository) DeleteFolder(ctx context.Context, folder_id uuid.UUID) (parent_id, oldPath, newPath string, fileMoves []model.PathMove, err error) {
-	folder, err := f.GetFolder(ctx, folder_id)
-	if err != nil {
-		return "", "", "", nil, err
-	}
+// list of (oldPath, newPath) pairs for every file under the folder. If newPath
+// is empty, the folder was permanently deleted.
+//
+// The beforeCommit callback runs INSIDE the DB transaction after the path
+// rewrites but before commit. If the callback returns an error, the entire
+// transaction rolls back, leaving the DB in its original state. This makes
+// the DB and backend stay consistent even if a backend operation fails midway.
+func (f *FolderRepository) DeleteFolder(
+	ctx context.Context,
+	folder_id uuid.UUID,
+	beforeCommit func(oldPath, newPath string, fileMoves []model.PathMove) error,
+) (parent_id, oldPath, newPath string, fileMoves []model.PathMove, err error) {
+	err = f.db.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var folder model.FolderModel
+		if err := tx.Preload("Folders").Preload("Files").Where("id = ?", folder_id).First(&folder).Error; err != nil {
+			return err
+		}
 
-	if folder.ParentID != nil {
-		parent_id = folder.ParentID.String()
-	}
+		if folder.ParentID != nil {
+			parent_id = folder.ParentID.String()
+		}
 
-	// Get the user's trash folder
-	trash, err := f.GetTrashFolder(ctx, folder.UserID)
-	if err != nil {
-		return parent_id, "", "", nil, err
-	}
+		// Get the user's trash folder (created if missing)
+		var trash model.FolderModel
+		trashErr := tx.Where("name = ? AND user_id = ?", constant.TRASH_FOLDER_NAME, folder.UserID).First(&trash).Error
+		if errors.Is(trashErr, gorm.ErrRecordNotFound) {
+			trash = model.FolderModel{
+				UserID:      folder.UserID,
+				Name:        constant.TRASH_FOLDER_NAME,
+				Description: "Trash",
+				Path:        "/" + folder.UserID + "/" + constant.TRASH_FOLDER_NAME,
+			}
+			if err := tx.Create(&trash).Error; err != nil {
+				return err
+			}
+		} else if trashErr != nil {
+			return trashErr
+		}
 
-	// If the folder IS the trash, refuse
-	if folder.ID == trash.ID {
-		return parent_id, "", "", nil, fmt.Errorf("cannot delete the trash folder itself")
-	}
+		// Refuse to delete the trash folder itself
+		if folder.ID == trash.ID {
+			return fmt.Errorf("cannot delete the trash folder itself")
+		}
 
-	oldPath = folder.Path
+		oldPath = folder.Path
 
-	// If the folder is already inside the trash, permanently delete it
-	if strings.HasPrefix(folder.Path, trash.Path+"/") || (folder.ParentID != nil && *folder.ParentID == trash.ID) {
-		_, scrubErr := f.ScrubFolder(ctx, folder.UserID, folder_id)
-		return parent_id, oldPath, "", nil, scrubErr
-	}
+		// If the folder is already inside the trash, permanently delete it
+		if strings.HasPrefix(folder.Path, trash.Path+"/") || (folder.ParentID != nil && *folder.ParentID == trash.ID) {
+			if err := tx.Delete(&folder).Error; err != nil {
+				return err
+			}
+			newPath = ""
+			if beforeCommit != nil {
+				if err := beforeCommit(oldPath, "", nil); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
 
-	// Move folder into trash, with a unique name to avoid collisions
-	newName, err := uniqueTrashName(ctx, f.db.DB, trash.ID, folder.Name)
-	if err != nil {
-		return parent_id, "", "", nil, err
-	}
-	newPath = trash.Path + "/" + newName
+		// Move folder into trash, with a unique name to avoid collisions
+		newName, err := uniqueTrashName(ctx, tx, trash.ID, folder.Name)
+		if err != nil {
+			return err
+		}
+		newPath = trash.Path + "/" + newName
 
-	txErr := f.db.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		// Collect all descendant file paths BEFORE the rewrite so we can return
 		// the (oldPath, newPath) pairs to the caller
 		oldPrefix := oldPath + "/"
@@ -312,13 +338,16 @@ func (f *FolderRepository) DeleteFolder(ctx context.Context, folder_id uuid.UUID
 			return err
 		}
 
+		// Run backend operation BEFORE commit. If it fails, the transaction
+		// rolls back and all path rewrites are undone.
+		if beforeCommit != nil {
+			if err := beforeCommit(oldPath, newPath, fileMoves); err != nil {
+				return err
+			}
+		}
 		return nil
 	})
-	if txErr != nil {
-		return parent_id, "", "", nil, txErr
-	}
-
-	return parent_id, oldPath, newPath, fileMoves, nil
+	return
 }
 
 // ScrubFolder permanently deletes a folder and all its contents.

@@ -110,80 +110,99 @@ func (f *FileRepository) Update(ctx context.Context, file *model.FileModel) erro
 //
 // Returns the file's old and new paths so the caller can move the underlying
 // data on the storage backend. If newPath is empty, the file was permanently
-// deleted (already in trash) and no backend move is needed — the caller should
-// call backend.Delete instead.
-func (f *FileRepository) DeleteFile(ctx context.Context, id uuid.UUID) (oldPath, newPath string, err error) {
-	var file model.FileModel
-	if err := f.db.DB.WithContext(ctx).First(&file, id).Error; err != nil {
-		return "", "", err
-	}
-
-	oldPath = file.Path
-
-	// Defense in depth: if user_id is empty (legacy data not yet backfilled),
-	// derive it from the parent folder so we don't move files into a phantom
-	// "empty user" trash bin.
-	if file.UserID == "" {
-		var parent model.FolderModel
-		if err := f.db.DB.WithContext(ctx).Select("user_id").First(&parent, file.ParentID).Error; err == nil && parent.UserID != "" {
-			file.UserID = parent.UserID
-			_ = f.db.DB.WithContext(ctx).Model(&file).Update("user_id", parent.UserID).Error
+// deleted (already in trash). If newPath equals oldPath, the file was moved
+// in flat-namespace mode and no backend op is needed.
+//
+// The beforeCommit callback runs INSIDE the DB transaction after the path
+// rewrite but before commit. If the callback returns an error, the entire
+// transaction rolls back, leaving the DB in its original state. This makes
+// the DB and backend stay consistent even if the backend operation fails.
+func (f *FileRepository) DeleteFile(
+	ctx context.Context,
+	id uuid.UUID,
+	beforeCommit func(oldPath, newPath string) error,
+) (oldPath, newPath string, err error) {
+	err = f.db.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var file model.FileModel
+		if err := tx.First(&file, id).Error; err != nil {
+			return err
 		}
-	}
 
-	// If we still don't have a user_id, refuse to delete. Continuing would
-	// create a shared "empty user" trash folder that could mix unrelated
-	// legacy rows and misplace files.
-	if file.UserID == "" {
-		return "", "", fmt.Errorf("cannot delete file %s: unable to resolve owner user_id (legacy row with missing user_id and no parent folder user_id)", id)
-	}
+		oldPath = file.Path
 
-	// Lookup or create the user's trash folder
-	trash, err := getOrCreateTrashFolder(ctx, f.db.DB, file.UserID)
-	if err != nil {
-		return "", "", err
-	}
-
-	// If the file is already in trash, permanently delete it
-	if file.ParentID == trash.ID {
-		if err := f.db.DB.WithContext(ctx).Delete(&model.FileModel{}, id).Error; err != nil {
-			return "", "", err
+		// Defense in depth: if user_id is empty (legacy data not yet backfilled),
+		// derive it from the parent folder so we don't move files into a phantom
+		// "empty user" trash bin.
+		if file.UserID == "" {
+			var parent model.FolderModel
+			if err := tx.Select("user_id").First(&parent, file.ParentID).Error; err == nil && parent.UserID != "" {
+				file.UserID = parent.UserID
+				_ = tx.Model(&file).Update("user_id", parent.UserID).Error
+			}
 		}
-		return oldPath, "", nil
-	}
 
-	// Move file into trash with a unique name
-	newName, err := uniqueFileTrashName(ctx, f.db.DB, trash.ID, file.Name)
-	if err != nil {
-		return "", "", err
-	}
+		// If we still don't have a user_id, refuse to delete.
+		if file.UserID == "" {
+			return fmt.Errorf("cannot delete file %s: unable to resolve owner user_id (legacy row with missing user_id and no parent folder user_id)", id)
+		}
 
-	// In flat-namespace mode the path is just "<uuid>.ext" with no directory
-	// component, and the storage backend stores files at that flat path. We
-	// must NOT rewrite the path to put it under the trash folder — the blob
-	// would still live at the original flat path on the backend, and any later
-	// read or permanent delete would fail. Detect flat mode by checking if the
-	// path has any directory separator (either / or \\, since filepath.Join
-	// on Windows can produce backslashes).
-	isFlatPath := !strings.ContainsAny(file.Path, "/\\")
+		// Lookup or create the user's trash folder
+		trash, err := getOrCreateTrashFolder(ctx, tx, file.UserID)
+		if err != nil {
+			return err
+		}
 
-	updates := map[string]interface{}{
-		"name":      newName,
-		"parent_id": trash.ID,
-	}
-	if !isFlatPath {
-		newPath = trash.Path + "/" + newName
-		updates["path"] = newPath
-	} else {
-		// Path stays the same in flat mode; signal "no backend move needed"
-		// by returning the same value for old and new.
-		newPath = file.Path
-	}
+		// If the file is already in trash, permanently delete it
+		if file.ParentID == trash.ID {
+			if err := tx.Delete(&model.FileModel{}, id).Error; err != nil {
+				return err
+			}
+			// Run backend cleanup BEFORE commit — failure rolls back the row deletion
+			if beforeCommit != nil {
+				if err := beforeCommit(oldPath, ""); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
 
-	if err := f.db.DB.WithContext(ctx).Model(&file).Updates(updates).Error; err != nil {
-		return "", "", err
-	}
-	return oldPath, newPath, nil
+		// Move file into trash with a unique name
+		newName, err := uniqueFileTrashName(ctx, tx, trash.ID, file.Name)
+		if err != nil {
+			return err
+		}
+
+		// Detect flat-namespace mode by checking for any directory separator
+		// (either / or \, since filepath.Join on Windows can produce backslashes).
+		isFlatPath := !strings.ContainsAny(file.Path, "/\\")
+
+		updates := map[string]any{
+			"name":      newName,
+			"parent_id": trash.ID,
+		}
+		if !isFlatPath {
+			newPath = trash.Path + "/" + newName
+			updates["path"] = newPath
+		} else {
+			// Path stays the same in flat mode; signal "no backend move needed"
+			// by returning the same value for old and new.
+			newPath = file.Path
+		}
+
+		if err := tx.Model(&file).Updates(updates).Error; err != nil {
+			return err
+		}
+
+		// Run backend operation BEFORE commit. If it fails, the transaction
+		// rolls back and the path rewrite is undone.
+		if beforeCommit != nil {
+			if err := beforeCommit(oldPath, newPath); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	return
 }
 
 // ScrubFile permanently deletes a file regardless of its location.

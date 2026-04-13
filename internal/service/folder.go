@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"errors"
 	"path/filepath"
 
@@ -211,32 +212,37 @@ func (f *FolderService) RenameFolder(ctx context.Context, user_id string, folder
 // DeleteFolder implements domain.FolderService.
 // Moves the folder to trash (or hard-deletes if already in trash) and
 // coordinates the storage backend so files physically follow their new paths.
+// Backend operations run inside the DB transaction so a backend failure
+// rolls back the path rewrite, keeping the DB and backend consistent.
 func (f *FolderService) DeleteFolder(ctx context.Context, folder_id string) (string, error) {
 	folderID, err := uuid.Parse(folder_id)
 	if err != nil {
 		return "", f.logger.WrapError("failed to parse uuid", err)
 	}
 
-	parent_id, oldPath, newPath, fileMoves, err := f.repo.DeleteFolder(ctx, folderID)
-	if err != nil {
-		return "", f.logger.WrapError("failed to delete folder", err)
-	}
+	parent_id, _, _, _, err := f.repo.DeleteFolder(ctx, folderID, func(oldPath, newPath string, fileMoves []model.PathMove) error {
+		// In flat-namespace mode the paths don't reflect disk layout, so no
+		// backend op is needed.
+		if f.flatNameSpaces {
+			return nil
+		}
 
-	// Coordinate the backend (only when paths actually represent disk layout)
-	if !f.flatNameSpaces {
 		if newPath == "" {
 			// Permanent deletion — remove the whole prefix from backend
-			if err := f.backend.DeleteFolder(ctx, oldPath); err != nil {
-				f.logger.Warn("failed to delete folder from backend: " + err.Error())
-			}
-		} else {
-			// Move every file under the folder to its new path
-			for _, mv := range fileMoves {
-				if err := f.backend.Move(ctx, mv.Old, mv.New); err != nil {
-					f.logger.Warn("failed to move file on backend: " + err.Error())
-				}
+			return f.backend.DeleteFolder(ctx, oldPath)
+		}
+
+		// Move every file under the folder to its new path. If any move
+		// fails, returning an error rolls back the entire DB transaction.
+		for _, mv := range fileMoves {
+			if err := f.backend.Move(ctx, mv.Old, mv.New); err != nil {
+				return fmt.Errorf("failed to move %s to %s: %w", mv.Old, mv.New, err)
 			}
 		}
+		return nil
+	})
+	if err != nil {
+		return "", f.logger.WrapError("failed to delete folder", err)
 	}
 
 	return parent_id, nil

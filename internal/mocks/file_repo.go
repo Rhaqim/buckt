@@ -57,9 +57,16 @@ func (m *FileRepository) Update(ctx context.Context, file *model.FileModel) erro
 	return args.Error(0)
 }
 
-func (m *FileRepository) DeleteFile(ctx context.Context, fileID uuid.UUID) (string, string, error) {
+func (m *FileRepository) DeleteFile(ctx context.Context, fileID uuid.UUID, beforeCommit func(oldPath, newPath string) error) (string, string, error) {
 	args := m.Called(fileID)
-	return args.String(0), args.String(1), args.Error(2)
+	oldPath, newPath := args.String(0), args.String(1)
+	// Invoke the callback so tests can verify backend coordination
+	if beforeCommit != nil {
+		if cbErr := beforeCommit(oldPath, newPath); cbErr != nil {
+			return "", "", cbErr
+		}
+	}
+	return oldPath, newPath, args.Error(2)
 }
 
 func (m *FileRepository) ScrubFile(ctx context.Context, fileID uuid.UUID) error {

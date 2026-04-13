@@ -61,13 +61,22 @@ func (m *FolderRepository) RenameFolder(ctx context.Context, user_id string, fol
 }
 
 // DeleteFolder implements domain.FolderRepository.
-func (m *FolderRepository) DeleteFolder(ctx context.Context, folder_id uuid.UUID) (parent_id, oldPath, newPath string, fileMoves []model.PathMove, err error) {
+func (m *FolderRepository) DeleteFolder(ctx context.Context, folder_id uuid.UUID, beforeCommit func(oldPath, newPath string, fileMoves []model.PathMove) error) (parent_id, oldPath, newPath string, fileMoves []model.PathMove, err error) {
 	args := m.Called(folder_id)
-	var moves []model.PathMove
+	parent_id = args.String(0)
+	oldPath = args.String(1)
+	newPath = args.String(2)
 	if v := args.Get(3); v != nil {
-		moves, _ = v.([]model.PathMove)
+		fileMoves, _ = v.([]model.PathMove)
 	}
-	return args.String(0), args.String(1), args.String(2), moves, args.Error(4)
+	// Invoke the callback so tests can verify backend coordination
+	if beforeCommit != nil {
+		if cbErr := beforeCommit(oldPath, newPath, fileMoves); cbErr != nil {
+			return parent_id, "", "", nil, cbErr
+		}
+	}
+	err = args.Error(4)
+	return
 }
 
 // ScrubFolder implements domain.FolderRepository.

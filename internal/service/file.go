@@ -416,30 +416,26 @@ func (f *FileService) DeleteFile(ctx context.Context, file_id string) (string, e
 		}
 	}
 
-	// Delete the file (moves to trash, or hard-deletes if already in trash)
-	oldPath, newPath, err := f.repo.DeleteFile(ctx, fileID)
+	// Delete the file with backend coordination. The backend op runs INSIDE
+	// the DB transaction, so a failure rolls back the path rewrite — the DB
+	// and backend stay consistent.
+	_, _, err = f.repo.DeleteFile(ctx, fileID, func(oldPath, newPath string) error {
+		switch {
+		case newPath == "":
+			// Permanent deletion (was already in trash). Remove the blob from
+			// the backend. Works in both flat and nested modes because oldPath
+			// always reflects the actual stored location.
+			return f.fileBackend.Delete(ctx, oldPath)
+		case oldPath == newPath:
+			// Flat mode — only parent_id changed, blob stays put.
+			return nil
+		default:
+			// Nested mode — physically move the blob to its new path.
+			return f.fileBackend.Move(ctx, oldPath, newPath)
+		}
+	})
 	if err != nil {
 		return parentID, f.logger.WrapError("failed to delete file", err)
-	}
-
-	// Coordinate the backend with what happened in the DB
-	switch {
-	case newPath == "":
-		// Permanent deletion (file was already in trash). Remove the blob
-		// from the backend at its current path. This works in both flat
-		// and nested modes because oldPath always reflects the actual
-		// stored location.
-		if err := f.fileBackend.Delete(ctx, oldPath); err != nil {
-			f.logger.Warn("failed to delete file from backend: " + err.Error())
-		}
-	case oldPath == newPath:
-		// Flat-namespace mode: only the parent_id changed in the DB.
-		// The blob's location on disk is unchanged, so no backend op needed.
-	default:
-		// Nested mode: the blob's logical path changed, physically move it.
-		if err := f.fileBackend.Move(ctx, oldPath, newPath); err != nil {
-			f.logger.Warn("failed to move file on backend: " + err.Error())
-		}
 	}
 
 	return file.ParentID.String(), nil
