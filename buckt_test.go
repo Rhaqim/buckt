@@ -7,8 +7,8 @@ import (
 	"testing"
 
 	"github.com/Rhaqim/buckt/internal/backend"
-	"github.com/Rhaqim/buckt/internal/domain"
 	"github.com/Rhaqim/buckt/internal/database"
+	"github.com/Rhaqim/buckt/internal/domain"
 	"github.com/Rhaqim/buckt/internal/mocks"
 	"github.com/Rhaqim/buckt/internal/model"
 

@@ -11,9 +11,9 @@ package buckt
 import (
 	"context"
 	"fmt"
-	"time"
 	"io"
 	"math"
+	"time"
 
 	"github.com/Rhaqim/buckt/internal/backend"
 	"github.com/Rhaqim/buckt/internal/cache"
