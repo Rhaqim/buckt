@@ -152,8 +152,26 @@ func (f *FileRepository) DeleteFile(
 			return err
 		}
 
-		// If the file is already in trash, permanently delete it
-		if file.ParentID == trash.ID {
+		// Detect whether the file is already in trash. There are three cases
+		// to cover so that the smart re-delete behavior works for nested files:
+		//   1. The file's direct parent IS the trash folder
+		//   2. Nested mode: the file's path lives under the trash prefix
+		//      (e.g., file in a folder that was moved to trash)
+		//   3. Flat-namespace mode: the file's parent folder is anywhere
+		//      under trash (path-prefix check on the parent folder)
+		inTrash := file.ParentID == trash.ID
+		if !inTrash && strings.HasPrefix(file.Path, trash.Path+"/") {
+			inTrash = true
+		}
+		if !inTrash {
+			var parentFolder model.FolderModel
+			if perr := tx.Select("path").First(&parentFolder, file.ParentID).Error; perr == nil {
+				if parentFolder.Path == trash.Path || strings.HasPrefix(parentFolder.Path, trash.Path+"/") {
+					inTrash = true
+				}
+			}
+		}
+		if inTrash {
 			if err := tx.Delete(&model.FileModel{}, id).Error; err != nil {
 				return err
 			}

@@ -231,7 +231,7 @@ func (svc *APIService) UploadFile(c *gin.Context) {
 	}
 
 	// Read file from request
-	fileName, fileByte, err := fileutil.ProcessFile(file)
+	fileName, fileByte, err := fileutil.ProcessFileWithLimit(file, svc.client.MaxFileSize())
 	if err != nil {
 		c.AbortWithStatusJSON(500, response.WrapError("failed to process file", err))
 		return

@@ -146,6 +146,13 @@ func (b *Client) Close() {
 	b.lruCache.Close()
 }
 
+// MaxFileSize returns the configured maximum file size in bytes. A return
+// value of 0 means no limit is enforced. Use this to surface the configured
+// limit to HTTP handlers so they can reject oversized uploads early.
+func (b *Client) MaxFileSize() int64 {
+	return b.maxFileSize
+}
+
 /* Folder Methods */
 
 // NewFolder creates a new folder for a user within a specified parent folder.

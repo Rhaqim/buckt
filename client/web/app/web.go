@@ -204,7 +204,7 @@ func (svc *WebService) UploadFile(c *gin.Context) {
 	// Loop through each file
 	for _, file := range files {
 		// Save each file (this example just prints)
-		fileName, fileByte, err := fileutil.ProcessFile(file)
+		fileName, fileByte, err := fileutil.ProcessFileWithLimit(file, svc.client.MaxFileSize())
 		if err != nil {
 			c.AbortWithStatusJSON(500, response.WrapError("failed to process file", err))
 			return

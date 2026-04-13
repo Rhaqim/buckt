@@ -219,8 +219,9 @@ func (db *DB) backfillFileUserIDs() error {
 
 	db.log.Infof("🔧 Backfilling user_id for %d legacy file rows...", count)
 
-	// Update via subquery — works on both SQLite and Postgres
-	err := db.Exec(`
+	// Step 1: backfill from the parent folder when one exists.
+	// Works on both SQLite and Postgres.
+	if err := db.Exec(`
 		UPDATE file_models
 		SET user_id = (
 			SELECT folder_models.user_id
@@ -231,8 +232,18 @@ func (db *DB) backfillFileUserIDs() error {
 		  AND EXISTS (
 			SELECT 1 FROM folder_models WHERE folder_models.id = file_models.parent_id
 		  )
-	`).Error
-	if err != nil {
+	`).Error; err != nil {
+		return err
+	}
+
+	// Step 2: any rows that still have NULL/empty user_id are orphaned
+	// (their parent folder doesn't exist). Set them to '' so the subsequent
+	// AutoMigrate can enforce NOT NULL without failing on Postgres.
+	if err := db.Exec(`
+		UPDATE file_models
+		SET user_id = ''
+		WHERE user_id IS NULL
+	`).Error; err != nil {
 		return err
 	}
 

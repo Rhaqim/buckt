@@ -69,13 +69,20 @@ func (m *FolderRepository) DeleteFolder(ctx context.Context, folder_id uuid.UUID
 	if v := args.Get(3); v != nil {
 		fileMoves, _ = v.([]model.PathMove)
 	}
-	// Invoke the callback so tests can verify backend coordination
+	repoErr := args.Error(4)
+
+	// Mirror the real repository: the callback only fires after the DB
+	// updates succeed. If the mocked call is configured to return an
+	// error, treat it as a pre-callback failure and skip the callback.
+	if repoErr != nil {
+		return parent_id, "", "", nil, repoErr
+	}
+
 	if beforeCommit != nil {
 		if cbErr := beforeCommit(oldPath, newPath, fileMoves); cbErr != nil {
 			return parent_id, "", "", nil, cbErr
 		}
 	}
-	err = args.Error(4)
 	return
 }
 

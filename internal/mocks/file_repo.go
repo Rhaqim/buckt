@@ -60,13 +60,21 @@ func (m *FileRepository) Update(ctx context.Context, file *model.FileModel) erro
 func (m *FileRepository) DeleteFile(ctx context.Context, fileID uuid.UUID, beforeCommit func(oldPath, newPath string) error) (string, string, error) {
 	args := m.Called(fileID)
 	oldPath, newPath := args.String(0), args.String(1)
-	// Invoke the callback so tests can verify backend coordination
+	repoErr := args.Error(2)
+
+	// Mirror the real repository: the callback only fires after the DB
+	// updates succeed. If the mocked call is configured to return an
+	// error, treat it as a pre-callback failure and skip the callback.
+	if repoErr != nil {
+		return "", "", repoErr
+	}
+
 	if beforeCommit != nil {
 		if cbErr := beforeCommit(oldPath, newPath); cbErr != nil {
 			return "", "", cbErr
 		}
 	}
-	return oldPath, newPath, args.Error(2)
+	return oldPath, newPath, nil
 }
 
 func (m *FileRepository) ScrubFile(ctx context.Context, fileID uuid.UUID) error {
