@@ -86,7 +86,9 @@ func (d *MigrationBackendService) Get(ctx context.Context, path string) ([]byte,
 	// error so we don't serve stale data on transient failures.
 	exists, existsErr := d.primaryBackend.Exists(ctx, path)
 	if existsErr != nil {
-		return nil, fmt.Errorf("primary backend unreachable for %s: %w", path, err)
+		// Wrap the existsErr (the actual cause of the "unreachable"
+		// classification) and include the original Get error for context.
+		return nil, fmt.Errorf("primary backend unreachable for %s: %w (initial get error: %v)", path, existsErr, err)
 	}
 	if exists {
 		// Primary has the file but Get still failed — this is a transient

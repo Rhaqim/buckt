@@ -313,16 +313,36 @@ func (f *FolderService) backendCtx(parent context.Context) (context.Context, con
 }
 
 // validateFolderName rejects names that are empty, contain path separators,
-// or collide with reserved names (e.g., the trash folder).
+// resolve to a different path component when joined to a parent (e.g. ".",
+// ".."), contain leading/trailing whitespace, or collide with reserved names
+// (e.g., the trash folder).
 func validateFolderName(name string) error {
 	if name == "" {
 		return fmt.Errorf("folder name cannot be empty")
+	}
+	// Reject leading/trailing whitespace — these often slip through user
+	// input and break uniqueness checks in surprising ways.
+	if name != strings.TrimSpace(name) {
+		return fmt.Errorf("folder name cannot have leading or trailing whitespace")
 	}
 	if name == constant.TRASH_FOLDER_NAME {
 		return fmt.Errorf("%q is a reserved folder name", name)
 	}
 	if strings.ContainsAny(name, "/\\") {
 		return fmt.Errorf("folder name cannot contain path separators")
+	}
+	// Reject dot-segments. filepath.Join(parent, ".") collapses to parent and
+	// filepath.Join(parent, "..") escapes upward — both break path/prefix
+	// invariants and lead to confusing uniqueness errors.
+	if name == "." || name == ".." {
+		return fmt.Errorf("%q is not a valid folder name", name)
+	}
+	// Enforce that the name is already a single canonical path component.
+	// filepath.Clean normalizes consecutive dots, slashes, etc.; if the
+	// cleaned form differs the name was non-canonical and we reject it
+	// rather than silently normalizing.
+	if filepath.Clean(name) != name {
+		return fmt.Errorf("folder name must be in canonical form: %q", name)
 	}
 	return nil
 }
