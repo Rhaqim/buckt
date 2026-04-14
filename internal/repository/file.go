@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/Rhaqim/buckt/internal/constant"
 	"github.com/Rhaqim/buckt/internal/database"
 	"github.com/Rhaqim/buckt/internal/domain"
 	"github.com/Rhaqim/buckt/internal/model"
@@ -231,29 +230,10 @@ func (f *FileRepository) ScrubFile(ctx context.Context, id uuid.UUID) error {
 // getOrCreateTrashFolder returns the user's trash folder, creating it if missing.
 // This duplicates the FolderRepository logic to avoid a cross-repo dependency.
 func getOrCreateTrashFolder(ctx context.Context, db *gorm.DB, user_id string) (*model.FolderModel, error) {
-	const trashName = constant.TRASH_FOLDER_NAME
-	var trash model.FolderModel
-
-	err := db.WithContext(ctx).
-		Where("name = ? AND user_id = ?", trashName, user_id).First(&trash).Error
-	if err == nil {
-		return &trash, nil
-	}
-	if !errors.Is(err, gorm.ErrRecordNotFound) {
-		return nil, err
-	}
-
-	path := "/" + user_id + "/" + trashName
-	trash = model.FolderModel{
-		UserID:      user_id,
-		Name:        trashName,
-		Description: "Trash",
-		Path:        path,
-	}
-	if err := db.WithContext(ctx).Create(&trash).Error; err != nil {
-		return nil, err
-	}
-	return &trash, nil
+	// Delegate to the shared helper in folder.go which enforces the
+	// reserved-top-level invariant (parent_id IS NULL) and handles
+	// concurrent-create races via a transaction + re-select.
+	return lookupOrCreateTrashFolder(ctx, db, user_id)
 }
 
 // uniqueFileTrashName returns a file name that doesn't collide with existing

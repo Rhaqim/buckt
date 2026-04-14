@@ -197,10 +197,11 @@ func (d *MigrationBackendService) MigrateFile(ctx context.Context, path string) 
 
 // MigrateAll copies all files from primary to secondary in the background.
 func (d *MigrationBackendService) MigrateAll(ctx context.Context) error {
-	if d.migrating.Load() {
+	// Atomic check-and-set so two concurrent callers can't both start a
+	// migration. CompareAndSwap returns false if the value was already true.
+	if !d.migrating.CompareAndSwap(false, true) {
 		return fmt.Errorf("migration already in progress")
 	}
-	d.migrating.Store(true)
 
 	// List all files from primary
 	files, err := d.primaryBackend.List(ctx, "")
