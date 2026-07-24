@@ -126,9 +126,21 @@ func (f *FileService) CreateFile(ctx context.Context, user_id, parent_id, file_n
 		return "", f.logger.WrapError("failed to create file", err)
 	}
 
-	// Write the file to the backend
+	// Write the file to the backend. If this fails, the metadata row was already
+	// committed above, so we compensate by removing it — otherwise the DB would
+	// hold a FileModel pointing at a blob that doesn't exist. Best-effort: if the
+	// rollback itself fails we log it (the caller needs the original Put error).
+	//
+	// We deliberately keep this order — metadata first, blob second — rather than
+	// writing the blob first: in nested-namespace mode the blob path is
+	// parentFolder.Path/name, so a blob-first write could overwrite an existing
+	// file's content before repo.Create's unique-name check runs, then delete it
+	// on rollback, destroying an unrelated file.
 	if err := f.fileBackend.Put(ctx, file.Path, file_data); err != nil {
-		return "", err
+		if scrubErr := f.repo.ScrubFile(ctx, file.ID); scrubErr != nil {
+			f.logger.Warn("failed to roll back file metadata after backend write failure: " + scrubErr.Error())
+		}
+		return "", fmt.Errorf("failed to write file to backend: %w", err)
 	}
 
 	return file.ID.String(), nil

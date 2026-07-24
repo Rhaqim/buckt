@@ -64,6 +64,32 @@ func TestCreateFile(t *testing.T) {
 	assert.NoError(t, err)
 }
 
+// TestCreateFile_BackendPutFailureRollsBackMetadata verifies that when the
+// backend write fails after the metadata row was created, the service
+// compensates by scrubbing the row (so no FileModel points at a missing blob)
+// and returns the wrapped backend error.
+func TestCreateFile_BackendPutFailureRollsBackMetadata(t *testing.T) {
+	mockSetUp := setupFileTest()
+	ctx := t.Context()
+
+	parentFolder := &model.FolderModel{ID: uuid.New(), Path: "/parent/folder"}
+	user_id := "user1"
+
+	mockSetUp.folderService.On("GetFolder", user_id, "parent_id").Return(parentFolder, nil)
+	mockSetUp.fileRepository.On("Create", mock.Anything).Return(nil)
+
+	putErr := fmt.Errorf("backend unavailable")
+	mockSetUp.backend.On("Put", "/parent/folder/file.txt", []byte("data")).Return(putErr)
+
+	// The compensation must delete the just-created row.
+	mockSetUp.fileRepository.On("ScrubFile", mock.Anything).Return(nil)
+
+	_, err := mockSetUp.fileService.CreateFile(ctx, user_id, "parent_id", "file.txt", "text/plain", []byte("data"))
+	assert.Error(t, err)
+	assert.ErrorIs(t, err, putErr)
+	mockSetUp.fileRepository.AssertCalled(t, "ScrubFile", mock.Anything)
+}
+
 func TestGetFiles(t *testing.T) {
 	mockSetUp := setupFileTest()
 	ctx := t.Context()
