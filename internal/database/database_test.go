@@ -14,39 +14,39 @@ func TestNewDB(t *testing.T) {
 	log := logger.NewLogger("", true, false)
 
 	t.Run("Unsupported driver falls back to SQLite", func(t *testing.T) {
-		db, err := database.NewDB(nil, "unsupported", log, true)
+		db, err := database.NewDB(nil, "unsupported", log, true, "")
 		assert.NoError(t, err)
 		assert.NotNil(t, db)
-		assert.Equal(t, "sqlite", db.Dialector.Name())
+		assert.Equal(t, "sqlite", db.Name())
 	})
 
 	t.Run("SQLite with provided instance", func(t *testing.T) {
 		sqlDB, err := sql.Open("sqlite3", ":memory:")
 		assert.NoError(t, err)
-		defer sqlDB.Close()
+		defer func() { _ = sqlDB.Close() }()
 
-		db, err := database.NewDB(sqlDB, model.SQLite, log, true)
+		db, err := database.NewDB(sqlDB, model.SQLite, log, true, "")
 		assert.NoError(t, err)
 		assert.NotNil(t, db)
-		assert.Equal(t, "sqlite", db.Dialector.Name())
+		assert.Equal(t, "sqlite", db.Name())
 	})
 
 	// t.Run("Postgres with provided instance", func(t *testing.T) {
 	// 	sqlDB, err := sql.Open("postgres", "user=postgres password=postgres dbname=postgres sslmode=disable")
 	// 	assert.NoError(t, err)
-	// 	defer sqlDB.Close()
+	// 	defer func() { _ = sqlDB.Close() }()
 
-	// 	db, err := database.NewDB(sqlDB, domain.Postgres, log, true)
+	// 	db, err := database.NewDB(sqlDB, domain.Postgres, log, true, "")
 	// 	assert.NoError(t, err)
 	// 	assert.NotNil(t, db)
 	// 	assert.Equal(t, "postgres", db.Dialector.Name())
 	// })
 
 	t.Run("SQLite without provided instance", func(t *testing.T) {
-		db, err := database.NewDB(nil, model.SQLite, log, true)
+		db, err := database.NewDB(nil, model.SQLite, log, true, "")
 		assert.NoError(t, err)
 		assert.NotNil(t, db)
-		assert.Equal(t, "sqlite", db.Dialector.Name())
+		assert.Equal(t, "sqlite", db.Name())
 	})
 }
 
@@ -54,9 +54,9 @@ func TestDB_Close(t *testing.T) {
 	log := logger.NewLogger("", true, false)
 	sqlDB, err := sql.Open("sqlite3", ":memory:")
 	assert.NoError(t, err)
-	defer sqlDB.Close()
+	defer func() { _ = sqlDB.Close() }()
 
-	db, err := database.NewDB(sqlDB, model.SQLite, log, true)
+	db, err := database.NewDB(sqlDB, model.SQLite, log, true, "")
 	assert.NoError(t, err)
 	assert.NotNil(t, db)
 
@@ -68,12 +68,12 @@ func TestDB_Migrate(t *testing.T) {
 	log := logger.NewLogger("", true, false)
 	sqlDB, err := sql.Open("sqlite3", ":memory:")
 	assert.NoError(t, err)
-	defer sqlDB.Close()
+	defer func() { _ = sqlDB.Close() }()
 
-	db, err := database.NewDB(sqlDB, model.SQLite, log, true)
+	db, err := database.NewDB(sqlDB, model.SQLite, log, true, "")
 	assert.NoError(t, err)
 	assert.NotNil(t, db)
 
-	err = db.Migrate()
+	err = db.Migrate(true)
 	assert.NoError(t, err)
 }

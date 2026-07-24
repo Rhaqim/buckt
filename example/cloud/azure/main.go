@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/Rhaqim/buckt"
@@ -21,7 +22,12 @@ func main() {
 		return
 	}
 
-	backend := buckt.RegisterPrimaryBackend(azureBackend)
+	if err := azureBackend.Ping(context.Background()); err != nil {
+		fmt.Println("Failed to connect to Azure backend:", err)
+		return
+	}
+
+	backend := buckt.WithBackend(azureBackend)
 
 	client, err := buckt.Default(buckt.WithLog(buckt.LogConfig{}), backend)
 	if err != nil {

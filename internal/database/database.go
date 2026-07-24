@@ -1,12 +1,14 @@
 package database
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"time"
 
 	_ "github.com/lib/pq"
 
+	"github.com/Rhaqim/buckt/internal/database/schema"
 	"github.com/Rhaqim/buckt/internal/domain"
 	"github.com/Rhaqim/buckt/internal/model"
 
@@ -14,16 +16,21 @@ import (
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 	gormLogger "gorm.io/gorm/logger"
+	gormschema "gorm.io/gorm/schema"
 )
 
 type DB struct {
 	*gorm.DB
-	log      domain.BucktLogger
-	external bool
+	log         domain.BucktLogger
+	external    bool
+	tablePrefix string
 }
 
-// NewSQLite creates a new SQLite database connection.
-func NewDB(sqlDBInstance *sql.DB, driver model.DBDrivers, log domain.BucktLogger, silence bool) (*DB, error) {
+// NewDB creates a new database connection. tablePrefix is applied to every
+// table name via gorm's NamingStrategy; the default (empty) prefix preserves
+// buckt's historical table names (folder_models, file_models) so existing
+// databases keep working unchanged.
+func NewDB(sqlDBInstance *sql.DB, driver model.DBDrivers, log domain.BucktLogger, silence bool, tablePrefix string) (*DB, error) {
 	var external bool
 
 	// Define supported database drivers
@@ -52,7 +59,7 @@ func NewDB(sqlDBInstance *sql.DB, driver model.DBDrivers, log domain.BucktLogger
 	}
 
 	// if silence is true, set log level to Info otherwise set to Silent
-	var logLevel gormLogger.LogLevel = gormLogger.Silent
+	logLevel := gormLogger.Silent
 	if silence {
 		logLevel = gormLogger.Info
 	}
@@ -67,6 +74,15 @@ func NewDB(sqlDBInstance *sql.DB, driver model.DBDrivers, log domain.BucktLogger
 				Colorful:      true,
 			},
 		),
+		// Apply the configurable table prefix to every model. An empty prefix
+		// (the default) is equivalent to gorm's zero-value strategy, so existing
+		// databases see the same table names as before.
+		NamingStrategy: gormschema.NamingStrategy{TablePrefix: tablePrefix},
+		// Translate dialect-specific driver errors (e.g. Postgres 23505, SQLite
+		// "UNIQUE constraint failed") into gorm sentinels like ErrDuplicatedKey,
+		// so the repository layer can map them to buckterr.ErrAlreadyExists
+		// portably. Additive: First() still returns ErrRecordNotFound as before.
+		TranslateError: true,
 	}
 
 	// Determine the correct dialector
@@ -117,7 +133,7 @@ func NewDB(sqlDBInstance *sql.DB, driver model.DBDrivers, log domain.BucktLogger
 
 	log.Info("🎉 Successfully connected to " + driverString + " database!")
 
-	return &DB{db, log, external}, nil
+	return &DB{DB: db, log: log, external: external, tablePrefix: tablePrefix}, nil
 }
 
 // Close closes the database connection.
@@ -137,18 +153,28 @@ func (db *DB) Close() error {
 	return err
 }
 
-func (db *DB) Migrate() error {
+// Migrate brings the database schema up to date using the versioned migration
+// runner in internal/database/schema. Migrations are recorded in a ledger and
+// each runs exactly once, so this is safe to call on every startup and adopts a
+// pre-migration (v1.4.x) database in place without destroying data.
+//
+// The optional cloud file-migration feature table (MigrationModel) is created
+// via a conditional AutoMigrate OUTSIDE the versioned ledger, preserving the
+// v1.4.1 behavior where the table only exists when migration mode is enabled.
+func (db *DB) Migrate(migrationEnabled bool) error {
 	db.log.Info("🚀 Running migrations...")
 
-	if err := db.AutoMigrate(&model.FolderModel{}); err != nil {
-		return db.log.WrapErrorf("❌ failed to migrate FolderModel: %w", err)
+	loader := schema.NewLoader(schema.DialectOf(db.DB), db.log, db.tablePrefix)
+	if err := loader.Apply(context.Background(), db.DB); err != nil {
+		return db.log.WrapErrorf("❌ schema migration failed", err)
 	}
-	db.log.GetLogger().Println("✅ FolderModel migrated")
 
-	if err := db.AutoMigrate(&model.FileModel{}); err != nil {
-		return db.log.WrapErrorf("❌ failed to migrate FileModel: %w", err)
+	if migrationEnabled {
+		if err := db.AutoMigrate(&model.MigrationModel{}); err != nil {
+			return db.log.WrapErrorf("❌ failed to migrate MigrationModel", err)
+		}
+		db.log.GetLogger().Println("✅ MigrationModel migrated")
 	}
-	db.log.GetLogger().Println("✅ FileModel migrated")
 
 	return nil
 }

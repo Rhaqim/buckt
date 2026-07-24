@@ -3,6 +3,7 @@ package buckt
 import (
 	"database/sql"
 	"log"
+	"time"
 
 	"github.com/Rhaqim/buckt/internal/domain"
 	"github.com/Rhaqim/buckt/internal/model"
@@ -26,6 +27,15 @@ const (
 type DBConfig struct {
 	Driver   DBDrivers
 	Database *sql.DB
+
+	// TablePrefix is prepended to every buckt table name (folder_models,
+	// file_models, the migration ledger, ...). Leave empty (the default) to keep
+	// buckt's historical un-prefixed names — required for existing databases.
+	// Set it (e.g. "buckt_" or "myapp_") for a FRESH database that shares a
+	// schema with other tables. Changing it on an existing database points buckt
+	// at a different, empty set of tables, so pick it once up front; buckt
+	// refuses to start if a prefix is set while legacy un-prefixed tables exist.
+	TablePrefix string
 }
 
 // FileCacheConfig holds the configuration for the file cache.
@@ -141,9 +151,35 @@ func LocalBackend() Backend {
 //	Log: Configuration for logging.
 //	MediaDir: Path to the directory where media files are stored.
 //	FlatNameSpaces: Flag indicating whether the application should use flat namespaces when storing files.
+//
+// DefaultMaxFileSize is a suggested file-size limit (100MB).
+// It is NOT applied automatically — pass it to WithMaxFileSize to opt in.
+const DefaultMaxFileSize int64 = 100 * 1024 * 1024
+
+// DefaultMaxTrashBatchSize caps the number of descendant files that a single
+// trash/permanent-delete operation may touch. Operations that exceed this
+// limit are refused so a single API call cannot tie up the database
+// transaction or storage backend with thousands of sequential moves.
+const DefaultMaxTrashBatchSize = 5000
+
+// DefaultBackendOpTimeout bounds the total time a single delete operation
+// may spend on backend I/O. The DB transaction is held open for the duration,
+// so this also bounds the worst-case lock-contention window.
+const DefaultBackendOpTimeout = 5 * time.Minute
+
 type Config struct {
 	MediaDir       string
 	FlatNameSpaces bool
+	MaxFileSize    int64
+
+	// MaxTrashBatchSize caps the number of descendant files in a single
+	// folder delete. Defaults to DefaultMaxTrashBatchSize when zero.
+	MaxTrashBatchSize int
+
+	// BackendOpTimeout bounds backend I/O time during a delete operation.
+	// Defaults to DefaultBackendOpTimeout when zero. Set to a negative value
+	// to disable.
+	BackendOpTimeout time.Duration
 
 	DB      DBConfig
 	Cache   CacheConfig
@@ -169,6 +205,16 @@ func WithDB(driver DBDrivers, db *sql.DB) ConfigFunc {
 	return func(c *Config) {
 		c.DB.Driver = DBDrivers(driver)
 		c.DB.Database = db
+	}
+}
+
+// WithTablePrefix sets a prefix applied to every buckt table name. Use it only
+// for a FRESH database that must share a schema with other tables; the default
+// empty prefix preserves buckt's historical table names, which existing
+// databases depend on. See DBConfig.TablePrefix for the full caveats.
+func WithTablePrefix(prefix string) ConfigFunc {
+	return func(c *Config) {
+		c.DB.TablePrefix = prefix
 	}
 }
 
@@ -226,7 +272,57 @@ func FlatNameSpaces(flat bool) ConfigFunc {
 	}
 }
 
+// MigrationConfig describes a dual-write migration between two backends.
+// Files are written to From (source of truth) and mirrored to To. Reads fall
+// back to To if From doesn't have the file, with lazy migration on access.
+type MigrationConfig struct {
+	// From is the current backend in use, treated as the source of truth.
+	From Backend
+
+	// To is the destination backend that From is being migrated to.
+	To Backend
+}
+
+// WithBackend configures a single storage backend.
+//
+// For migration scenarios (writing to two backends and gradually moving data),
+// use WithMigration instead.
+//
+// Example:
+//
+//	s3, _ := aws.NewBackend(awsConfig)
+//	client, _ := buckt.Default(buckt.WithBackend(s3))
+func WithBackend(backend Backend) ConfigFunc {
+	return func(c *Config) {
+		c.Backend.Source = backend
+		c.Backend.Target = nil
+		c.Backend.MigrationEnabled = false
+	}
+}
+
+// WithMigration configures dual-write migration between two backends.
+// Writes go to both backends (with From as the source of truth); reads fall
+// back to To if From is missing the file. Use this when migrating from one
+// storage backend to another.
+//
+// Example:
+//
+//	s3, _ := aws.NewBackend(awsConfig)
+//	client, _ := buckt.Default(buckt.WithMigration(buckt.MigrationConfig{
+//		From: buckt.LocalBackend(),
+//		To:   s3,
+//	}))
+func WithMigration(mc MigrationConfig) ConfigFunc {
+	return func(c *Config) {
+		c.Backend.Source = mc.From
+		c.Backend.Target = mc.To
+		c.Backend.MigrationEnabled = true
+	}
+}
+
 // RegisterPrimaryBackend registers the primary backend for the Buckt application.
+//
+// Deprecated: Use WithBackend instead.
 func RegisterPrimaryBackend(backend Backend) ConfigFunc {
 	return func(c *Config) {
 		c.Backend.Source = backend
@@ -234,6 +330,9 @@ func RegisterPrimaryBackend(backend Backend) ConfigFunc {
 }
 
 // RegisterSecondaryBackend registers the secondary backend for the Buckt application.
+//
+// Deprecated: Use WithMigration instead, which bundles the source, target, and
+// migration enable flag into a single call.
 func RegisterSecondaryBackend(backend Backend) ConfigFunc {
 	return func(c *Config) {
 		c.Backend.Target = backend
@@ -241,8 +340,45 @@ func RegisterSecondaryBackend(backend Backend) ConfigFunc {
 }
 
 // EnableMigration enables dual-write migration mode in the Buckt application.
+//
+// Deprecated: Use WithMigration instead, which bundles the source, target, and
+// migration enable flag into a single call.
 func EnableMigration() ConfigFunc {
 	return func(c *Config) {
 		c.Backend.MigrationEnabled = true
+	}
+}
+
+// WithMaxTrashBatchSize sets the maximum number of descendant files a
+// single folder delete may touch. Operations exceeding this limit are
+// refused. Pass 0 to use DefaultMaxTrashBatchSize.
+func WithMaxTrashBatchSize(n int) ConfigFunc {
+	return func(c *Config) {
+		c.MaxTrashBatchSize = n
+	}
+}
+
+// WithBackendOpTimeout sets the maximum time a delete operation may spend
+// on backend I/O. Pass 0 to use DefaultBackendOpTimeout. Pass a negative
+// duration to disable the timeout.
+func WithBackendOpTimeout(d time.Duration) ConfigFunc {
+	return func(c *Config) {
+		c.BackendOpTimeout = d
+	}
+}
+
+// WithMaxFileSize sets the maximum allowed file size in bytes.
+//
+// If unset or set to 0, no limit is enforced (backward-compatible default).
+// The DefaultMaxFileSize constant (100MB) is provided as a sensible value
+// to pass when you want a limit.
+//
+// Example:
+//
+//	buckt.WithMaxFileSize(buckt.DefaultMaxFileSize) // 100MB
+//	buckt.WithMaxFileSize(50 * 1024 * 1024)         // 50MB
+func WithMaxFileSize(size int64) ConfigFunc {
+	return func(c *Config) {
+		c.MaxFileSize = size
 	}
 }

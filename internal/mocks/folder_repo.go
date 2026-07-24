@@ -24,6 +24,12 @@ func (m *FolderRepository) GetRootFolder(ctx context.Context, user_id string) (*
 	return args.Get(0).(*model.FolderModel), args.Error(1)
 }
 
+// GetTrashFolder implements domain.FolderRepository.
+func (m *FolderRepository) GetTrashFolder(ctx context.Context, user_id string) (*model.FolderModel, error) {
+	args := m.Called(user_id)
+	return args.Get(0).(*model.FolderModel), args.Error(1)
+}
+
 func (m *FolderRepository) Create(ctx context.Context, folder *model.FolderModel) (string, error) {
 	args := m.Called(folder)
 	return args.Get(0).(string), args.Error(1)
@@ -39,6 +45,11 @@ func (m *FolderRepository) GetFolders(ctx context.Context, parentID uuid.UUID) (
 	return args.Get(0).([]model.FolderModel), args.Error(1)
 }
 
+func (m *FolderRepository) GetFoldersPaginated(ctx context.Context, parentID uuid.UUID, page model.Pagination) ([]model.FolderModel, error) {
+	args := m.Called(parentID, page)
+	return args.Get(0).([]model.FolderModel), args.Error(1)
+}
+
 func (m *FolderRepository) MoveFolder(ctx context.Context, folderID, newParentID uuid.UUID) error {
 	args := m.Called(folderID, newParentID)
 	return args.Error(0)
@@ -50,9 +61,29 @@ func (m *FolderRepository) RenameFolder(ctx context.Context, user_id string, fol
 }
 
 // DeleteFolder implements domain.FolderRepository.
-func (m *FolderRepository) DeleteFolder(ctx context.Context, folder_id uuid.UUID) (parent_id string, err error) {
+func (m *FolderRepository) DeleteFolder(ctx context.Context, folder_id uuid.UUID, beforeCommit func(oldPath, newPath string, fileMoves []model.PathMove) error) (parent_id, oldPath, newPath string, fileMoves []model.PathMove, err error) {
 	args := m.Called(folder_id)
-	return args.String(0), args.Error(1)
+	parent_id = args.String(0)
+	oldPath = args.String(1)
+	newPath = args.String(2)
+	if v := args.Get(3); v != nil {
+		fileMoves, _ = v.([]model.PathMove)
+	}
+	repoErr := args.Error(4)
+
+	// Mirror the real repository: the callback only fires after the DB
+	// updates succeed. If the mocked call is configured to return an
+	// error, treat it as a pre-callback failure and skip the callback.
+	if repoErr != nil {
+		return parent_id, "", "", nil, repoErr
+	}
+
+	if beforeCommit != nil {
+		if cbErr := beforeCommit(oldPath, newPath, fileMoves); cbErr != nil {
+			return parent_id, "", "", nil, cbErr
+		}
+	}
+	return
 }
 
 // ScrubFolder implements domain.FolderRepository.

@@ -3,12 +3,10 @@ package app
 import (
 	"fmt"
 	"io"
-	"strconv"
-	"strings"
 
 	"github.com/Rhaqim/buckt"
 	"github.com/Rhaqim/buckt/client/web/domain"
-	"github.com/Rhaqim/buckt/internal/utils"
+	"github.com/Rhaqim/buckt/pkg/fileutil"
 	"github.com/Rhaqim/buckt/pkg/response"
 	"github.com/gin-gonic/gin"
 )
@@ -91,12 +89,38 @@ func (svc *APIService) GetFilesInFolder(c *gin.Context) {
 
 // GetSubFolders implements domain.APIService.
 func (svc *APIService) GetSubFolders(c *gin.Context) {
-	panic("unimplemented")
+	parentID := c.Param("parent_id")
+	if parentID == "" {
+		c.AbortWithStatusJSON(400, response.Error("parent_id is required", ""))
+		return
+	}
+
+	folders, err := svc.client.ListFolders(parentID)
+	if err != nil {
+		c.AbortWithStatusJSON(500, response.WrapError("failed to get sub-folders", err))
+		return
+	}
+
+	c.JSON(200, response.Success(folders))
 }
 
 // GetDescendants implements domain.APIService.
 func (svc *APIService) GetDescendants(c *gin.Context) {
-	panic("unimplemented")
+	user_id := c.GetString("owner_id")
+
+	folderID := c.Param("folder_id")
+	if folderID == "" {
+		c.AbortWithStatusJSON(400, response.Error("folder_id is required", ""))
+		return
+	}
+
+	folder, err := svc.client.GetFolderWithContent(user_id, folderID)
+	if err != nil {
+		c.AbortWithStatusJSON(500, response.WrapError("failed to get descendants", err))
+		return
+	}
+
+	c.JSON(200, response.Success(folder))
 }
 
 // DeleteFolder implements domain.APIService.
@@ -205,7 +229,7 @@ func (svc *APIService) UploadFile(c *gin.Context) {
 	}
 
 	// Read file from request
-	fileName, fileByte, err := utils.ProcessFile(file)
+	fileName, fileByte, err := fileutil.ProcessFileWithLimit(file, svc.client.MaxFileSize())
 	if err != nil {
 		c.AbortWithStatusJSON(500, response.WrapError("failed to process file", err))
 		return
@@ -245,9 +269,10 @@ func (svc *APIService) DownloadFile(c *gin.Context) {
 
 	// Set headers
 	c.Header("Cache-Control", "public, max-age=86400")
-	c.Header("Content-Disposition", "attachment; filename="+file.Name)
+	c.Header("Content-Disposition", fileutil.SafeContentDisposition("attachment", file.Name))
 	c.Header("Content-Type", file.ContentType)
 	c.Header("Content-Length", fmt.Sprintf("%d", file.Size))
+	c.Header("X-Content-Type-Options", "nosniff")
 
 	// Send file data
 	c.Data(200, file.ContentType, file.Data)
@@ -274,11 +299,21 @@ func (svc *APIService) ServeFile(c *gin.Context) {
 		return
 	}
 
+	// Only render inline for a small allowlist of media types. Types that can
+	// execute script in this origin (text/html, image/svg+xml, ...) are forced
+	// to download, closing a stored-XSS vector where an uploaded HTML/SVG file
+	// would otherwise run in the buckt origin when opened via /serve.
+	disposition := fileutil.DispositionFor(file.ContentType)
+
 	// Set headers
 	c.Header("Cache-Control", "public, max-age=86400")
-	c.Header("Content-Disposition", "attachment; filename="+file.Name)
+	c.Header("Content-Disposition", fileutil.SafeContentDisposition(disposition, file.Name))
 	c.Header("Content-Type", file.ContentType)
 	c.Header("Content-Length", fmt.Sprintf("%d", file.Size))
+	c.Header("X-Content-Type-Options", "nosniff")
+	// Defense in depth: even if a type slips through as inline, this CSP blocks
+	// script execution and sub-resource loads from the served document.
+	c.Header("Content-Security-Policy", "default-src 'none'; sandbox; img-src 'self'; media-src 'self'")
 
 	// Send file data
 	c.Data(200, file.ContentType, file.Data)
@@ -297,12 +332,13 @@ func (svc *APIService) StreamFile(c *gin.Context) {
 		c.AbortWithStatusJSON(500, response.WrapError("failed to get file", err))
 		return
 	}
-	defer stream.Close()
+	defer func() { _ = stream.Close() }()
 
 	// Set headers
-	c.Header("Content-Disposition", "attachment; filename="+file.Name)
+	c.Header("Content-Disposition", fileutil.SafeContentDisposition("attachment", file.Name))
 	c.Header("Content-Type", file.ContentType)
 	c.Header("Content-Length", fmt.Sprintf("%d", file.Size))
+	c.Header("X-Content-Type-Options", "nosniff")
 
 	// If file is small, use io.Copy
 	if file.Size < 10*1024*1024 { // 10 MB threshold
@@ -409,33 +445,4 @@ func (svc *APIService) DeleteFilePermanently(c *gin.Context) {
 
 func (f *APIService) constructURL(s string) string {
 	return fmt.Sprintf("/serve/%s", s)
-}
-
-func parseRange(rangeHeader string, fileSize int64) (start, end int64, err error) {
-	// Example: "bytes=500-1000"
-	if !strings.HasPrefix(rangeHeader, "bytes=") {
-		return 0, 0, fmt.Errorf("invalid range")
-	}
-	rangeParts := strings.Split(strings.TrimPrefix(rangeHeader, "bytes="), "-")
-
-	start, err = strconv.ParseInt(rangeParts[0], 10, 64)
-	if err != nil {
-		return 0, 0, fmt.Errorf("invalid range start")
-	}
-
-	if rangeParts[1] != "" {
-		end, err = strconv.ParseInt(rangeParts[1], 10, 64)
-		if err != nil {
-			return 0, 0, fmt.Errorf("invalid range end")
-		}
-	} else {
-		end = fileSize - 1
-	}
-
-	// Ensure valid range
-	if start > end || start < 0 || end >= fileSize {
-		return 0, 0, fmt.Errorf("invalid range")
-	}
-
-	return start, end, nil
 }

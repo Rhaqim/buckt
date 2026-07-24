@@ -24,7 +24,10 @@ func NewBackend(conf Config) (*GCPBackend, error) {
 
 	ctx := context.Background()
 
-	client, err := storage.NewClient(ctx, option.WithCredentialsFile(conf.CredentialsFile))
+	// WithCredentialsFile is deprecated upstream but remains the supported way to
+	// pass a service-account key file path, which is this backend's configured
+	// auth model. Migrating to ADC / WithCredentialsJSON is a separate change.
+	client, err := storage.NewClient(ctx, option.WithCredentialsFile(conf.CredentialsFile)) //nolint:staticcheck // intentional: key-file auth is the configured model
 	if err != nil {
 		return nil, fmt.Errorf("failed to create GCP client: %w", err)
 	}
@@ -39,9 +42,20 @@ func (g *GCPBackend) Name() string {
 	return "gcp"
 }
 
+// Ping verifies connectivity to the GCS bucket by checking its attributes.
+func (g *GCPBackend) Ping(ctx context.Context) error {
+	_, err := g.client.Bucket(g.bucketName).Attrs(ctx)
+	if err != nil {
+		return fmt.Errorf("GCS connectivity check failed for bucket %q: %w", g.bucketName, err)
+	}
+	return nil
+}
+
 func (g *GCPBackend) Put(ctx context.Context, path string, data []byte) error {
 	w := g.client.Bucket(g.bucketName).Object(path).NewWriter(ctx)
 	if _, err := w.Write(data); err != nil {
+		// Cancel the upload by closing the writer — GCS will discard the incomplete object
+		_ = w.Close()
 		return fmt.Errorf("failed to write object: %w", err)
 	}
 	if err := w.Close(); err != nil {
@@ -55,7 +69,7 @@ func (g *GCPBackend) Get(ctx context.Context, path string) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to open reader: %w", err)
 	}
-	defer r.Close()
+	defer func() { _ = r.Close() }()
 
 	buf := new(bytes.Buffer)
 	if _, err := io.Copy(buf, r); err != nil {

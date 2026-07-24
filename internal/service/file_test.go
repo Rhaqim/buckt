@@ -29,7 +29,7 @@ func setupFileTest() MockFileServices {
 	mockFolderService := new(mocks.FolderService)
 	mockLocalFileSystemService := new(mocks.LocalFileSystemService)
 
-	fileService := NewFileService(mockLogger, mockCache, mockFileRepo, mockFolderService, mockLocalFileSystemService, false)
+	fileService := NewFileService(mockLogger, mockCache, mockFileRepo, mockFolderService, mockLocalFileSystemService, false, 100*1024*1024, 0)
 
 	return MockFileServices{
 		fileService:    fileService,
@@ -62,6 +62,32 @@ func TestCreateFile(t *testing.T) {
 
 	_, err := mockSetUp.fileService.CreateFile(ctx, user_id, "parent_id", "file.txt", "text/plain", []byte("file data"))
 	assert.NoError(t, err)
+}
+
+// TestCreateFile_BackendPutFailureRollsBackMetadata verifies that when the
+// backend write fails after the metadata row was created, the service
+// compensates by scrubbing the row (so no FileModel points at a missing blob)
+// and returns the wrapped backend error.
+func TestCreateFile_BackendPutFailureRollsBackMetadata(t *testing.T) {
+	mockSetUp := setupFileTest()
+	ctx := t.Context()
+
+	parentFolder := &model.FolderModel{ID: uuid.New(), Path: "/parent/folder"}
+	user_id := "user1"
+
+	mockSetUp.folderService.On("GetFolder", user_id, "parent_id").Return(parentFolder, nil)
+	mockSetUp.fileRepository.On("Create", mock.Anything).Return(nil)
+
+	putErr := fmt.Errorf("backend unavailable")
+	mockSetUp.backend.On("Put", "/parent/folder/file.txt", []byte("data")).Return(putErr)
+
+	// The compensation must delete the just-created row.
+	mockSetUp.fileRepository.On("ScrubFile", mock.Anything).Return(nil)
+
+	_, err := mockSetUp.fileService.CreateFile(ctx, user_id, "parent_id", "file.txt", "text/plain", []byte("data"))
+	assert.Error(t, err)
+	assert.ErrorIs(t, err, putErr)
+	mockSetUp.fileRepository.AssertCalled(t, "ScrubFile", mock.Anything)
 }
 
 func TestGetFiles(t *testing.T) {
@@ -123,29 +149,90 @@ func TestUpdateFile(t *testing.T) {
 	assert.NoError(t, err)
 }
 
-func TestDeleteFile(t *testing.T) {
+// TestDeleteFile_PermanentDeleteFromTrash covers the path where the repo
+// returns newPath == "" indicating the file was already in trash and got
+// hard-deleted. The service should call backend.Delete on oldPath.
+func TestDeleteFile_PermanentDeleteFromTrash(t *testing.T) {
 	mockSetUp := setupFileTest()
 	ctx := t.Context()
 
 	fileID := uuid.New()
 	fileModel := &model.FileModel{
 		ID:   fileID,
-		Path: "/parent/folder/file.txt",
+		Path: "/user/__trash__/file.txt",
 	}
 
 	mockSetUp.cacheManager.On("GetBucktValue", fileID.String()).Return("", nil)
-
-	// Mock cache deletion
 	mockSetUp.cacheManager.On("DeleteBucktValue", fileID.String()).Return(nil)
-
 	mockSetUp.fileRepository.On("GetFile", fileID).Return(fileModel, nil)
 
-	mockSetUp.backend.On("Delete", "/parent/folder/file.txt").Return(nil)
+	// Repo indicates permanent delete via newPath == ""
+	mockSetUp.fileRepository.On("DeleteFile", fileID).Return("/user/__trash__/file.txt", "", nil)
 
-	mockSetUp.fileRepository.On("DeleteFile", fileID).Return(nil)
+	// Service should remove the blob from the backend
+	mockSetUp.backend.On("Delete", "/user/__trash__/file.txt").Return(nil)
 
 	_, err := mockSetUp.fileService.DeleteFile(ctx, fileID.String())
 	assert.NoError(t, err)
+	mockSetUp.backend.AssertCalled(t, "Delete", "/user/__trash__/file.txt")
+}
+
+// TestDeleteFile_MoveToTrashNested covers the nested-namespace case where
+// the repo returns a different newPath. The service should call backend.Move
+// to physically relocate the blob.
+func TestDeleteFile_MoveToTrashNested(t *testing.T) {
+	mockSetUp := setupFileTest()
+	ctx := t.Context()
+
+	fileID := uuid.New()
+	fileModel := &model.FileModel{
+		ID:   fileID,
+		Path: "/user/photos/sunset.jpg",
+	}
+
+	mockSetUp.cacheManager.On("GetBucktValue", fileID.String()).Return("", nil)
+	mockSetUp.cacheManager.On("DeleteBucktValue", fileID.String()).Return(nil)
+	mockSetUp.fileRepository.On("GetFile", fileID).Return(fileModel, nil)
+
+	oldPath := "/user/photos/sunset.jpg"
+	newPath := "/user/__trash__/sunset.jpg"
+	mockSetUp.fileRepository.On("DeleteFile", fileID).Return(oldPath, newPath, nil)
+
+	// Service should physically move the blob on the backend
+	mockSetUp.backend.On("Move", oldPath, newPath).Return(nil)
+
+	_, err := mockSetUp.fileService.DeleteFile(ctx, fileID.String())
+	assert.NoError(t, err)
+	mockSetUp.backend.AssertCalled(t, "Move", oldPath, newPath)
+	mockSetUp.backend.AssertNotCalled(t, "Delete", mock.Anything)
+}
+
+// TestDeleteFile_MoveToTrashFlatNamespace covers the flat-namespace case
+// where oldPath == newPath. The service should NOT call backend.Move
+// because the blob's actual location is unchanged.
+func TestDeleteFile_MoveToTrashFlatNamespace(t *testing.T) {
+	mockSetUp := setupFileTest()
+	ctx := t.Context()
+
+	fileID := uuid.New()
+	fileModel := &model.FileModel{
+		ID:   fileID,
+		Path: "abc123.jpg",
+	}
+
+	mockSetUp.cacheManager.On("GetBucktValue", fileID.String()).Return("", nil)
+	mockSetUp.cacheManager.On("DeleteBucktValue", fileID.String()).Return(nil)
+	mockSetUp.fileRepository.On("GetFile", fileID).Return(fileModel, nil)
+
+	// Flat mode: repo returns same path for old and new
+	mockSetUp.fileRepository.On("DeleteFile", fileID).Return("abc123.jpg", "abc123.jpg", nil)
+
+	_, err := mockSetUp.fileService.DeleteFile(ctx, fileID.String())
+	assert.NoError(t, err)
+
+	// Neither Move nor Delete should be called — blob stays at its flat path
+	mockSetUp.backend.AssertNotCalled(t, "Move", mock.Anything, mock.Anything)
+	mockSetUp.backend.AssertNotCalled(t, "Delete", mock.Anything)
 }
 
 func TestScrubFile(t *testing.T) {

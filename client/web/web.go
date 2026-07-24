@@ -13,15 +13,15 @@ import (
 )
 
 func NewClient(bucktClient *buckt.Client, conf ...Config) (domain.RouterService, error) {
-	var logger *log.Logger = log.New(os.Stdout, "client: ", log.LstdFlags)
+	logger := log.New(os.Stdout, "client: ", log.LstdFlags)
 
 	tmpl, err := loadTemplates()
 	if err != nil {
 		return nil, fmt.Errorf("failed to load templates: %w", err)
 	}
 
-	var apiService domain.APIService = app.NewAPIService(bucktClient)
-	var webService domain.WebService = app.NewWebService(bucktClient)
+	apiService := app.NewAPIService(bucktClient)
+	webService := app.NewWebService(bucktClient)
 
 	mode := WebModeAll
 	debug := false
@@ -33,7 +33,7 @@ func NewClient(bucktClient *buckt.Client, conf ...Config) (domain.RouterService,
 	}
 
 	// 	// middleware server
-	var middleware domain.Middleware = middleware.NewBucketMiddleware(logger, mode == WebModeMount)
+	mw := middleware.NewBucketMiddleware(logger, mode == WebModeMount)
 
 	router := router.NewRouter(
 		logger,
@@ -42,7 +42,7 @@ func NewClient(bucktClient *buckt.Client, conf ...Config) (domain.RouterService,
 		mode,
 		apiService,
 		webService,
-		middleware)
+		mw)
 
 	return router, nil
 }

@@ -21,6 +21,12 @@ func (m *FolderService) GetRootFolder(ctx context.Context, user_id string) (*mod
 	return args.Get(0).(*model.FolderModel), args.Error(1)
 }
 
+// GetTrashFolder implements domain.FolderService.
+func (m *FolderService) GetTrashFolder(ctx context.Context, user_id string) (*model.FolderModel, error) {
+	args := m.Called(user_id)
+	return args.Get(0).(*model.FolderModel), args.Error(1)
+}
+
 // CreateFolder implements domain.FolderService.
 func (m *FolderService) CreateFolder(ctx context.Context, user_id string, parent_id string, folder_name string, description string) (string, error) {
 	args := m.Called(user_id, parent_id, folder_name, description)

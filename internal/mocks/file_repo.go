@@ -42,14 +42,13 @@ func (m *FileRepository) GetFile(ctx context.Context, fileID uuid.UUID) (*model.
 	return args.Get(0).(*model.FileModel), args.Error(1)
 }
 
-// RestoreFileByPath implements domain.FileRepository.
-func (m *FileRepository) RestoreFile(ctx context.Context, parent_id uuid.UUID, name string) (*model.FileModel, error) {
-	args := m.Called(parent_id, name)
-	return args.Get(0).(*model.FileModel), args.Error(1)
-}
-
 func (m *FileRepository) GetFiles(ctx context.Context, parentID uuid.UUID) ([]*model.FileModel, error) {
 	args := m.Called(parentID)
+	return args.Get(0).([]*model.FileModel), args.Error(1)
+}
+
+func (m *FileRepository) GetFilesPaginated(ctx context.Context, parentID uuid.UUID, page model.Pagination) ([]*model.FileModel, error) {
+	args := m.Called(parentID, page)
 	return args.Get(0).([]*model.FileModel), args.Error(1)
 }
 
@@ -58,9 +57,24 @@ func (m *FileRepository) Update(ctx context.Context, file *model.FileModel) erro
 	return args.Error(0)
 }
 
-func (m *FileRepository) DeleteFile(ctx context.Context, fileID uuid.UUID) error {
+func (m *FileRepository) DeleteFile(ctx context.Context, fileID uuid.UUID, beforeCommit func(oldPath, newPath string) error) (string, string, error) {
 	args := m.Called(fileID)
-	return args.Error(0)
+	oldPath, newPath := args.String(0), args.String(1)
+	repoErr := args.Error(2)
+
+	// Mirror the real repository: the callback only fires after the DB
+	// updates succeed. If the mocked call is configured to return an
+	// error, treat it as a pre-callback failure and skip the callback.
+	if repoErr != nil {
+		return "", "", repoErr
+	}
+
+	if beforeCommit != nil {
+		if cbErr := beforeCommit(oldPath, newPath); cbErr != nil {
+			return "", "", cbErr
+		}
+	}
+	return oldPath, newPath, nil
 }
 
 func (m *FileRepository) ScrubFile(ctx context.Context, fileID uuid.UUID) error {

@@ -10,7 +10,10 @@ package buckt
 
 import (
 	"context"
+	"fmt"
 	"io"
+	"math"
+	"time"
 
 	"github.com/Rhaqim/buckt/internal/backend"
 	"github.com/Rhaqim/buckt/internal/cache"
@@ -26,8 +29,11 @@ import (
 type Client struct {
 	db *database.DB
 
-	flatnameSpaces bool
-	silence        bool
+	flatnameSpaces    bool
+	silence           bool
+	maxFileSize       int64
+	maxTrashBatchSize int
+	backendOpTimeout  time.Duration
 
 	logger   domain.BucktLogger
 	lruCache domain.LRUCache
@@ -59,25 +65,44 @@ func New(conf Config, opts ...ConfigFunc) (*Client, error) {
 
 	// Initialize database
 	dbConf := conf.DB
-	db, err := database.NewDB(dbConf.Database, dbConf.Driver, bucktLog, logConf.Silence)
+	db, err := database.NewDB(dbConf.Database, dbConf.Driver, bucktLog, logConf.Silence, dbConf.TablePrefix)
 	if err != nil {
 		return nil, bucktLog.WrapErrorf("failed to initialize database", err)
 	}
 
-	// Migrate the database
-	if err = db.Migrate(); err != nil {
-		bucktLog.WrapErrorf("failed to migrate database", err)
+	// Migrate the database — fail fast on schema errors so we don't run
+	// against an incompatible schema and corrupt data.
+	if err = db.Migrate(conf.Backend.MigrationEnabled); err != nil {
+		return nil, bucktLog.WrapErrorf("failed to migrate database", err)
 	}
 
 	// Initialize cache
 	cacheManager, lruCache := initializeCache(conf.Cache, bucktLog)
 
 	// Initialise Backend
-	var backend domain.FileBackend = resolveBackend(conf.MediaDir, conf.Backend, bucktLog, lruCache)
+	backend := resolveBackend(conf.MediaDir, conf.Backend, bucktLog, lruCache)
+
+	// Max file size: 0 means no limit (backward compatible)
+	maxFileSize := conf.MaxFileSize
+
+	// Trash batch limit: 0 -> default, negative -> unlimited (escape hatch)
+	maxTrashBatch := conf.MaxTrashBatchSize
+	if maxTrashBatch == 0 {
+		maxTrashBatch = DefaultMaxTrashBatchSize
+	}
+
+	// Backend op timeout: 0 -> default, negative -> disabled
+	backendTimeout := conf.BackendOpTimeout
+	if backendTimeout == 0 {
+		backendTimeout = DefaultBackendOpTimeout
+	}
 
 	// Initialize the app services
 	folderService, fileService := newAppServices(
 		conf.FlatNameSpaces,
+		maxFileSize,
+		maxTrashBatch,
+		backendTimeout,
 		db,
 		bucktLog,
 		cacheManager,
@@ -86,13 +111,16 @@ func New(conf Config, opts ...ConfigFunc) (*Client, error) {
 
 	// Initialize the Buckt instance
 	buckt := &Client{
-		db:             db,
-		logger:         bucktLog,
-		lruCache:       lruCache,
-		flatnameSpaces: conf.FlatNameSpaces,
-		silence:        logConf.Silence,
-		fileService:    fileService,
-		folderService:  folderService,
+		db:                db,
+		logger:            bucktLog,
+		lruCache:          lruCache,
+		flatnameSpaces:    conf.FlatNameSpaces,
+		silence:           logConf.Silence,
+		maxFileSize:       maxFileSize,
+		maxTrashBatchSize: maxTrashBatch,
+		backendOpTimeout:  backendTimeout,
+		fileService:       fileService,
+		folderService:     folderService,
 	}
 
 	bucktLog.Info("✅ Buckt initialized")
@@ -130,11 +158,21 @@ func Default(opts ...ConfigFunc) (*Client, error) {
 	return New(bucktOpts)
 }
 
-// Close closes the Buckt instance.
-// It closes the database connection and the LRU cache.
-func (b *Client) Close() {
-	b.db.Close()
+// Close releases the Buckt instance's resources: it closes the LRU cache and
+// the database connection, and returns any error from closing the database
+// (external connections passed via WithDB are left open). Adding this return
+// value is source-compatible — existing `defer client.Close()` and
+// `client.Close()` call sites keep working.
+func (b *Client) Close() error {
 	b.lruCache.Close()
+	return b.db.Close()
+}
+
+// MaxFileSize returns the configured maximum file size in bytes. A return
+// value of 0 means no limit is enforced. Use this to surface the configured
+// limit to HTTP handlers so they can reject oversized uploads early.
+func (b *Client) MaxFileSize() int64 {
+	return b.maxFileSize
 }
 
 /* Folder Methods */
@@ -228,6 +266,18 @@ func (b *Client) DeleteFolder(folder_id string) (string, error) {
 //   - error: An error object if the deletion fails, otherwise nil.
 func (b *Client) DeleteFolderPermanently(user_id, folder_id string) (string, error) {
 	return b.DeleteFolderPermanentlyContext(context.Background(), user_id, folder_id)
+}
+
+// GetTrashFolder returns the user's trash folder with its contents preloaded.
+//
+// Parameters:
+//   - user_id: The ID of the user.
+//
+// Returns:
+//   - *model.FolderModel: The trash folder model with its contents.
+//   - error: An error if the trash folder could not be retrieved.
+func (b *Client) GetTrashFolder(user_id string) (*model.FolderModel, error) {
+	return b.GetTrashFolderContext(context.Background(), user_id)
 }
 
 /* File Methods */
@@ -461,6 +511,11 @@ func (b *Client) DeleteFolderPermanentlyContext(ctx context.Context, user_id, fo
 	return b.folderService.ScrubFolder(ctx, user_id, folder_id)
 }
 
+// GetTrashFolderContext returns the user's trash folder with its contents preloaded.
+func (b *Client) GetTrashFolderContext(ctx context.Context, user_id string) (*model.FolderModel, error) {
+	return b.folderService.GetTrashFolder(ctx, user_id)
+}
+
 /* File Methods */
 
 // UploadFileContext uploads a file to the specified user's bucket.
@@ -494,25 +549,44 @@ func (b *Client) UploadFileContext(ctx context.Context, user_id string, parent_i
 //   - string: The ID of the newly created file.
 //   - error: An error if the file upload fails, otherwise nil.
 func (b *Client) UploadFileFromReaderContext(ctx context.Context, user_id string, parent_id string, file_name string, content_type string, file_data io.Reader) (string, error) {
+	// Try to use Seeker for efficiency if available
+	if seeker, ok := file_data.(io.Seeker); ok {
+		fileSize, err := seeker.Seek(0, io.SeekEnd)
+		if err != nil {
+			return "", err
+		}
+		// Reject before allocating if we know the size upfront
+		if b.maxFileSize > 0 && fileSize > b.maxFileSize {
+			return "", fmt.Errorf("file size %d exceeds maximum allowed size %d bytes", fileSize, b.maxFileSize)
+		}
+		// Guard against int64 -> int overflow on 32-bit platforms
+		if fileSize < 0 || fileSize > int64(math.MaxInt) {
+			return "", fmt.Errorf("file size %d out of range for int allocation", fileSize)
+		}
+		if _, err = seeker.Seek(0, io.SeekStart); err != nil {
+			return "", err
+		}
 
-	// Get the file size
-	file_info, err := file_data.(io.Seeker).Seek(0, io.SeekEnd)
+		file_bytes := make([]byte, int(fileSize))
+		if _, err = io.ReadFull(file_data, file_bytes); err != nil {
+			return "", err
+		}
+		return b.fileService.CreateFile(ctx, user_id, parent_id, file_name, content_type, file_bytes)
+	}
+
+	// Fallback: read with bounded reader for non-seekable streams
+	reader := file_data
+	if b.maxFileSize > 0 {
+		reader = io.LimitReader(file_data, b.maxFileSize+1) // +1 to detect overflow
+	}
+	file_bytes, err := io.ReadAll(reader)
 	if err != nil {
 		return "", err
 	}
-	_, err = file_data.(io.Seeker).Seek(0, io.SeekStart)
-	if err != nil {
-		return "", err
+	if b.maxFileSize > 0 && int64(len(file_bytes)) > b.maxFileSize {
+		return "", fmt.Errorf("file size exceeds maximum allowed size %d bytes", b.maxFileSize)
 	}
 
-	// Read the file data
-	file_bytes := make([]byte, file_info)
-	_, err = io.ReadFull(file_data, file_bytes)
-	if err != nil {
-		return "", err
-	}
-
-	// Upload the file
 	return b.fileService.CreateFile(ctx, user_id, parent_id, file_name, content_type, file_bytes)
 }
 
@@ -624,7 +698,10 @@ func initializeCache(conf CacheConfig, bucktLog domain.BucktLogger) (domain.Cach
 
 	lruCache, err := cache.NewFileCache(fileConf.NumCounters, fileConf.MaxCost, fileConf.BufferItems)
 	if err != nil {
-		bucktLog.WrapErrorf("failed to initialize file cache", err)
+		// Best-effort fallback: the cache is optional, so we don't fail startup.
+		// Log it (the one legitimate use of the logger — an error we deliberately
+		// do not return to the caller).
+		bucktLog.Warn("failed to initialize file cache, using no-op cache: " + err.Error())
 		lruCache = mocks.NewNoopLRUCache()
 	}
 	bucktLog.Info("✅ Initialized file cache")
@@ -638,18 +715,21 @@ func initializeCache(conf CacheConfig, bucktLog domain.BucktLogger) (domain.Cach
 
 func newAppServices(
 	flatNameSpaces bool,
+	maxFileSize int64,
+	maxTrashBatch int,
+	backendOpTimeout time.Duration,
 	db *database.DB,
 	logger domain.BucktLogger,
 	cacheManager domain.CacheManager,
 	activeBackend domain.FileBackend,
 ) (domain.FolderService, domain.FileService) {
 	// Initialize the stores
-	var folderRepository domain.FolderRepository = repository.NewFolderRepository(db)
-	var fileRepository domain.FileRepository = repository.NewFileRepository(db)
+	folderRepository := repository.NewFolderRepository(db)
+	fileRepository := repository.NewFileRepository(db)
 
 	// initialize the services
-	var folderService domain.FolderService = service.NewFolderService(logger, cacheManager, folderRepository, activeBackend)
-	var fileService domain.FileService = service.NewFileService(logger, cacheManager, fileRepository, folderService, activeBackend, flatNameSpaces)
+	folderService := service.NewFolderService(logger, cacheManager, folderRepository, activeBackend, flatNameSpaces, maxTrashBatch, backendOpTimeout)
+	fileService := service.NewFileService(logger, cacheManager, fileRepository, folderService, activeBackend, flatNameSpaces, maxFileSize, backendOpTimeout)
 
 	logger.Info("✅ Initialized app services")
 
@@ -662,7 +742,7 @@ func resolveBackend(mediaDir string, bc BackendConfig, log domain.BucktLogger, l
 
 		// Fallback logic for source
 		if bc.Source != nil {
-			source = instantiateIfLocal(bc.Source, mediaDir, log, lru)
+			source = resolveIfPlaceholder(bc.Source, mediaDir, log, lru)
 		} else {
 			log.Warn("⚠️ Migration enabled but source backend missing — falling back to local as source")
 			source = backend.NewLocalFileSystemService(log, mediaDir, lru)
@@ -670,7 +750,7 @@ func resolveBackend(mediaDir string, bc BackendConfig, log domain.BucktLogger, l
 
 		// Fallback logic for target
 		if bc.Target != nil {
-			target = instantiateIfLocal(bc.Target, mediaDir, log, lru)
+			target = resolveIfPlaceholder(bc.Target, mediaDir, log, lru)
 		} else {
 			log.Warn("⚠️ Migration enabled but target backend missing — falling back to local as target")
 			target = backend.NewLocalFileSystemService(log, mediaDir, lru)
@@ -682,8 +762,14 @@ func resolveBackend(mediaDir string, bc BackendConfig, log domain.BucktLogger, l
 			return backend.NewLocalFileSystemService(log, mediaDir, lru)
 		}
 
+		// Compare by pointer identity — only reject if the caller passed the
+		// exact same backend instance for both source and target. Two distinct
+		// backends with the same Name() (e.g. two S3 buckets) are legitimate
+		// migration targets and should not be rejected here. Users are responsible
+		// for ensuring their source and target point to different underlying
+		// storage locations.
 		if source == target {
-			log.Errorf("❌ Migration enabled but source and target backends are the same instance — disabling migration and falling back to a single backend")
+			log.Errorf("❌ Migration enabled but source and target are the same instance — disabling migration and using source only")
 			return source
 		}
 
@@ -694,11 +780,11 @@ func resolveBackend(mediaDir string, bc BackendConfig, log domain.BucktLogger, l
 	// Non-migration modes
 	switch {
 	case bc.Source != nil:
-		return instantiateIfLocal(bc.Source, mediaDir, log, lru)
+		return resolveIfPlaceholder(bc.Source, mediaDir, log, lru)
 
 	case bc.Target != nil:
 		log.Warn("⚠️ Using target backend as primary because source is missing")
-		return instantiateIfLocal(bc.Target, mediaDir, log, lru)
+		return resolveIfPlaceholder(bc.Target, mediaDir, log, lru)
 
 	default:
 		log.Warn("⚠️ No backend configured, falling back to local")
@@ -706,8 +792,11 @@ func resolveBackend(mediaDir string, bc BackendConfig, log domain.BucktLogger, l
 	}
 }
 
-func instantiateIfLocal(b Backend, mediaDir string, log domain.BucktLogger, lru domain.LRUCache) Backend {
-	if b.Name() == "local" {
+// resolveIfPlaceholder checks if the backend is a PlaceholderBackend (e.g. from
+// buckt.LocalBackend()) and replaces it with a real local backend instance.
+// User-provided cloud backends pass through unchanged.
+func resolveIfPlaceholder(b Backend, mediaDir string, log domain.BucktLogger, lru domain.LRUCache) Backend {
+	if _, ok := b.(*domain.PlaceholderBackend); ok {
 		return backend.NewLocalFileSystemService(log, mediaDir, lru)
 	}
 	return b

@@ -8,6 +8,25 @@ import (
 	"strings"
 )
 
+// formatSize formats a file size in bytes to a human-readable string.
+func formatSize(size int64) string {
+	const (
+		KB = 1024
+		MB = KB * 1024
+		GB = MB * 1024
+	)
+	switch {
+	case size >= GB:
+		return fmt.Sprintf("%.1f GB", float64(size)/float64(GB))
+	case size >= MB:
+		return fmt.Sprintf("%.1f MB", float64(size)/float64(MB))
+	case size >= KB:
+		return fmt.Sprintf("%.1f KB", float64(size)/float64(KB))
+	default:
+		return fmt.Sprintf("%d B", size)
+	}
+}
+
 //go:embed templates/*.html
 var templatesFS embed.FS
 
@@ -33,7 +52,8 @@ func loadTemplates() (*template.Template, error) {
 
 	// Add custom functions to the template
 	tmpl := template.New("").Funcs(template.FuncMap{
-		"hasPrefix": hasPrefix,
+		"hasPrefix":  hasPrefix,
+		"formatSize": formatSize,
 	})
 
 	tmpl, err = tmpl.ParseFS(tmplFS, "*.html")

@@ -4,55 +4,67 @@
 	<head>
 		<meta charset="UTF-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-		<title>{{ .Title }}</title>
+		<title>{{ .Title }} - Buckt</title>
 		<script src="https://unpkg.com/htmx.org"></script>
 		<link
 			href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css"
 			rel="stylesheet"
 		/>
 		<style>
-			/* Add some basic styling */
-			.folder,
-			.file {
-				padding: 10px;
-				margin: 10px;
-				border: 1px solid #ddd;
-				border-radius: 5px;
-				cursor: pointer;
+			.folder-card, .file-card {
+				transition: all 0.15s ease;
 			}
-			.folder {
-				background-color: #f0f8ff;
+			.folder-card:hover, .file-card:hover {
+				transform: translateY(-2px);
+				box-shadow: 0 4px 12px rgba(0,0,0,0.1);
 			}
-			.file {
-				background-color: #f8f9fa;
+			.drag-over {
+				border-color: #3b82f6 !important;
+				background-color: #eff6ff !important;
 			}
-			.drop-zone {
-				border: 2px dashed #007bff;
-				padding: 20px;
-				margin-top: 20px;
+			.modal-backdrop {
+				backdrop-filter: blur(4px);
 			}
-			.highlight {
-				background-color: #d1ecf1;
+			.drop-indicator {
+				position: relative;
+			}
+			/* Ensure action menus are clickable above card content */
+			.file-card .aspect-w-16 img,
+			.file-card .aspect-w-16 video,
+			.file-card .aspect-w-16 audio,
+			.file-card .aspect-w-16 div {
+				pointer-events: none;
+			}
+			.file-card a, .file-card button, .file-card audio {
+				pointer-events: auto;
+			}
+			.drop-indicator.drag-over::after {
+				content: "Drop here";
+				position: absolute;
+				inset: 0;
+				display: flex;
+				align-items: center;
+				justify-content: center;
+				background: rgba(59, 130, 246, 0.1);
+				border-radius: 0.5rem;
+				font-weight: 600;
+				color: #3b82f6;
+				pointer-events: none;
 			}
 		</style>
 	</head>
-	<body class="bg-gray-100 text-gray-800">
-		<header class="bg-blue-600 text-white p-4">
-			<div class="container mx-auto flex justify-between items-center">
-				<h1 class="text-xl font-bold">MyDriver</h1>
-				<nav>
-					<a href="/" class="mr-4">Home</a>
-					<a href="/settings" class="mr-4">Settings</a>
-					<a href="/logout" class="text-red-300">Logout</a>
-				</nav>
+	<body class="bg-gray-50 text-gray-800 min-h-screen flex flex-col">
+		<header class="bg-white border-b shadow-sm">
+			<div class="container mx-auto px-4 py-3 flex justify-between items-center">
+				<a href="/web/" class="text-xl font-bold text-blue-600">Buckt</a>
 			</div>
 		</header>
-		<main class="container mx-auto p-4 min-h-screen">
+		<main class="container mx-auto px-4 py-6 flex-1">
 			{{ template "body" . }}
 		</main>
-		<footer class="bg-blue-500 text-white p-4 mt-4">
-			<div class="container mx-auto text-center">
-				<p>&copy; 2024 MyDrive</p>
+		<footer class="bg-white border-t text-gray-500 text-sm py-3">
+			<div class="container mx-auto px-4 text-center">
+				Buckt File Manager
 			</div>
 		</footer>
 	</body>

@@ -18,10 +18,12 @@ func main() {
 	}
 
 	withDB := false
+	flatNamespaces := false
 
-	// Allow overriding via command-line flag
+	// Allow overriding via command-line flags
 	flagPort := flag.String("port", port, "Port to run the server on")
 	flag.BoolVar(&withDB, "db", withDB, "Use external database")
+	flag.BoolVar(&flatNamespaces, "flat", flatNamespaces, "Use flat namespaces")
 	flag.Parse()
 
 	// Initialize the database
@@ -35,7 +37,7 @@ func main() {
 		config = buckt.WithDB(buckt.Postgres, db)
 	}
 
-	client, err := buckt.Default(buckt.FlatNameSpaces(true), config)
+	client, err := buckt.Default(buckt.FlatNameSpaces(flatNamespaces), config)
 	if err != nil {
 		log.Fatalf("Failed to initialize Buckt: %v", err)
 	}

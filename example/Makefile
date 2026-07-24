@@ -5,13 +5,19 @@ MAIN = main.go
 CLOUD_ROOT = cloud
 WEB_ROOT = client/web
 PORT ?= 8080
+FLATNAME ?= false
 PORT_FLAG = -port=$(PORT)
+FLATNAME_FLAG = -flat=$(FLATNAME)
+
 
 direct:
 	$(CMD) direct/$(MAIN)
 
 aws:
 	$(CMD) $(CLOUD_ROOT)/aws/$(MAIN)
+
+cloudflare:
+	$(CMD) $(CLOUD_ROOT)/cloudflare/$(MAIN)
 
 gcp:
 	$(CMD) $(CLOUD_ROOT)/gcp/$(MAIN)
@@ -23,7 +29,7 @@ migration:
 	$(CMD) $(CLOUD_ROOT)/migration/$(MAIN)
 
 ui:
-	$(CMD) $(WEB_ROOT)/UI/$(MAIN) $(PORT_FLAG)
+	$(CMD) $(WEB_ROOT)/UI/$(MAIN) $(PORT_FLAG) $(FLATNAME_FLAG)
 
 api:
 	$(CMD) $(WEB_ROOT)/api/$(MAIN) $(PORT_FLAG)

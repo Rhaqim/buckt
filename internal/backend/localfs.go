@@ -9,12 +9,19 @@ import (
 	"mime"
 	"os"
 	"path/filepath"
+	"strings"
 	"syscall"
 
 	"github.com/Rhaqim/buckt/internal/domain"
 	"github.com/Rhaqim/buckt/internal/model"
+	"github.com/Rhaqim/buckt/pkg/buckterr"
 	"golang.org/x/sync/singleflight"
 )
+
+// ErrPathTraversal wraps the public buckterr.ErrPathTraversal sentinel so
+// callers can errors.Is against it while keeping this package-level variable for
+// existing internal references.
+var ErrPathTraversal = fmt.Errorf("path escapes media directory: %w", buckterr.ErrPathTraversal)
 
 type LocalFileSystemService struct {
 	logger   domain.BucktLogger
@@ -37,8 +44,24 @@ func (bfs *LocalFileSystemService) Name() string {
 	return "local"
 }
 
-func (bfs *LocalFileSystemService) resolve(path string) string {
-	return filepath.Join(bfs.mediaDir, path)
+func (bfs *LocalFileSystemService) resolve(path string) (string, error) {
+	// Strip leading slashes to make the path relative, then clean
+	cleaned := filepath.Clean(strings.TrimLeft(path, "/\\"))
+
+	// Reject paths that escape upward after cleaning
+	if cleaned == ".." || strings.HasPrefix(cleaned, ".."+string(os.PathSeparator)) {
+		return "", ErrPathTraversal
+	}
+
+	full := filepath.Join(bfs.mediaDir, cleaned)
+
+	// Final safety check: ensure the resolved path is under mediaDir
+	cleanBase := filepath.Clean(bfs.mediaDir) + string(os.PathSeparator)
+	if !strings.HasPrefix(filepath.Clean(full)+string(os.PathSeparator), cleanBase) {
+		return "", ErrPathTraversal
+	}
+
+	return full, nil
 }
 
 // Put writes/overwrites a file.
@@ -49,7 +72,10 @@ func (bfs *LocalFileSystemService) Put(ctx context.Context, path string, data []
 	default:
 	}
 
-	filePath := bfs.resolve(path)
+	filePath, err := bfs.resolve(path)
+	if err != nil {
+		return err
+	}
 	if err := os.MkdirAll(filepath.Dir(filePath), 0755); err != nil {
 		return bfs.logger.WrapError("failed to create directory", err)
 	}
@@ -61,24 +87,24 @@ func (bfs *LocalFileSystemService) Put(ctx context.Context, path string, data []
 	}
 
 	if _, err = f.Write(data); err != nil {
-		f.Close()
-		os.Remove(tmpPath)
+		_ = f.Close()
+		_ = os.Remove(tmpPath)
 		return bfs.logger.WrapError("failed to write data", err)
 	}
 
 	if err = f.Sync(); err != nil {
-		f.Close()
-		os.Remove(tmpPath)
+		_ = f.Close()
+		_ = os.Remove(tmpPath)
 		return bfs.logger.WrapError("failed to fsync temp file", err)
 	}
 
 	if err = f.Close(); err != nil {
-		os.Remove(tmpPath)
+		_ = os.Remove(tmpPath)
 		return bfs.logger.WrapError("failed to close temp file", err)
 	}
 
 	if err = os.Rename(tmpPath, filePath); err != nil {
-		os.Remove(tmpPath)
+		_ = os.Remove(tmpPath)
 		return bfs.logger.WrapError("failed to rename temp file", err)
 	}
 
@@ -93,7 +119,10 @@ func (bfs *LocalFileSystemService) Get(ctx context.Context, path string) ([]byte
 	default:
 	}
 
-	filePath := bfs.resolve(path)
+	filePath, err := bfs.resolve(path)
+	if err != nil {
+		return nil, err
+	}
 
 	// check cache first
 	if data, ok := bfs.cache.Get(filePath); ok {
@@ -124,10 +153,13 @@ func (bfs *LocalFileSystemService) List(ctx context.Context, prefix string) ([]s
 	default:
 	}
 
-	dirPath := bfs.resolve(prefix)
+	dirPath, err := bfs.resolve(prefix)
+	if err != nil {
+		return nil, err
+	}
 	var files []string
 
-	err := filepath.WalkDir(dirPath, func(path string, d fs.DirEntry, err error) error {
+	err = filepath.WalkDir(dirPath, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
@@ -155,7 +187,10 @@ func (bfs *LocalFileSystemService) Stream(ctx context.Context, path string) (io.
 	default:
 	}
 
-	filePath := bfs.resolve(path)
+	filePath, err := bfs.resolve(path)
+	if err != nil {
+		return nil, err
+	}
 	return os.Open(filePath)
 }
 
@@ -167,7 +202,10 @@ func (bfs *LocalFileSystemService) Delete(ctx context.Context, path string) erro
 	default:
 	}
 
-	filePath := bfs.resolve(path)
+	filePath, err := bfs.resolve(path)
+	if err != nil {
+		return err
+	}
 	if err := os.Remove(filePath); err != nil && !errors.Is(err, fs.ErrNotExist) {
 		return bfs.logger.WrapError("failed to delete file", err)
 	}
@@ -183,8 +221,11 @@ func (bfs *LocalFileSystemService) Exists(ctx context.Context, path string) (boo
 	default:
 	}
 
-	filePath := bfs.resolve(path)
-	_, err := os.Stat(filePath)
+	filePath, err := bfs.resolve(path)
+	if err != nil {
+		return false, err
+	}
+	_, err = os.Stat(filePath)
 	if err == nil {
 		return true, nil
 	}
@@ -202,7 +243,10 @@ func (bfs *LocalFileSystemService) Stat(ctx context.Context, path string) (*mode
 	default:
 	}
 
-	filePath := bfs.resolve(path)
+	filePath, err := bfs.resolve(path)
+	if err != nil {
+		return nil, err
+	}
 	info, err := os.Stat(filePath)
 	if err != nil {
 		return nil, bfs.logger.WrapError("failed to stat file", err)
@@ -227,7 +271,10 @@ func (bfs *LocalFileSystemService) DeleteFolder(ctx context.Context, path string
 	default:
 	}
 
-	dirPath := bfs.resolve(path)
+	dirPath, err := bfs.resolve(path)
+	if err != nil {
+		return err
+	}
 	return os.RemoveAll(dirPath)
 }
 
@@ -238,8 +285,14 @@ func (bfs *LocalFileSystemService) Move(ctx context.Context, oldPath, newPath st
 	default:
 	}
 
-	oldFilePath := filepath.Join(bfs.mediaDir, oldPath)
-	newFilePath := filepath.Join(bfs.mediaDir, newPath)
+	oldFilePath, err := bfs.resolve(oldPath)
+	if err != nil {
+		return err
+	}
+	newFilePath, err := bfs.resolve(newPath)
+	if err != nil {
+		return err
+	}
 
 	if _, err := os.Stat(oldFilePath); errors.Is(err, fs.ErrNotExist) {
 		return bfs.logger.WrapError("source file does not exist", err)
@@ -271,20 +324,20 @@ func copyFile(src, dst string) error {
 	if err != nil {
 		return err
 	}
-	defer in.Close()
+	defer func() { _ = in.Close() }()
 
 	out, err := os.Create(dst)
 	if err != nil {
 		return err
 	}
-	defer out.Close()
+	defer func() { _ = out.Close() }()
 
 	if _, err = io.Copy(out, in); err != nil {
-		os.Remove(dst)
+		_ = os.Remove(dst)
 		return err
 	}
 	if err = out.Sync(); err != nil {
-		os.Remove(dst)
+		_ = os.Remove(dst)
 		return err
 	}
 	return nil

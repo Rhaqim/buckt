@@ -46,6 +46,15 @@ func (a *AzureBackend) Name() string {
 	return "azure"
 }
 
+// Ping verifies connectivity to the Azure container by fetching its properties.
+func (a *AzureBackend) Ping(ctx context.Context) error {
+	_, err := a.client.GetProperties(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("connectivity check failed for Azure container %q: %w", a.containerName, err)
+	}
+	return nil
+}
+
 func (a *AzureBackend) Put(ctx context.Context, path string, data []byte) error {
 	blobClient := a.client.NewBlockBlobClient(path)
 	_, err := blobClient.UploadBuffer(ctx, data, &blockblob.UploadBufferOptions{})
@@ -58,7 +67,7 @@ func (a *AzureBackend) Get(ctx context.Context, path string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	buf := new(bytes.Buffer)
 	if _, err := io.Copy(buf, resp.Body); err != nil {
@@ -124,12 +133,20 @@ func (a *AzureBackend) Stat(ctx context.Context, path string) (*FileInfo, error)
 		return nil, err
 	}
 
-	return &FileInfo{
-		Size:         *props.ContentLength,
-		LastModified: props.LastModified.UTC(),
-		ETag:         string(*props.ETag),
-		ContentType:  *props.ContentType,
-	}, nil
+	fi := &FileInfo{}
+	if props.ContentLength != nil {
+		fi.Size = *props.ContentLength
+	}
+	if props.LastModified != nil {
+		fi.LastModified = props.LastModified.UTC()
+	}
+	if props.ETag != nil {
+		fi.ETag = string(*props.ETag)
+	}
+	if props.ContentType != nil {
+		fi.ContentType = *props.ContentType
+	}
+	return fi, nil
 }
 
 func (a *AzureBackend) DeleteFolder(ctx context.Context, prefix string) error {
@@ -155,7 +172,13 @@ func (a *AzureBackend) DeleteFolder(ctx context.Context, prefix string) error {
 }
 
 func (a *AzureBackend) Move(ctx context.Context, oldPath, newPath string) error {
-	// Copy
+	// Apply a timeout if the parent context has none
+	if _, hasDeadline := ctx.Deadline(); !hasDeadline {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, 2*time.Minute)
+		defer cancel()
+	}
+
 	srcBlob := a.client.NewBlockBlobClient(oldPath)
 	destBlob := a.client.NewBlockBlobClient(newPath)
 
@@ -164,20 +187,35 @@ func (a *AzureBackend) Move(ctx context.Context, oldPath, newPath string) error 
 		return fmt.Errorf("failed to copy blob: %w", err)
 	}
 
-	// Poll copy completion
+	// Poll copy completion with context cancellation
 	for {
-		props, err := destBlob.GetProperties(context.TODO(), nil)
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("copy timed out for %s -> %s: %w", oldPath, newPath, ctx.Err())
+		default:
+		}
+
+		props, err := destBlob.GetProperties(ctx, nil)
 		if err != nil {
 			return fmt.Errorf("failed to get copy status: %w", err)
 		}
-		if props.CopyStatus != nil && *props.CopyStatus == "success" {
-			break
+		if props.CopyStatus != nil {
+			switch *props.CopyStatus {
+			case "success":
+				return a.Delete(ctx, oldPath)
+			case "failed", "aborted":
+				return fmt.Errorf("blob copy %s: %s", *props.CopyStatus, safeDeref(props.CopyStatusDescription))
+			}
 		}
-		time.Sleep(2 * time.Second)
+		time.Sleep(1 * time.Second)
 	}
+}
 
-	// Delete old
-	return a.Delete(ctx, oldPath)
+func safeDeref(s *string) string {
+	if s == nil {
+		return ""
+	}
+	return *s
 }
 
 func errorAs(err error, target any) bool {

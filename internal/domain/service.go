@@ -10,6 +10,7 @@ import (
 type FolderService interface {
 	CreateFolder(ctx context.Context, user_id, parent_id, folder_name, description string) (string, error)
 	GetRootFolder(ctx context.Context, user_id string) (*model.FolderModel, error)
+	GetTrashFolder(ctx context.Context, user_id string) (*model.FolderModel, error)
 	GetFolder(ctx context.Context, user_id, folder_id string) (*model.FolderModel, error)
 	GetFolders(ctx context.Context, parent_id string) ([]model.FolderModel, error)
 	MoveFolder(ctx context.Context, folder_id, new_parent_id string) error

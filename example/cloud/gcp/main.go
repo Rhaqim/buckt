@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/Rhaqim/buckt"
@@ -20,7 +21,12 @@ func main() {
 		return
 	}
 
-	backend := buckt.RegisterPrimaryBackend(gcpBackend)
+	if err := gcpBackend.Ping(context.Background()); err != nil {
+		fmt.Println("Failed to connect to GCP backend:", err)
+		return
+	}
+
+	backend := buckt.WithBackend(gcpBackend)
 
 	client, err := buckt.Default(buckt.WithLog(buckt.LogConfig{}), backend)
 	if err != nil {

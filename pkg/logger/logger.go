@@ -1,6 +1,7 @@
 package logger
 
 import (
+	"fmt"
 	"io"
 	"log"
 	"os"
@@ -48,11 +49,11 @@ func NewLogger(logFile string, logTerminal, silence bool, opts ...LogFunc) domai
 			logWriter = infoLogFile
 		}
 	} else {
-		// If no log file and silenceging, silence logs; otherwise, use stdout
+		// If no log file, use stdout for terminal output or discard if silenced
 		if logTerminal && !silence {
-			logWriter = io.Discard // Silence terminal logs
-		} else {
 			logWriter = os.Stdout
+		} else {
+			logWriter = io.Discard
 		}
 	}
 
@@ -114,18 +115,25 @@ func (l *BucktLogger) Errorf(format string, args ...any) {
 	l.Logger.Printf("ERROR: "+format, args...)
 }
 
-// WrapError logs an error message and returns an error
+// WrapError returns err wrapped with message as context using %w, so
+// errors.Is / errors.As continue to work through it. It does NOT log: buckt
+// returns errors to the caller rather than logging them (logging is the
+// application's decision). Use Info/Warn/Errorf for diagnostics you are
+// deliberately not returning. Returns nil when err is nil.
 func (l *BucktLogger) WrapError(message string, err error) error {
-	if !l.silence {
-		l.Logger.Println("ERROR:", message, err)
+	if err == nil {
+		return nil
 	}
-	return err
+	return fmt.Errorf("%s: %w", message, err)
 }
 
-// WrapErrorf logs an error message with formatting
+// WrapErrorf is like WrapError but formats message with args first.
 func (l *BucktLogger) WrapErrorf(message string, err error, args ...any) error {
-	if !l.silence {
-		l.Logger.Printf("ERROR: %s %v\n", message+" "+err.Error(), args)
+	if err == nil {
+		return nil
 	}
-	return err
+	if len(args) > 0 {
+		message = fmt.Sprintf(message, args...)
+	}
+	return fmt.Errorf("%s: %w", message, err)
 }

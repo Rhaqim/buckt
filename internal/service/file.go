@@ -6,15 +6,21 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net/http"
 	"path/filepath"
+	"time"
 
 	"github.com/Rhaqim/buckt/internal/domain"
 	"github.com/Rhaqim/buckt/internal/model"
+	"github.com/Rhaqim/buckt/internal/utils"
+	"github.com/Rhaqim/buckt/pkg/buckterr"
 	"github.com/google/uuid"
 )
 
 type FileService struct {
-	flatNameSpaces bool
+	flatNameSpaces   bool
+	maxFileSize      int64
+	backendOpTimeout time.Duration
 
 	logger domain.BucktLogger
 
@@ -35,6 +41,8 @@ func NewFileService(
 	fileBackend domain.FileBackend,
 
 	flatNameSpaces bool,
+	maxFileSize int64,
+	backendOpTimeout time.Duration,
 ) domain.FileService {
 	bucktLogger.Info("🚀 Initialising file services")
 	return &FileService{
@@ -47,13 +55,34 @@ func NewFileService(
 		folderService: folderService,
 		fileBackend:   fileBackend,
 
-		flatNameSpaces: flatNameSpaces,
+		flatNameSpaces:   flatNameSpaces,
+		maxFileSize:      maxFileSize,
+		backendOpTimeout: backendOpTimeout,
 	}
 }
 
 // CreateFile implements domain.FileService.
 func (f *FileService) CreateFile(ctx context.Context, user_id, parent_id, file_name, content_type string, file_data []byte) (string, error) {
 	var err error
+
+	// Validate the file name before it is ever joined to a folder path or used
+	// as a backend object key. Without this a name like "../../<victim>/x" would
+	// escape the parent folder's subtree (local backend) or be written verbatim
+	// as a cross-tenant object key (cloud backends).
+	if err := utils.ValidateFileName(file_name); err != nil {
+		return "", fmt.Errorf("invalid file name: %w", buckterr.ErrInvalidName)
+	}
+
+	// Enforce max file size
+	if f.maxFileSize > 0 && int64(len(file_data)) > f.maxFileSize {
+		return "", fmt.Errorf("file size %d exceeds maximum allowed size %d bytes: %w", len(file_data), f.maxFileSize, buckterr.ErrFileTooLarge)
+	}
+
+	// Detect and validate content type from actual file bytes
+	detectedType := http.DetectContentType(file_data)
+	if content_type == "" || content_type == "application/octet-stream" {
+		content_type = detectedType
+	}
 
 	// Get the parent folder
 	parentFolder, err := f.folderService.GetFolder(ctx, user_id, parent_id)
@@ -67,21 +96,23 @@ func (f *FileService) CreateFile(ctx context.Context, user_id, parent_id, file_n
 	// Get the file path
 	path := filepath.Join(parentFolder.Path, file_name)
 
-	// if flat namespaces is enabled save files in the root folder with uuid as name
+	// if flat namespaces is enabled save files in root with uuid as name
 	if f.flatNameSpaces {
 		ext := filepath.Ext(file_name)
 		path = uuid.New().String() + ext
 	}
 
-	// Calculate the file hash, for data verification
-	combinedData := append([]byte(path), file_data...)
-	hash := fmt.Sprintf("%x", sha256.Sum256(combinedData))
+	// Calculate the file hash from content only (not path)
+	h := sha256.New()
+	h.Write(file_data)
+	hash := fmt.Sprintf("%x", h.Sum(nil))
 
 	// Size of the file
 	fileSize := int64(len(file_data))
 
 	// Create the file model
 	file := &model.FileModel{
+		UserID:      user_id,
 		ParentID:    parentFolder.ID,
 		Name:        file_name,
 		Path:        path,
@@ -91,21 +122,25 @@ func (f *FileService) CreateFile(ctx context.Context, user_id, parent_id, file_n
 	}
 
 	// Create the file
-	err = f.repo.Create(ctx, file)
-	if err != nil {
-		if err.Error() == "UNIQUE constraint failed: file_models.name, file_models.parent_id" {
-			file, err = f.repo.RestoreFile(ctx, file.ParentID, file.Name)
-			if err != nil {
-				return "", f.logger.WrapError("failed to restore file", err)
-			}
-		} else {
-			return "", f.logger.WrapError("failed to create file", err)
+	if err = f.repo.Create(ctx, file); err != nil {
+		return "", f.logger.WrapError("failed to create file", err)
+	}
+
+	// Write the file to the backend. If this fails, the metadata row was already
+	// committed above, so we compensate by removing it — otherwise the DB would
+	// hold a FileModel pointing at a blob that doesn't exist. Best-effort: if the
+	// rollback itself fails we log it (the caller needs the original Put error).
+	//
+	// We deliberately keep this order — metadata first, blob second — rather than
+	// writing the blob first: in nested-namespace mode the blob path is
+	// parentFolder.Path/name, so a blob-first write could overwrite an existing
+	// file's content before repo.Create's unique-name check runs, then delete it
+	// on rollback, destroying an unrelated file.
+	if err := f.fileBackend.Put(ctx, file.Path, file_data); err != nil {
+		if scrubErr := f.repo.ScrubFile(ctx, file.ID); scrubErr != nil {
+			f.logger.Warn("failed to roll back file metadata after backend write failure: " + scrubErr.Error())
 		}
-	} else {
-		// Write the file to the file system
-		if err := f.fileBackend.Put(ctx, file.Path, file_data); err != nil {
-			return "", err
-		}
+		return "", fmt.Errorf("failed to write file to backend: %w", err)
 	}
 
 	return file.ID.String(), nil
@@ -116,7 +151,7 @@ func (f *FileService) CreateFile(ctx context.Context, user_id, parent_id, file_n
 func (f *FileService) GetFile(ctx context.Context, file_id string) (*model.FileModel, error) {
 	fileID, err := uuid.Parse(file_id)
 	if err != nil {
-		return nil, f.logger.WrapError("failed to parse uuid", err)
+		return nil, fmt.Errorf("invalid id: %w", buckterr.ErrInvalidID)
 	}
 
 	var file *model.FileModel
@@ -168,7 +203,7 @@ func (f *FileService) GetFile(ctx context.Context, file_id string) (*model.FileM
 func (f *FileService) GetFileStream(ctx context.Context, file_id string) (*model.FileModel, io.ReadCloser, error) {
 	fileID, err := uuid.Parse(file_id)
 	if err != nil {
-		return nil, nil, f.logger.WrapError("failed to parse uuid", err)
+		return nil, nil, fmt.Errorf("invalid id: %w", buckterr.ErrInvalidID)
 	}
 
 	var file *model.FileModel
@@ -213,7 +248,7 @@ func (f *FileService) GetFileStream(ctx context.Context, file_id string) (*model
 func (f *FileService) getFiles(ctx context.Context, parent_id string) ([]*model.FileModel, error) {
 	parentID, err := uuid.Parse(parent_id)
 	if err != nil {
-		return nil, f.logger.WrapError("failed to parse uuid", err)
+		return nil, fmt.Errorf("invalid id: %w", buckterr.ErrInvalidID)
 	}
 
 	var files []*model.FileModel
@@ -224,10 +259,12 @@ func (f *FileService) getFiles(ctx context.Context, parent_id string) ([]*model.
 	// Check cache first
 	if f.cache != nil {
 		cached, err := f.cache.GetBucktValue(ctx, cacheKey)
-		if err == nil || cached != nil {
-			var cachedFiles []*model.FileModel
-			if jsonErr := json.Unmarshal([]byte(cached.(string)), &cachedFiles); jsonErr == nil {
-				files = cachedFiles
+		if err == nil && cached != nil {
+			if cachedStr, ok := cached.(string); ok {
+				var cachedFiles []*model.FileModel
+				if jsonErr := json.Unmarshal([]byte(cachedStr), &cachedFiles); jsonErr == nil {
+					files = cachedFiles
+				}
 			}
 		}
 	}
@@ -290,12 +327,12 @@ func (f *FileService) GetFiles(ctx context.Context, parent_id string) ([]model.F
 func (f *FileService) MoveFile(ctx context.Context, file_id string, new_parent_id string) error {
 	fileID, err := uuid.Parse(file_id)
 	if err != nil {
-		return f.logger.WrapError("failed to parse uuid", err)
+		return fmt.Errorf("invalid id: %w", buckterr.ErrInvalidID)
 	}
 
 	newParentID, err := uuid.Parse(new_parent_id)
 	if err != nil {
-		return f.logger.WrapError("failed to parse uuid", err)
+		return fmt.Errorf("invalid id: %w", buckterr.ErrInvalidID)
 	}
 
 	// Move the file
@@ -316,9 +353,13 @@ func (f *FileService) MoveFile(ctx context.Context, file_id string, new_parent_i
 
 // RenameFile implements domain.FileService.
 func (f *FileService) RenameFile(ctx context.Context, file_id string, new_name string) error {
+	if err := utils.ValidateFileName(new_name); err != nil {
+		return fmt.Errorf("invalid file name: %w", buckterr.ErrInvalidName)
+	}
+
 	fileID, err := uuid.Parse(file_id)
 	if err != nil {
-		return f.logger.WrapError("failed to parse uuid", err)
+		return fmt.Errorf("invalid id: %w", buckterr.ErrInvalidID)
 	}
 
 	// Rename the file
@@ -331,9 +372,13 @@ func (f *FileService) RenameFile(ctx context.Context, file_id string, new_name s
 
 // UpdateFile implements domain.FileService.
 func (f *FileService) UpdateFile(ctx context.Context, user_id, file_id string, new_file_name string, new_file_data []byte) error {
+	if err := utils.ValidateFileName(new_file_name); err != nil {
+		return fmt.Errorf("invalid file name: %w", buckterr.ErrInvalidName)
+	}
+
 	fileID, err := uuid.Parse(file_id)
 	if err != nil {
-		return f.logger.WrapError("failed to parse uuid", err)
+		return fmt.Errorf("invalid id: %w", buckterr.ErrInvalidID)
 	}
 
 	file, err := f.repo.GetFile(ctx, fileID)
@@ -347,8 +392,10 @@ func (f *FileService) UpdateFile(ctx context.Context, user_id, file_id string, n
 		return err
 	}
 
-	// Get the new file path
-	newPath := parentFolder.Path + "/" + new_file_name
+	// Get the new file path. Use filepath.Join (not raw concatenation) so the
+	// name is cleaned; combined with validateFileName above this keeps the path
+	// confined to the parent folder.
+	newPath := filepath.Join(parentFolder.Path, new_file_name)
 
 	// Calculate the new file hash, for data verification
 	newHash := fmt.Sprintf("%x", sha256.Sum256(new_file_data))
@@ -378,7 +425,7 @@ func (f *FileService) DeleteFile(ctx context.Context, file_id string) (string, e
 
 	fileID, err := uuid.Parse(file_id)
 	if err != nil {
-		return parentID, f.logger.WrapError("failed to parse uuid", err)
+		return parentID, fmt.Errorf("invalid id: %w", buckterr.ErrInvalidID)
 	}
 
 	var file *model.FileModel
@@ -405,8 +452,28 @@ func (f *FileService) DeleteFile(ctx context.Context, file_id string) (string, e
 		}
 	}
 
-	// Delete the file
-	if err := f.repo.DeleteFile(ctx, fileID); err != nil {
+	// Delete the file with backend coordination. The backend op runs INSIDE
+	// the DB transaction (so a backend failure rolls back the path rewrite),
+	// but is bounded by backendOpTimeout to cap how long the transaction can
+	// stay open while waiting on storage I/O.
+	_, _, err = f.repo.DeleteFile(ctx, fileID, func(oldPath, newPath string) error {
+		opCtx, cancel := f.backendCtx(ctx)
+		defer cancel()
+		switch {
+		case newPath == "":
+			// Permanent deletion (was already in trash). Remove the blob from
+			// the backend. Works in both flat and nested modes because oldPath
+			// always reflects the actual stored location.
+			return f.fileBackend.Delete(opCtx, oldPath)
+		case oldPath == newPath:
+			// Flat mode — only parent_id changed, blob stays put.
+			return nil
+		default:
+			// Nested mode — physically move the blob to its new path.
+			return f.fileBackend.Move(opCtx, oldPath, newPath)
+		}
+	})
+	if err != nil {
 		return parentID, f.logger.WrapError("failed to delete file", err)
 	}
 
@@ -418,7 +485,7 @@ func (f *FileService) ScrubFile(ctx context.Context, file_id string) (string, er
 
 	fileID, err := uuid.Parse(file_id)
 	if err != nil {
-		return parentID, f.logger.WrapError("failed to parse uuid", err)
+		return parentID, fmt.Errorf("invalid id: %w", buckterr.ErrInvalidID)
 	}
 
 	var file *model.FileModel
@@ -456,4 +523,13 @@ func (f *FileService) ScrubFile(ctx context.Context, file_id string) (string, er
 	}
 
 	return file.ParentID.String(), nil
+}
+
+// backendCtx returns a context with backendOpTimeout applied (if positive).
+// Returns the original context unchanged if no timeout is configured.
+func (f *FileService) backendCtx(parent context.Context) (context.Context, context.CancelFunc) {
+	if f.backendOpTimeout <= 0 {
+		return parent, func() {}
+	}
+	return context.WithTimeout(parent, f.backendOpTimeout)
 }

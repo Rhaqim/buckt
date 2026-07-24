@@ -32,7 +32,7 @@ func TestFSPut(t *testing.T) {
 	// Write file
 	err = bfs.Put(ctx, testPath, testContent)
 	assert.NoError(t, err)
-	defer os.Remove(expectedPath)
+	defer func() { _ = os.Remove(expectedPath) }()
 
 	// Validate file content
 	content, err := os.ReadFile(expectedPath)
@@ -54,7 +54,7 @@ func TestFSGetFile(t *testing.T) {
 	// Create a test file
 	err = os.WriteFile(expectedPath, testContent, 0644)
 	assert.NoError(t, err)
-	defer os.Remove(expectedPath)
+	defer func() { _ = os.Remove(expectedPath) }()
 
 	// Get file
 	content, err := bfs.Get(ctx, testPath)
@@ -81,7 +81,7 @@ func TestFSList(t *testing.T) {
 	// Create a test folder
 	err := os.MkdirAll(expectedFolderPath, os.ModePerm)
 	assert.NoError(t, err)
-	defer os.RemoveAll(expectedFolderPath)
+	defer func() { _ = os.RemoveAll(expectedFolderPath) }()
 
 	// Create test files inside the folder
 	testFile1Path := filepath.Join(expectedFolderPath, "file1.txt")
@@ -120,8 +120,8 @@ func TestFSMove(t *testing.T) {
 	// Create a test file
 	err = os.WriteFile(oldFilePath, testContent, 0644)
 	assert.NoError(t, err)
-	defer os.Remove(oldFilePath)
-	defer os.Remove(newFilePath)
+	defer func() { _ = os.Remove(oldFilePath) }()
+	defer func() { _ = os.Remove(newFilePath) }()
 
 	// Move file
 	err = bfs.Move(ctx, oldPath, newPath)

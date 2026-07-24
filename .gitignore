@@ -1,9 +1,20 @@
-
 config.yaml
 
+# Database files
 db.sqlite
+*.sqlite
+internal/database/db.sqlite
 
+# Logs and media
 logs/
 media/
 
+# OS files
 .DS_Store
+**/.DS_Store
+
+# Binary output
+bin/
+
+# Claude
+.claude/

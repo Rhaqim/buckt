@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/Rhaqim/buckt"
@@ -22,9 +23,12 @@ func main() {
 		return
 	}
 
-	backend := buckt.RegisterPrimaryBackend(awsBackend)
+	if err := awsBackend.Ping(context.Background()); err != nil {
+		fmt.Println("Failed to connect to AWS backend:", err)
+		return
+	}
 
-	client, err := buckt.Default(buckt.WithLog(buckt.LogConfig{}), backend)
+	client, err := buckt.Default(buckt.WithLog(buckt.LogConfig{}), buckt.WithBackend(awsBackend))
 	if err != nil {
 		fmt.Println(err)
 		return

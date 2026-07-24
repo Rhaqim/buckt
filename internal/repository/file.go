@@ -2,11 +2,14 @@ package repository
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/Rhaqim/buckt/internal/database"
 	"github.com/Rhaqim/buckt/internal/domain"
 	"github.com/Rhaqim/buckt/internal/model"
+	"github.com/Rhaqim/buckt/pkg/buckterr"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
@@ -20,25 +23,15 @@ func NewFileRepository(db *database.DB) domain.FileRepository {
 }
 
 // Create implements domain.FileRepository.
-// Subtle: this method shadows the method (*DB).Create of FileRepository.DB.WithContext(ctx).
 func (f *FileRepository) Create(ctx context.Context, file *model.FileModel) error {
-	return f.db.DB.WithContext(ctx).Create(file).Error
-}
-
-// RestoreFileByPath implements domain.FileRepository.
-// if it already exists, overwrite it and set the deleted_at to nil
-func (f *FileRepository) RestoreFile(ctx context.Context, parent_id uuid.UUID, name string) (*model.FileModel, error) {
-	var file model.FileModel
-	err := f.db.DB.WithContext(ctx).Unscoped().Model(&model.FileModel{}).Where("parent_id = ? AND name = ?", parent_id, name).Update("deleted_at", nil).Scan(&file).Error
-
-	return &file, err
+	return asAlreadyExists(f.db.DB.WithContext(ctx).Create(file).Error, "file already exists")
 }
 
 // GetFile implements domain.FileRepository.
 func (f *FileRepository) GetFile(ctx context.Context, id uuid.UUID) (*model.FileModel, error) {
 	var file model.FileModel
 	err := f.db.DB.WithContext(ctx).First(&file, id).Error
-	return &file, err
+	return &file, asNotFound(err, "file not found")
 }
 
 // GetFiles implements domain.FileRepository.
@@ -48,21 +41,34 @@ func (f *FileRepository) GetFiles(ctx context.Context, parent_id uuid.UUID) ([]*
 	return files, err
 }
 
+// GetFilesPaginated implements domain.FileRepository.
+func (f *FileRepository) GetFilesPaginated(ctx context.Context, parent_id uuid.UUID, page model.Pagination) ([]*model.FileModel, error) {
+	page.Validate()
+	var files []*model.FileModel
+	err := f.db.DB.WithContext(ctx).
+		Where("parent_id = ?", parent_id).
+		Offset(page.Offset()).
+		Limit(page.PageSize).
+		Order("created_at DESC").
+		Find(&files).Error
+	return files, err
+}
+
 // MoveFile implements domain.FileRepository.
-func (f *FileRepository) MoveFile(ctx context.Context, file_id uuid.UUID, new_parent_id uuid.UUID) (string, string, error) { // TODO: MOdify function to accept file_id, new_parent_id, and new_name
+func (f *FileRepository) MoveFile(ctx context.Context, file_id uuid.UUID, new_parent_id uuid.UUID) (string, string, error) {
 	var newParentFolder model.FolderModel
 
 	if err := f.db.DB.WithContext(ctx).Where("id = ?", new_parent_id).First(&newParentFolder).Error; err != nil {
-		if err == gorm.ErrRecordNotFound {
-			return "", "", fmt.Errorf("parent folder not found")
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return "", "", fmt.Errorf("parent folder not found: %w", buckterr.ErrNotFound)
 		}
 		return "", "", err
 	}
 
 	var file model.FileModel
 	if err := f.db.DB.WithContext(ctx).First(&file, file_id).Error; err != nil {
-		if err == gorm.ErrRecordNotFound {
-			return "", "", fmt.Errorf("file not found")
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return "", "", fmt.Errorf("file not found: %w", buckterr.ErrNotFound)
 		}
 		return "", "", err
 	}
@@ -83,8 +89,8 @@ func (f *FileRepository) MoveFile(ctx context.Context, file_id uuid.UUID, new_pa
 func (f *FileRepository) RenameFile(ctx context.Context, file_id uuid.UUID, new_name string) error {
 	var file model.FileModel
 	if err := f.db.DB.WithContext(ctx).First(&file, file_id).Error; err != nil {
-		if err == gorm.ErrRecordNotFound {
-			return fmt.Errorf("file not found")
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return fmt.Errorf("file not found: %w", buckterr.ErrNotFound)
 		}
 		return err
 	}
@@ -95,17 +101,178 @@ func (f *FileRepository) RenameFile(ctx context.Context, file_id uuid.UUID, new_
 }
 
 // Update implements domain.FileRepository.
-// Subtle: this method shadows the method (*DB).Update of FileRepository.DB.WithContext(ctx).
 func (f *FileRepository) Update(ctx context.Context, file *model.FileModel) error {
 	return f.db.DB.WithContext(ctx).Save(file).Error
 }
 
-// DeleteFile implements domain.FileRepository.
-func (f *FileRepository) DeleteFile(ctx context.Context, id uuid.UUID) error {
+// DeleteFile moves the file to the user's trash folder. If the file is already
+// in trash, it is permanently deleted instead.
+//
+// Returns the file's old and new paths so the caller can move the underlying
+// data on the storage backend. If newPath is empty, the file was permanently
+// deleted (already in trash). If newPath equals oldPath, the file was moved
+// in flat-namespace mode and no backend op is needed.
+//
+// The beforeCommit callback runs INSIDE the DB transaction after the path
+// rewrite but before commit. If the callback returns an error, the entire
+// transaction rolls back, leaving the DB in its original state. This makes
+// the DB and backend stay consistent even if the backend operation fails.
+func (f *FileRepository) DeleteFile(
+	ctx context.Context,
+	id uuid.UUID,
+	beforeCommit func(oldPath, newPath string) error,
+) (oldPath, newPath string, err error) {
+	err = f.db.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var file model.FileModel
+		if err := tx.First(&file, id).Error; err != nil {
+			return err
+		}
+
+		oldPath = file.Path
+
+		// Defense in depth: if user_id is empty (legacy data not yet backfilled),
+		// derive it from the parent folder so we don't move files into a phantom
+		// "empty user" trash bin.
+		if file.UserID == "" {
+			var parent model.FolderModel
+			if err := tx.Select("user_id").First(&parent, file.ParentID).Error; err == nil && parent.UserID != "" {
+				file.UserID = parent.UserID
+				_ = tx.Model(&file).Update("user_id", parent.UserID).Error
+			}
+		}
+
+		// If we still don't have a user_id, refuse to delete.
+		if file.UserID == "" {
+			return fmt.Errorf("cannot delete file %s: unable to resolve owner user_id (legacy row with missing user_id and no parent folder user_id)", id)
+		}
+
+		// Lookup or create the user's trash folder
+		trash, err := getOrCreateTrashFolder(ctx, tx, file.UserID)
+		if err != nil {
+			return err
+		}
+
+		// Detect whether the file is already in trash. There are three cases
+		// to cover so that the smart re-delete behavior works for nested files:
+		//   1. The file's direct parent IS the trash folder
+		//   2. Nested mode: the file's path lives under the trash prefix
+		//      (e.g., file in a folder that was moved to trash)
+		//   3. Flat-namespace mode: the file's parent folder is anywhere
+		//      under trash (path-prefix check on the parent folder)
+		inTrash := file.ParentID == trash.ID
+		if !inTrash && strings.HasPrefix(file.Path, trash.Path+"/") {
+			inTrash = true
+		}
+		if !inTrash {
+			var parentFolder model.FolderModel
+			if perr := tx.Select("path").First(&parentFolder, file.ParentID).Error; perr == nil {
+				if parentFolder.Path == trash.Path || strings.HasPrefix(parentFolder.Path, trash.Path+"/") {
+					inTrash = true
+				}
+			}
+		}
+		if inTrash {
+			if err := tx.Delete(&model.FileModel{}, id).Error; err != nil {
+				return err
+			}
+			// Run backend cleanup BEFORE commit — failure rolls back the row deletion
+			if beforeCommit != nil {
+				if err := beforeCommit(oldPath, ""); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+
+		// Move file into trash with a unique name
+		newName, err := uniqueFileTrashName(ctx, tx, trash.ID, file.Name)
+		if err != nil {
+			return err
+		}
+
+		// Detect flat-namespace mode by checking for any directory separator
+		// (either / or \, since filepath.Join on Windows can produce backslashes).
+		isFlatPath := !strings.ContainsAny(file.Path, "/\\")
+
+		updates := map[string]any{
+			"name":      newName,
+			"parent_id": trash.ID,
+		}
+		if !isFlatPath {
+			newPath = trash.Path + "/" + newName
+			updates["path"] = newPath
+		} else {
+			// Path stays the same in flat mode; signal "no backend move needed"
+			// by returning the same value for old and new.
+			newPath = file.Path
+		}
+
+		if err := tx.Model(&file).Updates(updates).Error; err != nil {
+			return err
+		}
+
+		// Run backend operation BEFORE commit. If it fails, the transaction
+		// rolls back and the path rewrite is undone.
+		if beforeCommit != nil {
+			if err := beforeCommit(oldPath, newPath); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	return
+}
+
+// ScrubFile permanently deletes a file regardless of its location.
+func (f *FileRepository) ScrubFile(ctx context.Context, id uuid.UUID) error {
 	return f.db.DB.WithContext(ctx).Delete(&model.FileModel{}, id).Error
 }
 
-// ScrubFile implements domain.FileRepository.
-func (f *FileRepository) ScrubFile(ctx context.Context, id uuid.UUID) error {
-	return f.db.DB.WithContext(ctx).Unscoped().Delete(&model.FileModel{}, id).Error
+// getOrCreateTrashFolder returns the user's trash folder, creating it if missing.
+// This duplicates the FolderRepository logic to avoid a cross-repo dependency.
+func getOrCreateTrashFolder(ctx context.Context, db *gorm.DB, user_id string) (*model.FolderModel, error) {
+	// Delegate to the shared helper in folder.go which enforces the
+	// reserved-top-level invariant (parent_id IS NULL) and handles
+	// concurrent-create races via a transaction + re-select.
+	return lookupOrCreateTrashFolder(ctx, db, user_id)
+}
+
+// uniqueFileTrashName returns a file name that doesn't collide with existing
+// files in the trash folder. If "photo.png" already exists, it returns
+// "photo (2).png", "photo (3).png", etc., preserving the extension.
+func uniqueFileTrashName(ctx context.Context, db *gorm.DB, trashID uuid.UUID, name string) (string, error) {
+	count, err := countFileName(ctx, db, trashID, name)
+	if err != nil {
+		return "", err
+	}
+	if count == 0 {
+		return name, nil
+	}
+
+	// Split into base and extension to insert the suffix sensibly
+	ext := ""
+	base := name
+	if idx := strings.LastIndex(name, "."); idx > 0 {
+		ext = name[idx:]
+		base = name[:idx]
+	}
+
+	for i := 2; i < 10000; i++ {
+		candidate := fmt.Sprintf("%s (%d)%s", base, i, ext)
+		count, err := countFileName(ctx, db, trashID, candidate)
+		if err != nil {
+			return "", err
+		}
+		if count == 0 {
+			return candidate, nil
+		}
+	}
+	return base + "-" + uuid.New().String()[:8] + ext, nil
+}
+
+func countFileName(ctx context.Context, db *gorm.DB, parentID uuid.UUID, name string) (int64, error) {
+	var count int64
+	err := db.WithContext(ctx).Model(&model.FileModel{}).
+		Where("parent_id = ? AND name = ?", parentID, name).Count(&count).Error
+	return count, err
 }

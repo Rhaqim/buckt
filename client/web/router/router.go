@@ -81,8 +81,21 @@ func (r *Router) registerBaseRoutes() {
 		// redirect to /web
 		c.Redirect(http.StatusMovedPermanently, "/web")
 	})
-	r.GET("/serve/:file_id", r.APIService.ServeFile)
-	r.GET("/stream/:file_id", r.APIService.StreamFile)
+
+	// /serve and /stream expose raw file *contents* by id. They were previously
+	// registered outside any guard, making them the only unauthenticated content
+	// endpoints — anyone who learned a file id could read any file. Put them
+	// behind the API guard: in standalone mode it requires the buckt-User-ID
+	// header; in mount mode it sets owner_id="default" and passes through, so
+	// mounted consumers are unaffected. (This is authentication only; the bundled
+	// handlers still call the un-scoped core GetFile — front them with your own
+	// signed URLs for per-object authorization.)
+	serve := r.Group("/")
+	serve.Use(r.APIGuardMiddleware())
+	{
+		serve.GET("serve/:file_id", r.APIService.ServeFile)
+		serve.GET("stream/:file_id", r.APIService.StreamFile)
+	}
 }
 
 // RegisterAPIRoutes sets up API endpoints
@@ -120,14 +133,14 @@ func (r *Router) registerWebRoutes() {
 			web.GET("/", r.WebService.ViewFolder)
 			web.GET("/folder/:folder_id", r.WebService.ViewFolder)
 			web.POST("/new-folder", r.WebService.NewFolder)
-			web.PUT("/rename-folder", r.WebService.RenameFolder)
-			web.PUT("/move-folder", r.WebService.MoveFolder)
+			web.POST("/rename-folder", r.WebService.RenameFolder)
+			web.POST("/move-folder", r.WebService.MoveFolder)
 			web.DELETE("/folder/:folder_id", r.WebService.DeleteFolder)
 			web.DELETE("/scrub-folder/:folder_id", r.WebService.DeleteFolderPermanently)
 
 			web.POST("/upload", r.WebService.UploadFile)
 			web.GET("/file/:file_id", r.WebService.DownloadFile)
-			web.PUT("/file/:file_id", r.WebService.MoveFile)
+			web.POST("/move-file/:file_id", r.WebService.MoveFile)
 			web.DELETE("/file/:file_id", r.WebService.DeleteFile)
 			web.DELETE("/scrub/:file_id", r.WebService.DeleteFilePermanently)
 		}
