@@ -26,7 +26,7 @@ func openGormPrefixed(t *testing.T, prefix string) *gorm.DB {
 	t.Helper()
 	sqlDB, err := sql.Open("sqlite3", ":memory:")
 	require.NoError(t, err)
-	t.Cleanup(func() { sqlDB.Close() })
+	t.Cleanup(func() { _ = sqlDB.Close() })
 
 	gdb, err := gorm.Open(
 		gormsqlite.New(gormsqlite.Config{DriverName: "sqlite", Conn: sqlDB}),

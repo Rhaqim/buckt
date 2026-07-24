@@ -3,10 +3,10 @@ package service
 import (
 	"context"
 	"encoding/json"
-	"time"
-	"fmt"
 	"errors"
+	"fmt"
 	"path/filepath"
+	"time"
 
 	"github.com/Rhaqim/buckt/internal/constant"
 	"github.com/Rhaqim/buckt/internal/domain"
@@ -311,4 +311,3 @@ func (f *FolderService) backendCtx(parent context.Context) (context.Context, con
 	}
 	return context.WithTimeout(parent, f.backendOpTimeout)
 }
-

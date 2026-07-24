@@ -108,7 +108,6 @@ func TestWrapErrorUsageWithoutErr(t *testing.T) {
 	}
 }
 
-
 func TestWrapErrorSafe_OmitsDetailsInJSON(t *testing.T) {
 	result := WrapErrorSafe("user error", errors.New("internal secret"))
 

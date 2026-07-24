@@ -32,7 +32,7 @@ const (
 // SQLite semantics — the most conservative choice, since it avoids any
 // Postgres-only DDL.
 func DialectOf(db *gorm.DB) Dialect {
-	if db.Dialector != nil && db.Dialector.Name() == "postgres" {
+	if d := db.Dialector; d != nil && d.Name() == "postgres" {
 		return DialectPostgres
 	}
 	return DialectSQLite

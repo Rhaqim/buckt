@@ -7,7 +7,6 @@ const (
 	SQLite   DBDrivers = "sqlite"
 )
 
-
 // Pagination holds pagination parameters for list queries.
 type Pagination struct {
 	Page     int `json:"page"`
@@ -36,7 +35,6 @@ func (p *Pagination) Validate() {
 func (p Pagination) Offset() int {
 	return (p.Page - 1) * p.PageSize
 }
-
 
 // PathMove represents a single file path rewrite, used to coordinate
 // the storage backend when a logical move happens in the database.

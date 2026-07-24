@@ -6,8 +6,8 @@ type APIResponse[T any] struct {
 }
 
 type APIError struct {
-	Message string `json:"message"`                   // User-facing error message
-	Details string `json:"details,omitempty"`         // Developer debug info (omitted when empty)
+	Message string `json:"message"`           // User-facing error message
+	Details string `json:"details,omitempty"` // Developer debug info (omitted when empty)
 }
 
 // Success response

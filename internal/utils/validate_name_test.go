@@ -49,15 +49,15 @@ func TestValidateFolderName(t *testing.T) {
 	}
 
 	invalid := []string{
-		"",              // empty
-		" x",            // leading whitespace
-		"x ",            // trailing whitespace
-		trash,           // reserved
-		".",             // current dir
-		"..",            // parent dir
-		"a/b",           // separator
-		"a\\b",          // backslash
-		"../escape",     // traversal
+		"",          // empty
+		" x",        // leading whitespace
+		"x ",        // trailing whitespace
+		trash,       // reserved
+		".",         // current dir
+		"..",        // parent dir
+		"a/b",       // separator
+		"a\\b",      // backslash
+		"../escape", // traversal
 	}
 	for _, name := range invalid {
 		if err := ValidateFolderName(name, trash); err == nil {

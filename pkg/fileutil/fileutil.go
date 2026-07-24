@@ -45,7 +45,6 @@ func ProcessFileWithLimit(file *multipart.FileHeader, maxSize int64) (string, []
 	return file.Filename, data, nil
 }
 
-
 // inlineSafeTypes is the allowlist of content types that are safe to render
 // inline in a browser. Anything outside this set — most importantly text/html
 // and image/svg+xml, both of which can execute script in the serving origin —

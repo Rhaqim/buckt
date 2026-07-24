@@ -19,13 +19,13 @@ func TestDispositionFor(t *testing.T) {
 	}
 
 	attachment := []string{
-		"text/html",                  // XSS vector
-		"image/svg+xml",              // scriptable image
-		"application/xhtml+xml",      // scriptable
-		"application/octet-stream",   // unknown binary
-		"application/javascript",     // script
-		"",                           // empty
-		"text/html; charset=utf-8",   // param does not make it safe
+		"text/html",                // XSS vector
+		"image/svg+xml",            // scriptable image
+		"application/xhtml+xml",    // scriptable
+		"application/octet-stream", // unknown binary
+		"application/javascript",   // script
+		"",                         // empty
+		"text/html; charset=utf-8", // param does not make it safe
 	}
 	for _, ct := range attachment {
 		if got := DispositionFor(ct); got != "attachment" {

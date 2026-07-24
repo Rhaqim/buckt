@@ -48,9 +48,9 @@ func migrations() []Migration {
 // database AutoMigrate only adds what is missing (e.g. file_models.user_id),
 // leaving existing tables and rows intact.
 //
-// AutoMigrate runs FIRST and adds file_models.user_id as NOT NULL DEFAULT '' —
-// a plain ADD COLUMN, so existing rows get '' without any table rebuild. The
-// backfill then updates those '' rows from each file's parent folder. Order
+// AutoMigrate runs FIRST and adds file_models.user_id as NOT NULL DEFAULT ” —
+// a plain ADD COLUMN, so existing rows get ” without any table rebuild. The
+// backfill then updates those ” rows from each file's parent folder. Order
 // matters: an earlier design backfilled a nullable column BEFORE AutoMigrate
 // enforced NOT NULL, but on SQLite the enforcement triggers a table rebuild that
 // discarded the freshly-backfilled values (they were not yet committed), leaving
@@ -100,9 +100,9 @@ func guardLegacyTables(tx *gorm.DB, prefix string) error {
 }
 
 // backfillFileUserIDs populates <prefix>file_models.user_id from the parent
-// folder for legacy rows that AutoMigrate defaulted to '' (they predate the
+// folder for legacy rows that AutoMigrate defaulted to ” (they predate the
 // column). It is a no-op on a fresh database and on databases whose files
-// already carry a user_id. Orphaned files (no parent folder) are left as '' —
+// already carry a user_id. Orphaned files (no parent folder) are left as ” —
 // the NOT NULL default AutoMigrate already applied.
 func backfillFileUserIDs(tx *gorm.DB, prefix string) error {
 	if !tx.Migrator().HasTable(&model.FileModel{}) {
@@ -201,7 +201,7 @@ func scanLegacyRows(tx *gorm.DB, query string) ([]legacyRow, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var out []legacyRow
 	for rows.Next() {
@@ -307,7 +307,7 @@ func softDeletedFolderIDs(tx *gorm.DB, foldersTable string) (map[string]bool, er
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	out := map[string]bool{}
 	for rows.Next() {
