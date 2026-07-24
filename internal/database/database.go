@@ -1,12 +1,14 @@
 package database
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"time"
 
 	_ "github.com/lib/pq"
 
+	"github.com/Rhaqim/buckt/internal/database/schema"
 	"github.com/Rhaqim/buckt/internal/domain"
 	"github.com/Rhaqim/buckt/internal/model"
 
@@ -137,147 +139,27 @@ func (db *DB) Close() error {
 	return err
 }
 
+// Migrate brings the database schema up to date using the versioned migration
+// runner in internal/database/schema. Migrations are recorded in a ledger and
+// each runs exactly once, so this is safe to call on every startup and adopts a
+// pre-migration (v1.4.x) database in place without destroying data.
+//
+// The optional cloud file-migration feature table (MigrationModel) is created
+// via a conditional AutoMigrate OUTSIDE the versioned ledger, preserving the
+// v1.4.1 behavior where the table only exists when migration mode is enabled.
 func (db *DB) Migrate(migrationEnabled bool) error {
 	db.log.Info("🚀 Running migrations...")
 
-	// Backward-compat: if upgrading from a version that used soft-deletes via
-	// deleted_at, the column may still exist with rows that should remain hidden.
-	// Hard-delete those rows so they don't suddenly reappear after we removed
-	// the gorm.DeletedAt field from the model.
-	if err := db.cleanupLegacySoftDeletes(); err != nil {
-		db.log.Warn("legacy soft-delete cleanup skipped: " + err.Error())
+	loader := schema.NewLoader(schema.DialectOf(db.DB), db.log)
+	if err := loader.Apply(context.Background(), db.DB); err != nil {
+		return db.log.WrapErrorf("❌ schema migration failed: %w", err)
 	}
-
-	if err := db.AutoMigrate(&model.FolderModel{}); err != nil {
-		return db.log.WrapErrorf("❌ failed to migrate FolderModel: %w", err)
-	}
-	db.log.GetLogger().Println("✅ FolderModel migrated")
-
-	// Pre-migration: backfill file_models.user_id BEFORE AutoMigrate tries to
-	// enforce NOT NULL on the column. On Postgres, AutoMigrate would fail if any
-	// existing rows had NULL user_id values.
-	if err := db.preBackfillFileUserIDs(); err != nil {
-		db.log.Warn("file user_id pre-backfill skipped: " + err.Error())
-	}
-
-	if err := db.AutoMigrate(&model.FileModel{}); err != nil {
-		return db.log.WrapErrorf("❌ failed to migrate FileModel: %w", err)
-	}
-	db.log.GetLogger().Println("✅ FileModel migrated")
 
 	if migrationEnabled {
 		if err := db.AutoMigrate(&model.MigrationModel{}); err != nil {
 			return db.log.WrapErrorf("❌ failed to migrate MigrationModel: %w", err)
 		}
 		db.log.GetLogger().Println("✅ MigrationModel migrated")
-	}
-
-	return nil
-}
-
-// preBackfillFileUserIDs handles the case where the file_models table exists
-// but file_models.user_id is missing or has NULL/empty values. Runs before
-// AutoMigrate so the subsequent NOT NULL enforcement doesn't fail on Postgres.
-//
-// Steps:
-//  1. If file_models doesn't exist yet, nothing to do (fresh install)
-//  2. If user_id column doesn't exist, add it as nullable so we can backfill
-//  3. Backfill from parent folder's user_id where empty/null
-//
-// AutoMigrate will then upgrade the column to NOT NULL with default ''.
-func (db *DB) preBackfillFileUserIDs() error {
-	if !db.Migrator().HasTable(&model.FileModel{}) {
-		return nil // fresh install — nothing to backfill
-	}
-
-	if !db.Migrator().HasColumn(&model.FileModel{}, "user_id") {
-		// Add the column as nullable so the backfill can populate it
-		if err := db.Exec("ALTER TABLE file_models ADD COLUMN user_id TEXT").Error; err != nil {
-			return fmt.Errorf("failed to add user_id column: %w", err)
-		}
-	}
-
-	return db.backfillFileUserIDs()
-}
-
-// backfillFileUserIDs populates file_models.user_id from the parent folder's
-// user_id for any rows where user_id is empty. This handles legacy data from
-// before the user_id column existed on file_models.
-func (db *DB) backfillFileUserIDs() error {
-	if !db.Migrator().HasColumn(&model.FileModel{}, "user_id") {
-		return nil
-	}
-
-	// Count first so we only log when there's actually work to do
-	var count int64
-	if err := db.Model(&model.FileModel{}).Where("user_id = ? OR user_id IS NULL", "").Count(&count).Error; err != nil {
-		return err
-	}
-	if count == 0 {
-		return nil
-	}
-
-	db.log.Infof("🔧 Backfilling user_id for %d legacy file rows...", count)
-
-	// Step 1: backfill from the parent folder when one exists.
-	// Works on both SQLite and Postgres.
-	if err := db.Exec(`
-		UPDATE file_models
-		SET user_id = (
-			SELECT folder_models.user_id
-			FROM folder_models
-			WHERE folder_models.id = file_models.parent_id
-		)
-		WHERE (user_id = '' OR user_id IS NULL)
-		  AND EXISTS (
-			SELECT 1 FROM folder_models WHERE folder_models.id = file_models.parent_id
-		  )
-	`).Error; err != nil {
-		return err
-	}
-
-	// Step 2: any rows that still have NULL/empty user_id are orphaned
-	// (their parent folder doesn't exist). Set them to '' so the subsequent
-	// AutoMigrate can enforce NOT NULL without failing on Postgres.
-	if err := db.Exec(`
-		UPDATE file_models
-		SET user_id = ''
-		WHERE user_id IS NULL
-	`).Error; err != nil {
-		return err
-	}
-
-	db.log.GetLogger().Println("✅ Backfilled file user_id from parent folders")
-	return nil
-}
-
-// cleanupLegacySoftDeletes hard-deletes any rows that were soft-deleted under
-// the previous deleted_at scheme. Safe to call when the column doesn't exist
-// (errors are ignored at the call site). This must run BEFORE AutoMigrate so
-// that the deleted_at column hasn't been dropped yet.
-func (db *DB) cleanupLegacySoftDeletes() error {
-	hasFileCol := db.Migrator().HasColumn(&model.FileModel{}, "deleted_at")
-	hasFolderCol := db.Migrator().HasColumn(&model.FolderModel{}, "deleted_at")
-
-	if hasFileCol {
-		if err := db.Exec("DELETE FROM file_models WHERE deleted_at IS NOT NULL").Error; err != nil {
-			return err
-		}
-		db.log.GetLogger().Println("✅ Purged legacy soft-deleted files")
-		// Drop the column so it doesn't linger
-		if err := db.Migrator().DropColumn(&model.FileModel{}, "deleted_at"); err != nil {
-			db.log.Warn("could not drop file_models.deleted_at column: " + err.Error())
-		}
-	}
-
-	if hasFolderCol {
-		if err := db.Exec("DELETE FROM folder_models WHERE deleted_at IS NOT NULL").Error; err != nil {
-			return err
-		}
-		db.log.GetLogger().Println("✅ Purged legacy soft-deleted folders")
-		if err := db.Migrator().DropColumn(&model.FolderModel{}, "deleted_at"); err != nil {
-			db.log.Warn("could not drop folder_models.deleted_at column: " + err.Error())
-		}
 	}
 
 	return nil

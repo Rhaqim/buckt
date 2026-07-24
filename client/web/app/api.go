@@ -301,12 +301,21 @@ func (svc *APIService) ServeFile(c *gin.Context) {
 		return
 	}
 
+	// Only render inline for a small allowlist of media types. Types that can
+	// execute script in this origin (text/html, image/svg+xml, ...) are forced
+	// to download, closing a stored-XSS vector where an uploaded HTML/SVG file
+	// would otherwise run in the buckt origin when opened via /serve.
+	disposition := fileutil.DispositionFor(file.ContentType)
+
 	// Set headers
 	c.Header("Cache-Control", "public, max-age=86400")
-	c.Header("Content-Disposition", fileutil.SafeContentDisposition("inline", file.Name))
+	c.Header("Content-Disposition", fileutil.SafeContentDisposition(disposition, file.Name))
 	c.Header("Content-Type", file.ContentType)
 	c.Header("Content-Length", fmt.Sprintf("%d", file.Size))
 	c.Header("X-Content-Type-Options", "nosniff")
+	// Defense in depth: even if a type slips through as inline, this CSP blocks
+	// script execution and sub-resource loads from the served document.
+	c.Header("Content-Security-Policy", "default-src 'none'; sandbox; img-src 'self'; media-src 'self'")
 
 	// Send file data
 	c.Data(200, file.ContentType, file.Data)

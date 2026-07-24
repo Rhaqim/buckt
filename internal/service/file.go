@@ -12,6 +12,7 @@ import (
 
 	"github.com/Rhaqim/buckt/internal/domain"
 	"github.com/Rhaqim/buckt/internal/model"
+	"github.com/Rhaqim/buckt/internal/utils"
 	"github.com/google/uuid"
 )
 
@@ -62,6 +63,14 @@ func NewFileService(
 // CreateFile implements domain.FileService.
 func (f *FileService) CreateFile(ctx context.Context, user_id, parent_id, file_name, content_type string, file_data []byte) (string, error) {
 	var err error
+
+	// Validate the file name before it is ever joined to a folder path or used
+	// as a backend object key. Without this a name like "../../<victim>/x" would
+	// escape the parent folder's subtree (local backend) or be written verbatim
+	// as a cross-tenant object key (cloud backends).
+	if err := utils.ValidateFileName(file_name); err != nil {
+		return "", f.logger.WrapError("invalid file name", err)
+	}
 
 	// Enforce max file size
 	if f.maxFileSize > 0 && int64(len(file_data)) > f.maxFileSize {
@@ -331,6 +340,10 @@ func (f *FileService) MoveFile(ctx context.Context, file_id string, new_parent_i
 
 // RenameFile implements domain.FileService.
 func (f *FileService) RenameFile(ctx context.Context, file_id string, new_name string) error {
+	if err := utils.ValidateFileName(new_name); err != nil {
+		return f.logger.WrapError("invalid file name", err)
+	}
+
 	fileID, err := uuid.Parse(file_id)
 	if err != nil {
 		return f.logger.WrapError("failed to parse uuid", err)
@@ -346,6 +359,10 @@ func (f *FileService) RenameFile(ctx context.Context, file_id string, new_name s
 
 // UpdateFile implements domain.FileService.
 func (f *FileService) UpdateFile(ctx context.Context, user_id, file_id string, new_file_name string, new_file_data []byte) error {
+	if err := utils.ValidateFileName(new_file_name); err != nil {
+		return f.logger.WrapError("invalid file name", err)
+	}
+
 	fileID, err := uuid.Parse(file_id)
 	if err != nil {
 		return f.logger.WrapError("failed to parse uuid", err)
@@ -362,8 +379,10 @@ func (f *FileService) UpdateFile(ctx context.Context, user_id, file_id string, n
 		return err
 	}
 
-	// Get the new file path
-	newPath := parentFolder.Path + "/" + new_file_name
+	// Get the new file path. Use filepath.Join (not raw concatenation) so the
+	// name is cleaned; combined with validateFileName above this keeps the path
+	// confined to the parent folder.
+	newPath := filepath.Join(parentFolder.Path, new_file_name)
 
 	// Calculate the new file hash, for data verification
 	newHash := fmt.Sprintf("%x", sha256.Sum256(new_file_data))
