@@ -166,12 +166,12 @@ func (db *DB) Migrate(migrationEnabled bool) error {
 
 	loader := schema.NewLoader(schema.DialectOf(db.DB), db.log, db.tablePrefix)
 	if err := loader.Apply(context.Background(), db.DB); err != nil {
-		return db.log.WrapErrorf("❌ schema migration failed: %w", err)
+		return db.log.WrapErrorf("❌ schema migration failed", err)
 	}
 
 	if migrationEnabled {
 		if err := db.AutoMigrate(&model.MigrationModel{}); err != nil {
-			return db.log.WrapErrorf("❌ failed to migrate MigrationModel: %w", err)
+			return db.log.WrapErrorf("❌ failed to migrate MigrationModel", err)
 		}
 		db.log.GetLogger().Println("✅ MigrationModel migrated")
 	}

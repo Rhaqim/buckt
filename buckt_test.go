@@ -125,7 +125,7 @@ func TestDefault(t *testing.T) {
 		buckt, err := Default()
 		// Cleanup to ensure the server is closed after the test
 		t.Cleanup(func() {
-			buckt.Close()
+			_ = buckt.Close()
 		})
 
 		assert.NoError(t, err)
@@ -136,7 +136,7 @@ func TestDefault(t *testing.T) {
 		buckt, err := Default(FlatNameSpaces(true))
 		// Cleanup to ensure the server is closed after the test
 		t.Cleanup(func() {
-			buckt.Close()
+			_ = buckt.Close()
 		})
 		assert.NoError(t, err)
 		assert.NotNil(t, buckt)
@@ -146,7 +146,7 @@ func TestDefault(t *testing.T) {
 		buckt, err := Default(MediaDir("media"))
 		// Cleanup to ensure the server is closed after the test
 		t.Cleanup(func() {
-			buckt.Close()
+			_ = buckt.Close()
 		})
 		assert.NoError(t, err)
 		assert.NotNil(t, buckt)
@@ -167,7 +167,7 @@ func TestDefault(t *testing.T) {
 		buckt, err := Default(WithCache(cacheConfig))
 		// Cleanup to ensure the server is closed after the test
 		t.Cleanup(func() {
-			buckt.Close()
+			_ = buckt.Close()
 		})
 		assert.NoError(t, err)
 		assert.NotNil(t, buckt)
@@ -177,7 +177,7 @@ func TestDefault(t *testing.T) {
 		buckt, err := Default(WithLog(LogConfig{LogTerminal: false, Silence: false}))
 		// Cleanup to ensure the server is closed after the test
 		t.Cleanup(func() {
-			buckt.Close()
+			_ = buckt.Close()
 		})
 		assert.NoError(t, err)
 		assert.NotNil(t, buckt)
@@ -191,7 +191,7 @@ func TestDefault(t *testing.T) {
 		buckt, err := Default(WithDB(SQLite, sqlDB))
 		// Cleanup to ensure the server is closed after the test
 		t.Cleanup(func() {
-			buckt.Close()
+			_ = buckt.Close()
 		})
 		assert.NoError(t, err)
 		assert.NotNil(t, buckt)
@@ -229,7 +229,7 @@ func TestClose(t *testing.T) {
 	buckt := setupBucktTest(t)
 	assert.NotNil(t, buckt)
 
-	buckt.Close()
+	assert.NoError(t, buckt.Close())
 }
 
 func TestNewFolder(t *testing.T) {
@@ -237,7 +237,7 @@ func TestNewFolder(t *testing.T) {
 
 	// Ensure cleanup after test execution
 	t.Cleanup(func() {
-		buckt.Close() // Assuming there's a method to clean up resources
+		_ = buckt.Close() // Assuming there's a method to clean up resources
 	})
 
 	// Expected folder ID
@@ -263,7 +263,7 @@ func TestListFolders(t *testing.T) {
 
 	// Ensure cleanup after test execution
 	t.Cleanup(func() {
-		buckt.Close() // Assuming there's a method to clean up resources
+		_ = buckt.Close() // Assuming there's a method to clean up resources
 	})
 
 	// Mock the expected behavior
@@ -289,7 +289,7 @@ func TestGetFolderWithContent(t *testing.T) {
 
 	// Ensure cleanup after test execution
 	t.Cleanup(func() {
-		buckt.Close() // Assuming there's a method to clean up resources
+		_ = buckt.Close() // Assuming there's a method to clean up resources
 	})
 
 	// Mock the expected behavior
@@ -324,7 +324,7 @@ func TestMoveFolder(t *testing.T) {
 
 	// Ensure cleanup after test execution
 	t.Cleanup(func() {
-		buckt.Close() // Assuming there's a method to clean up resources
+		_ = buckt.Close() // Assuming there's a method to clean up resources
 	})
 
 	// Mock the expected behavior
@@ -345,7 +345,7 @@ func TestDeleteFolder(t *testing.T) {
 
 	// Ensure cleanup after test execution
 	t.Cleanup(func() {
-		buckt.Close() // Assuming there's a method to clean up resources
+		_ = buckt.Close() // Assuming there's a method to clean up resources
 	})
 
 	// Mock the expected behavior
@@ -365,7 +365,7 @@ func TestDeleteFolderPermanently(t *testing.T) {
 
 	// Ensure cleanup after test execution
 	t.Cleanup(func() {
-		buckt.Close() // Assuming there's a method to clean up resources
+		_ = buckt.Close() // Assuming there's a method to clean up resources
 	})
 
 	// Mock the expected behavior
@@ -385,7 +385,7 @@ func TestUploadFile(t *testing.T) {
 
 	// Ensure cleanup after test execution
 	t.Cleanup(func() {
-		buckt.Close() // Assuming there's a method to clean up resources
+		_ = buckt.Close() // Assuming there's a method to clean up resources
 	})
 
 	// Mock the expected behavior
@@ -406,7 +406,7 @@ func TestGetFile(t *testing.T) {
 
 	// Ensure cleanup after test execution
 	t.Cleanup(func() {
-		buckt.Close() // Assuming there's a method to clean up resources
+		_ = buckt.Close() // Assuming there's a method to clean up resources
 	})
 
 	// Mock the expected behavior
@@ -433,7 +433,7 @@ func TestGetFileStream(t *testing.T) {
 
 	// Ensure cleanup after test execution
 	t.Cleanup(func() {
-		buckt.Close() // Assuming there's a method to clean up resources
+		_ = buckt.Close() // Assuming there's a method to clean up resources
 	})
 
 	// Mock the expected behavior
@@ -464,7 +464,7 @@ func TestListFilesMetadata(t *testing.T) {
 
 	// Ensure cleanup after test execution
 	t.Cleanup(func() {
-		buckt.Close() // Assuming there's a method to clean up resources
+		_ = buckt.Close() // Assuming there's a method to clean up resources
 	})
 
 	// Mock the expected behavior
@@ -490,7 +490,7 @@ func TestListFiles(t *testing.T) {
 
 	// Ensure cleanup after test execution
 	t.Cleanup(func() {
-		buckt.Close() // Assuming there's a method to clean up resources
+		_ = buckt.Close() // Assuming there's a method to clean up resources
 	})
 
 	// Mock the expected behavior
@@ -516,7 +516,7 @@ func TestMoveFile(t *testing.T) {
 
 	// Ensure cleanup after test execution
 	t.Cleanup(func() {
-		buckt.Close() // Assuming there's a method to clean up resources
+		_ = buckt.Close() // Assuming there's a method to clean up resources
 	})
 
 	// Mock the expected behavior
@@ -536,7 +536,7 @@ func TestDeleteFile(t *testing.T) {
 
 	// Ensure cleanup after test execution
 	t.Cleanup(func() {
-		buckt.Close() // Assuming there's a method to clean up resources
+		_ = buckt.Close() // Assuming there's a method to clean up resources
 	})
 
 	// Mock the expected behavior
@@ -556,7 +556,7 @@ func TestDeleteFilePermanently(t *testing.T) {
 
 	// Ensure cleanup after test execution
 	t.Cleanup(func() {
-		buckt.Close() // Assuming there's a method to clean up resources
+		_ = buckt.Close() // Assuming there's a method to clean up resources
 	})
 
 	// Mock the expected behavior

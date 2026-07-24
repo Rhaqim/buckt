@@ -25,7 +25,7 @@ func main() {
 		panic(err)
 	}
 
-	defer bucktInstance.Close()
+	defer func() { _ = bucktInstance.Close() }()
 }
 
 type Cache struct {

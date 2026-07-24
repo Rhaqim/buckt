@@ -48,6 +48,15 @@ call on every startup — applied migrations are recorded in a
   `pkg/buckterr` package). The "record not found" case no longer leaks
   `gorm.ErrRecordNotFound`. The optional `LogConfig` logger is now purely for
   diagnostics — error handling should use these returned errors.
+- **Errors carry context and are no longer logged by the library.** Internally,
+  errors are now wrapped with `fmt.Errorf(...: %w)` so the returned error carries
+  full context (previously the context was only written to the log and the raw
+  error returned). buckt no longer logs the errors it returns; the caller
+  decides whether to log. Errors that buckt intentionally swallows (best-effort
+  cache/secondary-backend operations) are still surfaced via `Warn`.
+- **`Client.Close()` now returns an error** (the database close error), matching
+  the `io.Closer` idiom. Source-compatible: existing `defer client.Close()` and
+  `client.Close()` statements keep compiling.
 - **Configurable table prefix** (`DBConfig.TablePrefix` / `WithTablePrefix`). Set
   it for a **fresh** database that shares a schema with other tables; every buckt
   table and the migration ledger are prefixed. The default is empty, preserving

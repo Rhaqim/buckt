@@ -158,11 +158,14 @@ func Default(opts ...ConfigFunc) (*Client, error) {
 	return New(bucktOpts)
 }
 
-// Close closes the Buckt instance.
-// It closes the database connection and the LRU cache.
-func (b *Client) Close() {
-	_ = b.db.Close()
+// Close releases the Buckt instance's resources: it closes the LRU cache and
+// the database connection, and returns any error from closing the database
+// (external connections passed via WithDB are left open). Adding this return
+// value is source-compatible — existing `defer client.Close()` and
+// `client.Close()` call sites keep working.
+func (b *Client) Close() error {
 	b.lruCache.Close()
+	return b.db.Close()
 }
 
 // MaxFileSize returns the configured maximum file size in bytes. A return
@@ -695,7 +698,10 @@ func initializeCache(conf CacheConfig, bucktLog domain.BucktLogger) (domain.Cach
 
 	lruCache, err := cache.NewFileCache(fileConf.NumCounters, fileConf.MaxCost, fileConf.BufferItems)
 	if err != nil {
-		_ = bucktLog.WrapErrorf("failed to initialize file cache", err)
+		// Best-effort fallback: the cache is optional, so we don't fail startup.
+		// Log it (the one legitimate use of the logger — an error we deliberately
+		// do not return to the caller).
+		bucktLog.Warn("failed to initialize file cache, using no-op cache: " + err.Error())
 		lruCache = mocks.NewNoopLRUCache()
 	}
 	bucktLog.Info("✅ Initialized file cache")

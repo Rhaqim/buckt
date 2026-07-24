@@ -31,7 +31,7 @@ func newSentinelTestClient(t *testing.T) *Client {
 		MaxFileSize:    1024,
 	})
 	require.NoError(t, err)
-	t.Cleanup(client.Close)
+	t.Cleanup(func() { _ = client.Close() })
 	return client
 }
 
