@@ -14,10 +14,14 @@ import (
 
 	"github.com/Rhaqim/buckt/internal/domain"
 	"github.com/Rhaqim/buckt/internal/model"
+	"github.com/Rhaqim/buckt/pkg/buckterr"
 	"golang.org/x/sync/singleflight"
 )
 
-var ErrPathTraversal = fmt.Errorf("path traversal detected: path escapes media directory")
+// ErrPathTraversal wraps the public buckterr.ErrPathTraversal sentinel so
+// callers can errors.Is against it while keeping this package-level variable for
+// existing internal references.
+var ErrPathTraversal = fmt.Errorf("path escapes media directory: %w", buckterr.ErrPathTraversal)
 
 type LocalFileSystemService struct {
 	logger   domain.BucktLogger

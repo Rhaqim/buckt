@@ -39,6 +39,15 @@ call on every startup — applied migrations are recorded in a
 
 ### ✨ Added
 
+- **Typed sentinel errors** for programmatic error handling. `Client` methods now
+  wrap failures with `errors.Is`-matchable sentinels — `ErrNotFound`,
+  `ErrInvalidID`, `ErrInvalidName`, `ErrAlreadyExists`, `ErrFileTooLarge`,
+  `ErrPathTraversal`, `ErrTrashBatchExceeded`, `ErrBackendUnavailable` — so
+  callers can map failures to HTTP status codes without importing GORM. Available
+  as `buckt.ErrNotFound` and, identically, `buckterr.ErrNotFound` (new
+  `pkg/buckterr` package). The "record not found" case no longer leaks
+  `gorm.ErrRecordNotFound`. The optional `LogConfig` logger is now purely for
+  diagnostics — error handling should use these returned errors.
 - **Configurable table prefix** (`DBConfig.TablePrefix` / `WithTablePrefix`). Set
   it for a **fresh** database that shares a schema with other tables; every buckt
   table and the migration ledger are prefixed. The default is empty, preserving

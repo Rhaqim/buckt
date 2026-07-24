@@ -13,6 +13,7 @@ import (
 	"github.com/Rhaqim/buckt/internal/domain"
 	"github.com/Rhaqim/buckt/internal/model"
 	"github.com/Rhaqim/buckt/internal/utils"
+	"github.com/Rhaqim/buckt/pkg/buckterr"
 	"github.com/google/uuid"
 )
 
@@ -69,12 +70,12 @@ func (f *FileService) CreateFile(ctx context.Context, user_id, parent_id, file_n
 	// escape the parent folder's subtree (local backend) or be written verbatim
 	// as a cross-tenant object key (cloud backends).
 	if err := utils.ValidateFileName(file_name); err != nil {
-		return "", f.logger.WrapError("invalid file name", err)
+		return "", fmt.Errorf("invalid file name: %w", buckterr.ErrInvalidName)
 	}
 
 	// Enforce max file size
 	if f.maxFileSize > 0 && int64(len(file_data)) > f.maxFileSize {
-		return "", fmt.Errorf("file size %d exceeds maximum allowed size %d bytes", len(file_data), f.maxFileSize)
+		return "", fmt.Errorf("file size %d exceeds maximum allowed size %d bytes: %w", len(file_data), f.maxFileSize, buckterr.ErrFileTooLarge)
 	}
 
 	// Detect and validate content type from actual file bytes
@@ -138,7 +139,7 @@ func (f *FileService) CreateFile(ctx context.Context, user_id, parent_id, file_n
 func (f *FileService) GetFile(ctx context.Context, file_id string) (*model.FileModel, error) {
 	fileID, err := uuid.Parse(file_id)
 	if err != nil {
-		return nil, f.logger.WrapError("failed to parse uuid", err)
+		return nil, fmt.Errorf("invalid id: %w", buckterr.ErrInvalidID)
 	}
 
 	var file *model.FileModel
@@ -190,7 +191,7 @@ func (f *FileService) GetFile(ctx context.Context, file_id string) (*model.FileM
 func (f *FileService) GetFileStream(ctx context.Context, file_id string) (*model.FileModel, io.ReadCloser, error) {
 	fileID, err := uuid.Parse(file_id)
 	if err != nil {
-		return nil, nil, f.logger.WrapError("failed to parse uuid", err)
+		return nil, nil, fmt.Errorf("invalid id: %w", buckterr.ErrInvalidID)
 	}
 
 	var file *model.FileModel
@@ -235,7 +236,7 @@ func (f *FileService) GetFileStream(ctx context.Context, file_id string) (*model
 func (f *FileService) getFiles(ctx context.Context, parent_id string) ([]*model.FileModel, error) {
 	parentID, err := uuid.Parse(parent_id)
 	if err != nil {
-		return nil, f.logger.WrapError("failed to parse uuid", err)
+		return nil, fmt.Errorf("invalid id: %w", buckterr.ErrInvalidID)
 	}
 
 	var files []*model.FileModel
@@ -314,12 +315,12 @@ func (f *FileService) GetFiles(ctx context.Context, parent_id string) ([]model.F
 func (f *FileService) MoveFile(ctx context.Context, file_id string, new_parent_id string) error {
 	fileID, err := uuid.Parse(file_id)
 	if err != nil {
-		return f.logger.WrapError("failed to parse uuid", err)
+		return fmt.Errorf("invalid id: %w", buckterr.ErrInvalidID)
 	}
 
 	newParentID, err := uuid.Parse(new_parent_id)
 	if err != nil {
-		return f.logger.WrapError("failed to parse uuid", err)
+		return fmt.Errorf("invalid id: %w", buckterr.ErrInvalidID)
 	}
 
 	// Move the file
@@ -341,12 +342,12 @@ func (f *FileService) MoveFile(ctx context.Context, file_id string, new_parent_i
 // RenameFile implements domain.FileService.
 func (f *FileService) RenameFile(ctx context.Context, file_id string, new_name string) error {
 	if err := utils.ValidateFileName(new_name); err != nil {
-		return f.logger.WrapError("invalid file name", err)
+		return fmt.Errorf("invalid file name: %w", buckterr.ErrInvalidName)
 	}
 
 	fileID, err := uuid.Parse(file_id)
 	if err != nil {
-		return f.logger.WrapError("failed to parse uuid", err)
+		return fmt.Errorf("invalid id: %w", buckterr.ErrInvalidID)
 	}
 
 	// Rename the file
@@ -360,12 +361,12 @@ func (f *FileService) RenameFile(ctx context.Context, file_id string, new_name s
 // UpdateFile implements domain.FileService.
 func (f *FileService) UpdateFile(ctx context.Context, user_id, file_id string, new_file_name string, new_file_data []byte) error {
 	if err := utils.ValidateFileName(new_file_name); err != nil {
-		return f.logger.WrapError("invalid file name", err)
+		return fmt.Errorf("invalid file name: %w", buckterr.ErrInvalidName)
 	}
 
 	fileID, err := uuid.Parse(file_id)
 	if err != nil {
-		return f.logger.WrapError("failed to parse uuid", err)
+		return fmt.Errorf("invalid id: %w", buckterr.ErrInvalidID)
 	}
 
 	file, err := f.repo.GetFile(ctx, fileID)
@@ -412,7 +413,7 @@ func (f *FileService) DeleteFile(ctx context.Context, file_id string) (string, e
 
 	fileID, err := uuid.Parse(file_id)
 	if err != nil {
-		return parentID, f.logger.WrapError("failed to parse uuid", err)
+		return parentID, fmt.Errorf("invalid id: %w", buckterr.ErrInvalidID)
 	}
 
 	var file *model.FileModel
@@ -472,7 +473,7 @@ func (f *FileService) ScrubFile(ctx context.Context, file_id string) (string, er
 
 	fileID, err := uuid.Parse(file_id)
 	if err != nil {
-		return parentID, f.logger.WrapError("failed to parse uuid", err)
+		return parentID, fmt.Errorf("invalid id: %w", buckterr.ErrInvalidID)
 	}
 
 	var file *model.FileModel

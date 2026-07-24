@@ -1,6 +1,7 @@
 package model
 
 import (
+	"database/sql"
 	"time"
 
 	"github.com/google/uuid"
@@ -21,10 +22,11 @@ type FolderModel struct {
 
 	// Deprecated: soft-delete was replaced by the __trash__ folder. Retained only
 	// for source compatibility with pre-trash releases — fully ignored by the
-	// database (gorm:"-:all", so no deleted_at column and no soft-delete
-	// filtering) and never populated (always Valid == false). Use
-	// Client.GetTrashFolder to enumerate trashed items.
-	DeletedAt gorm.DeletedAt `gorm:"-:all" json:"deleted_at"`
+	// database (gorm:"-", so no deleted_at column and no soft-delete filtering)
+	// and never populated (always Valid == false). Use Client.GetTrashFolder to
+	// enumerate trashed items. See FileModel.DeletedAt for why this is
+	// sql.NullTime rather than gorm.DeletedAt.
+	DeletedAt sql.NullTime `gorm:"-" json:"deleted_at"`
 }
 
 // BeforeCreate hook for FolderModel to add a prefixed UUID

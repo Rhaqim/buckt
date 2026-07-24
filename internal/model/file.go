@@ -1,6 +1,7 @@
 package model
 
 import (
+	"database/sql"
 	"time"
 
 	"github.com/google/uuid"
@@ -20,12 +21,18 @@ type FileModel struct {
 	CreatedAt   time.Time `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
 
-	// Deprecated: soft-delete was replaced by the __trash__ folder. This field
-	// is retained only for source compatibility with pre-trash releases — it is
-	// fully ignored by the database (gorm:"-:all", so no deleted_at column and no
-	// soft-delete filtering) and is never populated (always reports Valid ==
-	// false). Enumerate trashed items via Client.GetTrashFolder instead.
-	DeletedAt gorm.DeletedAt `gorm:"-:all" json:"deleted_at"`
+	// Deprecated: soft-delete was replaced by the __trash__ folder. Retained only
+	// for source compatibility with pre-trash releases — fully ignored by the
+	// database (gorm:"-", so no deleted_at column and no soft-delete filtering)
+	// and never populated (always reports Valid == false). Enumerate trashed
+	// items via Client.GetTrashFolder instead.
+	//
+	// Note: the type is sql.NullTime, not gorm.DeletedAt. gorm.DeletedAt is
+	// defined as `type DeletedAt sql.NullTime`, so the .Time/.Valid field access
+	// and JSON shape are identical, but a gorm.DeletedAt-typed field — even when
+	// tagged as ignored — makes gorm emit a broken "deleted_at IS NULL" clause on
+	// every query. sql.NullTime avoids that entirely.
+	DeletedAt sql.NullTime `gorm:"-" json:"deleted_at"`
 }
 
 // BeforeCreate hook for FileModel to add a prefixed UUID

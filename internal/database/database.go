@@ -78,6 +78,11 @@ func NewDB(sqlDBInstance *sql.DB, driver model.DBDrivers, log domain.BucktLogger
 		// (the default) is equivalent to gorm's zero-value strategy, so existing
 		// databases see the same table names as before.
 		NamingStrategy: gormschema.NamingStrategy{TablePrefix: tablePrefix},
+		// Translate dialect-specific driver errors (e.g. Postgres 23505, SQLite
+		// "UNIQUE constraint failed") into gorm sentinels like ErrDuplicatedKey,
+		// so the repository layer can map them to buckterr.ErrAlreadyExists
+		// portably. Additive: First() still returns ErrRecordNotFound as before.
+		TranslateError: true,
 	}
 
 	// Determine the correct dialector

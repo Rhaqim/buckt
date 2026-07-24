@@ -9,6 +9,7 @@ import (
 	"github.com/Rhaqim/buckt/internal/database"
 	"github.com/Rhaqim/buckt/internal/domain"
 	"github.com/Rhaqim/buckt/internal/model"
+	"github.com/Rhaqim/buckt/pkg/buckterr"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
@@ -23,14 +24,14 @@ func NewFileRepository(db *database.DB) domain.FileRepository {
 
 // Create implements domain.FileRepository.
 func (f *FileRepository) Create(ctx context.Context, file *model.FileModel) error {
-	return f.db.DB.WithContext(ctx).Create(file).Error
+	return asAlreadyExists(f.db.DB.WithContext(ctx).Create(file).Error, "file already exists")
 }
 
 // GetFile implements domain.FileRepository.
 func (f *FileRepository) GetFile(ctx context.Context, id uuid.UUID) (*model.FileModel, error) {
 	var file model.FileModel
 	err := f.db.DB.WithContext(ctx).First(&file, id).Error
-	return &file, err
+	return &file, asNotFound(err, "file not found")
 }
 
 // GetFiles implements domain.FileRepository.
@@ -59,7 +60,7 @@ func (f *FileRepository) MoveFile(ctx context.Context, file_id uuid.UUID, new_pa
 
 	if err := f.db.DB.WithContext(ctx).Where("id = ?", new_parent_id).First(&newParentFolder).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return "", "", fmt.Errorf("parent folder not found")
+			return "", "", fmt.Errorf("parent folder not found: %w", buckterr.ErrNotFound)
 		}
 		return "", "", err
 	}
@@ -67,7 +68,7 @@ func (f *FileRepository) MoveFile(ctx context.Context, file_id uuid.UUID, new_pa
 	var file model.FileModel
 	if err := f.db.DB.WithContext(ctx).First(&file, file_id).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return "", "", fmt.Errorf("file not found")
+			return "", "", fmt.Errorf("file not found: %w", buckterr.ErrNotFound)
 		}
 		return "", "", err
 	}
@@ -89,7 +90,7 @@ func (f *FileRepository) RenameFile(ctx context.Context, file_id uuid.UUID, new_
 	var file model.FileModel
 	if err := f.db.DB.WithContext(ctx).First(&file, file_id).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return fmt.Errorf("file not found")
+			return fmt.Errorf("file not found: %w", buckterr.ErrNotFound)
 		}
 		return err
 	}
