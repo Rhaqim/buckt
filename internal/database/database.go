@@ -59,7 +59,7 @@ func NewDB(sqlDBInstance *sql.DB, driver model.DBDrivers, log domain.BucktLogger
 	}
 
 	// if silence is true, set log level to Info otherwise set to Silent
-	var logLevel gormLogger.LogLevel = gormLogger.Silent
+	logLevel := gormLogger.Silent
 	if silence {
 		logLevel = gormLogger.Info
 	}

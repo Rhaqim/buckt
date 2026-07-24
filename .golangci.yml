@@ -1,0 +1,16 @@
+version: "2"
+
+# Lint policy for buckt. The baseline is golangci-lint's default linter set
+# (errcheck, govet, ineffassign, staticcheck, unused). The single project-wide
+# exception is documented below.
+linters:
+  exclusions:
+    rules:
+      # QF1008 asks to drop the embedded-field qualifier (e.g. r.APIService.X ->
+      # r.X). In client/web the router embeds several interfaces (APIService,
+      # WebService, Middleware) whose method sets overlap (both services define
+      # UploadFile, DeleteFolder, ...). The explicit qualifier is deliberate
+      # disambiguation, not redundancy, so QF1008 is excluded.
+      - linters:
+          - staticcheck
+        text: "QF1008"

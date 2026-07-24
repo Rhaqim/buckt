@@ -48,7 +48,7 @@ func setup(t *testing.T, bucktOpts Config) MockBuckt {
 func setupBucktTest(t *testing.T) MockBuckt {
 	sqlDB, err := sql.Open("sqlite3", ":memory:")
 	assert.NoError(t, err)
-	defer sqlDB.Close()
+	defer func() { _ = sqlDB.Close() }()
 
 	bucktOpts := Config{
 		DB:             DBConfig{Driver: SQLite, Database: sqlDB},
@@ -70,7 +70,7 @@ func TestNew(t *testing.T) {
 	t.Run("SQLite without provided instance", func(t *testing.T) {
 		sqlDB, err := sql.Open("sqlite3", ":memory:")
 		assert.NoError(t, err)
-		defer sqlDB.Close()
+		defer func() { _ = sqlDB.Close() }()
 
 		bucktOpts := Config{
 			DB:             DBConfig{Driver: SQLite, Database: sqlDB},
@@ -87,7 +87,7 @@ func TestNew(t *testing.T) {
 	// t.Run("Postgres with provided instance", func(t *testing.T) {
 	// 	sqlDB, err := sql.Open("postgres", "user=postgres password=postgres dbname=postgres sslmode=disable")
 	// 	assert.NoError(t, err)
-	// 	defer sqlDB.Close()
+	// 	defer func() { _ = sqlDB.Close() }()
 
 	// 	bucktOpts := Config{
 	// 		DB:             DBConfig{Driver: Postgres, Database: sqlDB},
@@ -186,7 +186,7 @@ func TestDefault(t *testing.T) {
 	t.Run("With DB", func(t *testing.T) {
 		sqlDB, err := sql.Open("sqlite3", ":memory:")
 		assert.NoError(t, err)
-		defer sqlDB.Close()
+		defer func() { _ = sqlDB.Close() }()
 
 		buckt, err := Default(WithDB(SQLite, sqlDB))
 		// Cleanup to ensure the server is closed after the test
@@ -200,7 +200,7 @@ func TestDefault(t *testing.T) {
 	t.Run("With all options", func(t *testing.T) {
 		sqlDB, err := sql.Open("sqlite3", ":memory:")
 		assert.NoError(t, err)
-		defer sqlDB.Close()
+		defer func() { _ = sqlDB.Close() }()
 
 		fileCacheConfig := FileCacheConfig{
 			NumCounters: 1e7,     // 10M
@@ -332,7 +332,7 @@ func TestMoveFolder(t *testing.T) {
 		Return(nil)
 
 	// Call the method
-	err := buckt.Client.MoveFolder("user1", "550e8400-e29b-41d4-a716-446655440000", "550e8400-e29b-41d4-a716-446655440001")
+	err := buckt.MoveFolder("user1", "550e8400-e29b-41d4-a716-446655440000", "550e8400-e29b-41d4-a716-446655440001")
 	assert.NoError(t, err)
 
 	// Verify expectations
@@ -353,7 +353,7 @@ func TestDeleteFolder(t *testing.T) {
 		Return("550e8400-e29b-41d4-a716-446655440001", nil)
 
 	// Call the method
-	_, err := buckt.Client.DeleteFolder("550e8400-e29b-41d4-a716-446655440000")
+	_, err := buckt.DeleteFolder("550e8400-e29b-41d4-a716-446655440000")
 	assert.NoError(t, err)
 
 	// Verify expectations
@@ -420,7 +420,7 @@ func TestGetFile(t *testing.T) {
 		Return(&expectedFile, nil)
 
 	// Call the method
-	file, err := buckt.Client.GetFile("550e8400-e29b-41d4-a716-446655440000")
+	file, err := buckt.GetFile("550e8400-e29b-41d4-a716-446655440000")
 	assert.NoError(t, err)
 	assert.NotNil(t, file)
 
@@ -449,11 +449,11 @@ func TestGetFileStream(t *testing.T) {
 		Return(&expectedFile, expectedStream, nil)
 
 	// Call the method
-	file, stream, err := buckt.Client.GetFileStream("550e8400-e29b-41d4-a716-446655440000")
+	file, stream, err := buckt.GetFileStream("550e8400-e29b-41d4-a716-446655440000")
 	assert.NoError(t, err)
 	assert.NotNil(t, file)
 	assert.NotNil(t, stream)
-	defer stream.Close()
+	defer func() { _ = stream.Close() }()
 
 	// Verify expectations
 	buckt.MockFileService.AssertExpectations(t)
@@ -524,7 +524,7 @@ func TestMoveFile(t *testing.T) {
 		Return(nil)
 
 	// Call the method
-	err := buckt.Client.MoveFile("550e8400-e29b-41d4-a716-446655440000", "550e8400-e29b-41d4-a716-446655440001")
+	err := buckt.MoveFile("550e8400-e29b-41d4-a716-446655440000", "550e8400-e29b-41d4-a716-446655440001")
 	assert.NoError(t, err)
 
 	// Verify expectations
@@ -544,7 +544,7 @@ func TestDeleteFile(t *testing.T) {
 		Return("parent1", nil)
 
 	// Call the method
-	_, err := buckt.Client.DeleteFile("550e8400-e29b-41d4-a716-446655440000")
+	_, err := buckt.DeleteFile("550e8400-e29b-41d4-a716-446655440000")
 	assert.NoError(t, err)
 
 	// Verify expectations
@@ -708,12 +708,12 @@ func TestNewAppServices(t *testing.T) {
 	// Use an in-memory SQLite DB for testing
 	sqlDB, err := sql.Open("sqlite3", ":memory:")
 	assert.NoError(t, err)
-	defer sqlDB.Close()
+	defer func() { _ = sqlDB.Close() }()
 
 	dbConf := DBConfig{Driver: SQLite, Database: sqlDB}
 	db, err := database.NewDB(dbConf.Database, dbConf.Driver, mockLogger, false, "")
 	assert.NoError(t, err)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	t.Run("returns valid FolderService and FileService", func(t *testing.T) {
 		folderService, fileService := newAppServices(

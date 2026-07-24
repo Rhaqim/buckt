@@ -50,7 +50,7 @@ func (a *AzureBackend) Name() string {
 func (a *AzureBackend) Ping(ctx context.Context) error {
 	_, err := a.client.GetProperties(ctx, nil)
 	if err != nil {
-		return fmt.Errorf("Azure connectivity check failed for container %q: %w", a.containerName, err)
+		return fmt.Errorf("connectivity check failed for Azure container %q: %w", a.containerName, err)
 	}
 	return nil
 }
@@ -67,7 +67,7 @@ func (a *AzureBackend) Get(ctx context.Context, path string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	buf := new(bytes.Buffer)
 	if _, err := io.Copy(buf, resp.Body); err != nil {

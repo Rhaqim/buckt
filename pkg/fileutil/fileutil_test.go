@@ -25,7 +25,7 @@ func makeMultipartFile(t *testing.T, name string, data []byte) *multipart.FileHe
 	if _, err := part.Write(data); err != nil {
 		t.Fatalf("part.Write: %v", err)
 	}
-	w.Close()
+	_ = w.Close()
 
 	mr := multipart.NewReader(&buf, w.Boundary())
 	form, err := mr.ReadForm(int64(len(data) + 1024))

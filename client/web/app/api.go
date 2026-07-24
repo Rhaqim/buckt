@@ -3,8 +3,6 @@ package app
 import (
 	"fmt"
 	"io"
-	"strconv"
-	"strings"
 
 	"github.com/Rhaqim/buckt"
 	"github.com/Rhaqim/buckt/client/web/domain"
@@ -334,7 +332,7 @@ func (svc *APIService) StreamFile(c *gin.Context) {
 		c.AbortWithStatusJSON(500, response.WrapError("failed to get file", err))
 		return
 	}
-	defer stream.Close()
+	defer func() { _ = stream.Close() }()
 
 	// Set headers
 	c.Header("Content-Disposition", fileutil.SafeContentDisposition("attachment", file.Name))
@@ -447,33 +445,4 @@ func (svc *APIService) DeleteFilePermanently(c *gin.Context) {
 
 func (f *APIService) constructURL(s string) string {
 	return fmt.Sprintf("/serve/%s", s)
-}
-
-func parseRange(rangeHeader string, fileSize int64) (start, end int64, err error) {
-	// Example: "bytes=500-1000"
-	if !strings.HasPrefix(rangeHeader, "bytes=") {
-		return 0, 0, fmt.Errorf("invalid range")
-	}
-	rangeParts := strings.Split(strings.TrimPrefix(rangeHeader, "bytes="), "-")
-
-	start, err = strconv.ParseInt(rangeParts[0], 10, 64)
-	if err != nil {
-		return 0, 0, fmt.Errorf("invalid range start")
-	}
-
-	if rangeParts[1] != "" {
-		end, err = strconv.ParseInt(rangeParts[1], 10, 64)
-		if err != nil {
-			return 0, 0, fmt.Errorf("invalid range end")
-		}
-	} else {
-		end = fileSize - 1
-	}
-
-	// Ensure valid range
-	if start > end || start < 0 || end >= fileSize {
-		return 0, 0, fmt.Errorf("invalid range")
-	}
-
-	return start, end, nil
 }

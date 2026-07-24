@@ -24,7 +24,10 @@ func NewBackend(conf Config) (*GCPBackend, error) {
 
 	ctx := context.Background()
 
-	client, err := storage.NewClient(ctx, option.WithCredentialsFile(conf.CredentialsFile))
+	// WithCredentialsFile is deprecated upstream but remains the supported way to
+	// pass a service-account key file path, which is this backend's configured
+	// auth model. Migrating to ADC / WithCredentialsJSON is a separate change.
+	client, err := storage.NewClient(ctx, option.WithCredentialsFile(conf.CredentialsFile)) //nolint:staticcheck // intentional: key-file auth is the configured model
 	if err != nil {
 		return nil, fmt.Errorf("failed to create GCP client: %w", err)
 	}
@@ -66,7 +69,7 @@ func (g *GCPBackend) Get(ctx context.Context, path string) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to open reader: %w", err)
 	}
-	defer r.Close()
+	defer func() { _ = r.Close() }()
 
 	buf := new(bytes.Buffer)
 	if _, err := io.Copy(buf, r); err != nil {

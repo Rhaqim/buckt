@@ -22,7 +22,7 @@ func GenerateThumbnail(inputPath, outputPath string, width uint) error {
 	if err != nil {
 		return err
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	img, format, err := image.Decode(file)
 	if err != nil {
@@ -37,7 +37,7 @@ func GenerateThumbnail(inputPath, outputPath string, width uint) error {
 	if err != nil {
 		return err
 	}
-	defer outFile.Close()
+	defer func() { _ = outFile.Close() }()
 
 	if format == "png" {
 		return png.Encode(outFile, thumbnail)
@@ -80,7 +80,7 @@ func ProcessFile(file *multipart.FileHeader) (string, []byte, error) {
 	if err != nil {
 		return "", nil, err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	data, err := io.ReadAll(f)
 	if err != nil {
@@ -120,7 +120,7 @@ func ValidateFolderPath(folderPath string) []string {
 // isValidFolderPath checks if a folder path contains only valid characters (alphanumeric, spaces, slashes).
 func isValidFolderPath(s string) bool {
 	for _, r := range s {
-		if !(unicode.IsLetter(r) || unicode.IsDigit(r) || r == '/' || r == ' ' || r == '-') {
+		if !unicode.IsLetter(r) && !unicode.IsDigit(r) && r != '/' && r != ' ' && r != '-' {
 			return false
 		}
 	}

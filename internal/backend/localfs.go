@@ -83,24 +83,24 @@ func (bfs *LocalFileSystemService) Put(ctx context.Context, path string, data []
 	}
 
 	if _, err = f.Write(data); err != nil {
-		f.Close()
-		os.Remove(tmpPath)
+		_ = f.Close()
+		_ = os.Remove(tmpPath)
 		return bfs.logger.WrapError("failed to write data", err)
 	}
 
 	if err = f.Sync(); err != nil {
-		f.Close()
-		os.Remove(tmpPath)
+		_ = f.Close()
+		_ = os.Remove(tmpPath)
 		return bfs.logger.WrapError("failed to fsync temp file", err)
 	}
 
 	if err = f.Close(); err != nil {
-		os.Remove(tmpPath)
+		_ = os.Remove(tmpPath)
 		return bfs.logger.WrapError("failed to close temp file", err)
 	}
 
 	if err = os.Rename(tmpPath, filePath); err != nil {
-		os.Remove(tmpPath)
+		_ = os.Remove(tmpPath)
 		return bfs.logger.WrapError("failed to rename temp file", err)
 	}
 
@@ -320,20 +320,20 @@ func copyFile(src, dst string) error {
 	if err != nil {
 		return err
 	}
-	defer in.Close()
+	defer func() { _ = in.Close() }()
 
 	out, err := os.Create(dst)
 	if err != nil {
 		return err
 	}
-	defer out.Close()
+	defer func() { _ = out.Close() }()
 
 	if _, err = io.Copy(out, in); err != nil {
-		os.Remove(dst)
+		_ = os.Remove(dst)
 		return err
 	}
 	if err = out.Sync(); err != nil {
-		os.Remove(dst)
+		_ = os.Remove(dst)
 		return err
 	}
 	return nil

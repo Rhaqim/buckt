@@ -80,7 +80,7 @@ func New(conf Config, opts ...ConfigFunc) (*Client, error) {
 	cacheManager, lruCache := initializeCache(conf.Cache, bucktLog)
 
 	// Initialise Backend
-	var backend domain.FileBackend = resolveBackend(conf.MediaDir, conf.Backend, bucktLog, lruCache)
+	backend := resolveBackend(conf.MediaDir, conf.Backend, bucktLog, lruCache)
 
 	// Max file size: 0 means no limit (backward compatible)
 	maxFileSize := conf.MaxFileSize
@@ -161,7 +161,7 @@ func Default(opts ...ConfigFunc) (*Client, error) {
 // Close closes the Buckt instance.
 // It closes the database connection and the LRU cache.
 func (b *Client) Close() {
-	b.db.Close()
+	_ = b.db.Close()
 	b.lruCache.Close()
 }
 
@@ -695,7 +695,7 @@ func initializeCache(conf CacheConfig, bucktLog domain.BucktLogger) (domain.Cach
 
 	lruCache, err := cache.NewFileCache(fileConf.NumCounters, fileConf.MaxCost, fileConf.BufferItems)
 	if err != nil {
-		bucktLog.WrapErrorf("failed to initialize file cache", err)
+		_ = bucktLog.WrapErrorf("failed to initialize file cache", err)
 		lruCache = mocks.NewNoopLRUCache()
 	}
 	bucktLog.Info("✅ Initialized file cache")
@@ -718,12 +718,12 @@ func newAppServices(
 	activeBackend domain.FileBackend,
 ) (domain.FolderService, domain.FileService) {
 	// Initialize the stores
-	var folderRepository domain.FolderRepository = repository.NewFolderRepository(db)
-	var fileRepository domain.FileRepository = repository.NewFileRepository(db)
+	folderRepository := repository.NewFolderRepository(db)
+	fileRepository := repository.NewFileRepository(db)
 
 	// initialize the services
-	var folderService domain.FolderService = service.NewFolderService(logger, cacheManager, folderRepository, activeBackend, flatNameSpaces, maxTrashBatch, backendOpTimeout)
-	var fileService domain.FileService = service.NewFileService(logger, cacheManager, fileRepository, folderService, activeBackend, flatNameSpaces, maxFileSize, backendOpTimeout)
+	folderService := service.NewFolderService(logger, cacheManager, folderRepository, activeBackend, flatNameSpaces, maxTrashBatch, backendOpTimeout)
+	fileService := service.NewFileService(logger, cacheManager, fileRepository, folderService, activeBackend, flatNameSpaces, maxFileSize, backendOpTimeout)
 
 	logger.Info("✅ Initialized app services")
 

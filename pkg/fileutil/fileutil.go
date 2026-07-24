@@ -26,7 +26,7 @@ func ProcessFileWithLimit(file *multipart.FileHeader, maxSize int64) (string, []
 	if err != nil {
 		return "", nil, err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	var reader io.Reader = f
 	if maxSize > 0 {
