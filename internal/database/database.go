@@ -16,16 +16,21 @@ import (
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 	gormLogger "gorm.io/gorm/logger"
+	gormschema "gorm.io/gorm/schema"
 )
 
 type DB struct {
 	*gorm.DB
-	log      domain.BucktLogger
-	external bool
+	log         domain.BucktLogger
+	external    bool
+	tablePrefix string
 }
 
-// NewSQLite creates a new SQLite database connection.
-func NewDB(sqlDBInstance *sql.DB, driver model.DBDrivers, log domain.BucktLogger, silence bool) (*DB, error) {
+// NewDB creates a new database connection. tablePrefix is applied to every
+// table name via gorm's NamingStrategy; the default (empty) prefix preserves
+// buckt's historical table names (folder_models, file_models) so existing
+// databases keep working unchanged.
+func NewDB(sqlDBInstance *sql.DB, driver model.DBDrivers, log domain.BucktLogger, silence bool, tablePrefix string) (*DB, error) {
 	var external bool
 
 	// Define supported database drivers
@@ -69,6 +74,10 @@ func NewDB(sqlDBInstance *sql.DB, driver model.DBDrivers, log domain.BucktLogger
 				Colorful:      true,
 			},
 		),
+		// Apply the configurable table prefix to every model. An empty prefix
+		// (the default) is equivalent to gorm's zero-value strategy, so existing
+		// databases see the same table names as before.
+		NamingStrategy: gormschema.NamingStrategy{TablePrefix: tablePrefix},
 	}
 
 	// Determine the correct dialector
@@ -119,7 +128,7 @@ func NewDB(sqlDBInstance *sql.DB, driver model.DBDrivers, log domain.BucktLogger
 
 	log.Info("🎉 Successfully connected to " + driverString + " database!")
 
-	return &DB{db, log, external}, nil
+	return &DB{DB: db, log: log, external: external, tablePrefix: tablePrefix}, nil
 }
 
 // Close closes the database connection.
@@ -150,7 +159,7 @@ func (db *DB) Close() error {
 func (db *DB) Migrate(migrationEnabled bool) error {
 	db.log.Info("🚀 Running migrations...")
 
-	loader := schema.NewLoader(schema.DialectOf(db.DB), db.log)
+	loader := schema.NewLoader(schema.DialectOf(db.DB), db.log, db.tablePrefix)
 	if err := loader.Apply(context.Background(), db.DB); err != nil {
 		return db.log.WrapErrorf("❌ schema migration failed: %w", err)
 	}

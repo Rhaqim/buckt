@@ -23,7 +23,7 @@ import (
 type Migration struct {
 	Version int
 	Name    string
-	Up      func(ctx context.Context, tx *gorm.DB, d Dialect) error
+	Up      func(ctx context.Context, tx *gorm.DB, prefix string, d Dialect) error
 }
 
 // migrations is the ordered list of every schema migration. Append new
@@ -55,25 +55,56 @@ func migrations() []Migration {
 // enforced NOT NULL, but on SQLite the enforcement triggers a table rebuild that
 // discarded the freshly-backfilled values (they were not yet committed), leaving
 // user_id NULL. Backfilling AFTER AutoMigrate avoids that entirely.
-func migrateBaseline(ctx context.Context, tx *gorm.DB, d Dialect) error {
+func migrateBaseline(ctx context.Context, tx *gorm.DB, prefix string, d Dialect) error {
+	// Guard against silently orphaning data: if a non-empty prefix is
+	// configured but the prefixed tables don't exist while legacy un-prefixed
+	// ones do, refuse rather than create a fresh empty prefixed schema that
+	// makes the operator's data look lost.
+	if err := guardLegacyTables(tx, prefix); err != nil {
+		return err
+	}
+
+	// tx carries the gorm NamingStrategy, so AutoMigrate creates/adopts the
+	// prefixed tables automatically.
 	if err := tx.AutoMigrate(&model.FolderModel{}); err != nil {
 		return fmt.Errorf("folder autoMigrate: %w", err)
 	}
 	if err := tx.AutoMigrate(&model.FileModel{}); err != nil {
 		return fmt.Errorf("file autoMigrate: %w", err)
 	}
-	if err := backfillFileUserIDs(tx); err != nil {
+	if err := backfillFileUserIDs(tx, prefix); err != nil {
 		return fmt.Errorf("file user_id backfill: %w", err)
 	}
 	return nil
 }
 
-// backfillFileUserIDs populates file_models.user_id from the parent folder for
-// legacy rows that AutoMigrate defaulted to '' (they predate the column). It is
-// a no-op on a fresh database and on databases whose files already carry a
-// user_id. Orphaned files (no parent folder) are left as '' — the NOT NULL
-// default AutoMigrate already applied.
-func backfillFileUserIDs(tx *gorm.DB) error {
+// guardLegacyTables returns an actionable error when a prefix is set but the
+// database still holds legacy un-prefixed buckt tables and no prefixed ones —
+// the situation where blindly proceeding would create empty prefixed tables and
+// strand the existing data.
+func guardLegacyTables(tx *gorm.DB, prefix string) error {
+	if prefix == "" {
+		return nil // default schema: the un-prefixed tables ARE the real ones
+	}
+	legacy := tx.Migrator().HasTable("folder_models")
+	prefixed := tx.Migrator().HasTable(prefix + "folder_models")
+	if legacy && !prefixed {
+		return fmt.Errorf(
+			"table prefix %q is set but this database still has legacy un-prefixed tables "+
+				"(folder_models); proceeding would create empty %sfolder_models and strand your "+
+				"data. Either run with the default empty prefix, or rename your existing tables to "+
+				"the %s* names before upgrading",
+			prefix, prefix, prefix)
+	}
+	return nil
+}
+
+// backfillFileUserIDs populates <prefix>file_models.user_id from the parent
+// folder for legacy rows that AutoMigrate defaulted to '' (they predate the
+// column). It is a no-op on a fresh database and on databases whose files
+// already carry a user_id. Orphaned files (no parent folder) are left as '' —
+// the NOT NULL default AutoMigrate already applied.
+func backfillFileUserIDs(tx *gorm.DB, prefix string) error {
 	if !tx.Migrator().HasTable(&model.FileModel{}) {
 		return nil // fresh install — nothing to backfill
 	}
@@ -81,18 +112,20 @@ func backfillFileUserIDs(tx *gorm.DB) error {
 		return nil // AutoMigrate should have added it; nothing to do otherwise
 	}
 
-	return tx.Exec(`
-		UPDATE file_models
+	files := prefix + "file_models"
+	folders := prefix + "folder_models"
+	return tx.Exec(fmt.Sprintf(`
+		UPDATE %[1]s
 		SET user_id = (
-			SELECT folder_models.user_id
-			FROM folder_models
-			WHERE folder_models.id = file_models.parent_id
+			SELECT %[2]s.user_id
+			FROM %[2]s
+			WHERE %[2]s.id = %[1]s.parent_id
 		)
 		WHERE (user_id = '' OR user_id IS NULL)
 		  AND EXISTS (
-			SELECT 1 FROM folder_models WHERE folder_models.id = file_models.parent_id
+			SELECT 1 FROM %[2]s WHERE %[2]s.id = %[1]s.parent_id
 		  )
-	`).Error
+	`, files, folders)).Error
 }
 
 // migratePreserveLegacyTrash retires the v1.4.x soft-delete scheme WITHOUT
@@ -108,24 +141,26 @@ func backfillFileUserIDs(tx *gorm.DB) error {
 // migration needs no access to the storage backend. Only parent_id (and a
 // de-collided name) change, so the item now lists under Trash instead of
 // reappearing in its original folder.
-func migratePreserveLegacyTrash(ctx context.Context, tx *gorm.DB, d Dialect) error {
+func migratePreserveLegacyTrash(ctx context.Context, tx *gorm.DB, prefix string, d Dialect) error {
 	hasFileDel := tx.Migrator().HasColumn(&model.FileModel{}, "deleted_at")
 	hasFolderDel := tx.Migrator().HasColumn(&model.FolderModel{}, "deleted_at")
 	if !hasFileDel && !hasFolderDel {
 		return nil // fresh database or already migrated — nothing to preserve
 	}
 
-	trash := &trashResolver{tx: tx, cache: map[string]string{}}
+	files := prefix + "file_models"
+	folders := prefix + "folder_models"
+	trash := &trashResolver{tx: tx, foldersTable: folders, cache: map[string]string{}}
 
 	// Folders first: relocating a soft-deleted folder carries its whole subtree
 	// (including any soft-deleted descendants) along with it.
 	if hasFolderDel {
-		if err := relocateSoftDeletedFolders(tx, trash); err != nil {
+		if err := relocateSoftDeletedFolders(tx, trash, folders); err != nil {
 			return fmt.Errorf("relocate soft-deleted folders: %w", err)
 		}
 	}
 	if hasFileDel {
-		if err := relocateSoftDeletedFiles(tx, trash); err != nil {
+		if err := relocateSoftDeletedFiles(tx, trash, files, folders); err != nil {
 			return fmt.Errorf("relocate soft-deleted files: %w", err)
 		}
 	}
@@ -137,13 +172,13 @@ func migratePreserveLegacyTrash(ctx context.Context, tx *gorm.DB, d Dialect) err
 	// that rebuild resets other columns (e.g. the just-backfilled user_id) to
 	// their model defaults. Native DROP COLUMN leaves every other column intact.
 	if hasFileDel {
-		if err := tx.Exec(`ALTER TABLE file_models DROP COLUMN deleted_at`).Error; err != nil {
-			return fmt.Errorf("drop file_models.deleted_at: %w", err)
+		if err := tx.Exec(fmt.Sprintf(`ALTER TABLE %s DROP COLUMN deleted_at`, files)).Error; err != nil {
+			return fmt.Errorf("drop %s.deleted_at: %w", files, err)
 		}
 	}
 	if hasFolderDel {
-		if err := tx.Exec(`ALTER TABLE folder_models DROP COLUMN deleted_at`).Error; err != nil {
-			return fmt.Errorf("drop folder_models.deleted_at: %w", err)
+		if err := tx.Exec(fmt.Sprintf(`ALTER TABLE %s DROP COLUMN deleted_at`, folders)).Error; err != nil {
+			return fmt.Errorf("drop %s.deleted_at: %w", folders, err)
 		}
 	}
 	return nil
@@ -182,9 +217,9 @@ func scanLegacyRows(tx *gorm.DB, query string) ([]legacyRow, error) {
 // relocateSoftDeletedFolders moves every soft-deleted folder that is the ROOT of
 // a deleted subtree into its owner's trash. Deleted folders whose parent is also
 // deleted are skipped — they ride along with the ancestor that gets relocated.
-func relocateSoftDeletedFolders(tx *gorm.DB, trash *trashResolver) error {
-	deleted, err := scanLegacyRows(tx,
-		`SELECT id, user_id, name, parent_id FROM folder_models WHERE deleted_at IS NOT NULL`)
+func relocateSoftDeletedFolders(tx *gorm.DB, trash *trashResolver, foldersTable string) error {
+	deleted, err := scanLegacyRows(tx, fmt.Sprintf(
+		`SELECT id, user_id, name, parent_id FROM %s WHERE deleted_at IS NOT NULL`, foldersTable))
 	if err != nil {
 		return err
 	}
@@ -212,12 +247,12 @@ func relocateSoftDeletedFolders(tx *gorm.DB, trash *trashResolver) error {
 			continue // never relocate the trash folder itself
 		}
 
-		name, err := uniqueName(tx, "folder_models", trashID, f.Name)
+		name, err := uniqueName(tx, foldersTable, trashID, f.Name)
 		if err != nil {
 			return err
 		}
-		if err := tx.Exec(
-			`UPDATE folder_models SET parent_id = ?, name = ? WHERE id = ?`,
+		if err := tx.Exec(fmt.Sprintf(
+			`UPDATE %s SET parent_id = ?, name = ? WHERE id = ?`, foldersTable),
 			trashID, name, f.ID).Error; err != nil {
 			return err
 		}
@@ -228,9 +263,9 @@ func relocateSoftDeletedFolders(tx *gorm.DB, trash *trashResolver) error {
 // relocateSoftDeletedFiles moves every soft-deleted file whose parent folder is
 // NOT itself soft-deleted into its owner's trash. Files under a deleted folder
 // are left in place — they follow the folder into trash.
-func relocateSoftDeletedFiles(tx *gorm.DB, trash *trashResolver) error {
-	deleted, err := scanLegacyRows(tx,
-		`SELECT id, user_id, name, parent_id FROM file_models WHERE deleted_at IS NOT NULL`)
+func relocateSoftDeletedFiles(tx *gorm.DB, trash *trashResolver, filesTable, foldersTable string) error {
+	deleted, err := scanLegacyRows(tx, fmt.Sprintf(
+		`SELECT id, user_id, name, parent_id FROM %s WHERE deleted_at IS NOT NULL`, filesTable))
 	if err != nil {
 		return err
 	}
@@ -238,7 +273,7 @@ func relocateSoftDeletedFiles(tx *gorm.DB, trash *trashResolver) error {
 		return nil
 	}
 
-	softFolders, err := softDeletedFolderIDs(tx)
+	softFolders, err := softDeletedFolderIDs(tx, foldersTable)
 	if err != nil {
 		return err
 	}
@@ -253,12 +288,12 @@ func relocateSoftDeletedFiles(tx *gorm.DB, trash *trashResolver) error {
 			return err
 		}
 
-		name, err := uniqueName(tx, "file_models", trashID, f.Name)
+		name, err := uniqueName(tx, filesTable, trashID, f.Name)
 		if err != nil {
 			return err
 		}
-		if err := tx.Exec(
-			`UPDATE file_models SET parent_id = ?, name = ? WHERE id = ?`,
+		if err := tx.Exec(fmt.Sprintf(
+			`UPDATE %s SET parent_id = ?, name = ? WHERE id = ?`, filesTable),
 			trashID, name, f.ID).Error; err != nil {
 			return err
 		}
@@ -267,8 +302,8 @@ func relocateSoftDeletedFiles(tx *gorm.DB, trash *trashResolver) error {
 }
 
 // softDeletedFolderIDs returns the set of folder ids with a non-NULL deleted_at.
-func softDeletedFolderIDs(tx *gorm.DB) (map[string]bool, error) {
-	rows, err := tx.Raw(`SELECT id FROM folder_models WHERE deleted_at IS NOT NULL`).Rows()
+func softDeletedFolderIDs(tx *gorm.DB, foldersTable string) (map[string]bool, error) {
+	rows, err := tx.Raw(fmt.Sprintf(`SELECT id FROM %s WHERE deleted_at IS NOT NULL`, foldersTable)).Rows()
 	if err != nil {
 		return nil, err
 	}
@@ -289,8 +324,9 @@ func softDeletedFolderIDs(tx *gorm.DB) (map[string]bool, error) {
 // __trash__ folder, caching the id so a run with many soft-deleted rows issues
 // one lookup per owner rather than one per row.
 type trashResolver struct {
-	tx    *gorm.DB
-	cache map[string]string
+	tx           *gorm.DB
+	foldersTable string
+	cache        map[string]string
 }
 
 func (t *trashResolver) get(userID string) (string, error) {
@@ -299,8 +335,8 @@ func (t *trashResolver) get(userID string) (string, error) {
 	}
 
 	var id string
-	if err := t.tx.Raw(
-		`SELECT id FROM folder_models WHERE user_id = ? AND name = ? AND parent_id IS NULL LIMIT 1`,
+	if err := t.tx.Raw(fmt.Sprintf(
+		`SELECT id FROM %s WHERE user_id = ? AND name = ? AND parent_id IS NULL LIMIT 1`, t.foldersTable),
 		userID, constant.TRASH_FOLDER_NAME,
 	).Scan(&id).Error; err != nil {
 		return "", err
@@ -317,9 +353,9 @@ func (t *trashResolver) get(userID string) (string, error) {
 	newID := uuid.New().String()
 	now := time.Now()
 	path := "/" + userID + "/" + constant.TRASH_FOLDER_NAME
-	if err := t.tx.Exec(
-		`INSERT INTO folder_models (id, user_id, parent_id, name, description, path, created_at, updated_at)
-		 VALUES (?, ?, NULL, ?, ?, ?, ?, ?)`,
+	if err := t.tx.Exec(fmt.Sprintf(
+		`INSERT INTO %s (id, user_id, parent_id, name, description, path, created_at, updated_at)
+		 VALUES (?, ?, NULL, ?, ?, ?, ?, ?)`, t.foldersTable),
 		newID, userID, constant.TRASH_FOLDER_NAME, "Trash", path, now, now,
 	).Error; err != nil {
 		return "", err

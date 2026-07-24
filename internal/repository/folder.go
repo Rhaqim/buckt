@@ -219,13 +219,13 @@ func (f *FolderRepository) MoveFolder(ctx context.Context, folder_id uuid.UUID, 
 		prefixLen := len(oldPrefix)
 
 		if err := tx.Model(&model.FolderModel{}).
-			Where("path LIKE ?", oldPrefix+"%").
+			Where("path LIKE ? ESCAPE '\\'", escapeLike(oldPrefix)+"%").
 			Update("path", gorm.Expr("? || SUBSTR(path, ?)", newPrefix, prefixLen+1)).Error; err != nil {
 			return err
 		}
 
 		if err := tx.Model(&model.FileModel{}).
-			Where("path LIKE ?", oldPrefix+"%").
+			Where("path LIKE ? ESCAPE '\\'", escapeLike(oldPrefix)+"%").
 			Update("path", gorm.Expr("? || SUBSTR(path, ?)", newPrefix, prefixLen+1)).Error; err != nil {
 			return err
 		}
@@ -260,13 +260,13 @@ func (f *FolderRepository) RenameFolder(ctx context.Context, user_id string, fol
 		prefixLen := len(oldPrefix)
 
 		if err := tx.Model(&model.FolderModel{}).
-			Where("path LIKE ?", oldPrefix+"%").
+			Where("path LIKE ? ESCAPE '\\'", escapeLike(oldPrefix)+"%").
 			Update("path", gorm.Expr("? || SUBSTR(path, ?)", newPrefix, prefixLen+1)).Error; err != nil {
 			return err
 		}
 
 		if err := tx.Model(&model.FileModel{}).
-			Where("path LIKE ?", oldPrefix+"%").
+			Where("path LIKE ? ESCAPE '\\'", escapeLike(oldPrefix)+"%").
 			Update("path", gorm.Expr("? || SUBSTR(path, ?)", newPrefix, prefixLen+1)).Error; err != nil {
 			return err
 		}
@@ -364,7 +364,7 @@ func (f *FolderRepository) DeleteFolder(
 		newPrefix := newPath + "/"
 
 		var files []model.FileModel
-		if err := tx.Where("path LIKE ?", oldPrefix+"%").Find(&files).Error; err != nil {
+		if err := tx.Where("path LIKE ? ESCAPE '\\'", escapeLike(oldPrefix)+"%").Find(&files).Error; err != nil {
 			return err
 		}
 		for _, file := range files {
@@ -385,13 +385,13 @@ func (f *FolderRepository) DeleteFolder(
 		prefixLen := len(oldPrefix)
 
 		if err := tx.Model(&model.FolderModel{}).
-			Where("path LIKE ?", oldPrefix+"%").
+			Where("path LIKE ? ESCAPE '\\'", escapeLike(oldPrefix)+"%").
 			Update("path", gorm.Expr("? || SUBSTR(path, ?)", newPrefix, prefixLen+1)).Error; err != nil {
 			return err
 		}
 
 		if err := tx.Model(&model.FileModel{}).
-			Where("path LIKE ?", oldPrefix+"%").
+			Where("path LIKE ? ESCAPE '\\'", escapeLike(oldPrefix)+"%").
 			Update("path", gorm.Expr("? || SUBSTR(path, ?)", newPrefix, prefixLen+1)).Error; err != nil {
 			return err
 		}
@@ -454,6 +454,16 @@ func uniqueTrashName(ctx context.Context, db *gorm.DB, trashID uuid.UUID, name s
 	}
 	// Fallback: use a random uuid suffix
 	return name + "-" + uuid.New().String()[:8], nil
+}
+
+// escapeLike escapes the LIKE wildcards % and _ (and the escape char itself) so
+// s can be used as a literal prefix in a `LIKE ? ESCAPE '\'` clause. File and
+// folder names may legitimately contain % or _; without escaping those act as
+// wildcards and a prefix rewrite (move/rename/delete) would match and corrupt
+// unrelated sibling paths. The escape char and clause work on both SQLite and
+// Postgres.
+func escapeLike(s string) string {
+	return strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`).Replace(s)
 }
 
 func countFolderName(ctx context.Context, db *gorm.DB, parentID uuid.UUID, name string) (int64, error) {

@@ -65,7 +65,7 @@ func New(conf Config, opts ...ConfigFunc) (*Client, error) {
 
 	// Initialize database
 	dbConf := conf.DB
-	db, err := database.NewDB(dbConf.Database, dbConf.Driver, bucktLog, logConf.Silence)
+	db, err := database.NewDB(dbConf.Database, dbConf.Driver, bucktLog, logConf.Silence, dbConf.TablePrefix)
 	if err != nil {
 		return nil, bucktLog.WrapErrorf("failed to initialize database", err)
 	}

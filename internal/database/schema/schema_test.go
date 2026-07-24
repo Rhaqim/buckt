@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 	gormsqlite "gorm.io/driver/sqlite"
 	"gorm.io/gorm"
+	gormschema "gorm.io/gorm/schema"
 )
 
 // nopLogger satisfies schema.Logger without producing output during tests.
@@ -19,13 +20,18 @@ func (nopLogger) Info(string)          {}
 func (nopLogger) Infof(string, ...any) {}
 func (nopLogger) Warn(string)          {}
 
-func openGorm(t *testing.T) *gorm.DB {
+func openGorm(t *testing.T) *gorm.DB { return openGormPrefixed(t, "") }
+
+func openGormPrefixed(t *testing.T, prefix string) *gorm.DB {
 	t.Helper()
 	sqlDB, err := sql.Open("sqlite3", ":memory:")
 	require.NoError(t, err)
 	t.Cleanup(func() { sqlDB.Close() })
 
-	gdb, err := gorm.Open(gormsqlite.New(gormsqlite.Config{DriverName: "sqlite", Conn: sqlDB}), &gorm.Config{})
+	gdb, err := gorm.Open(
+		gormsqlite.New(gormsqlite.Config{DriverName: "sqlite", Conn: sqlDB}),
+		&gorm.Config{NamingStrategy: gormschema.NamingStrategy{TablePrefix: prefix}},
+	)
 	require.NoError(t, err)
 	return gdb
 }
@@ -105,7 +111,7 @@ func TestApply_PreservesLegacyTrashOnV141Upgrade(t *testing.T) {
 	gdb := openGorm(t)
 	seedV141(t, gdb)
 
-	loader := schema.NewLoader(schema.DialectSQLite, nopLogger{})
+	loader := schema.NewLoader(schema.DialectSQLite, nopLogger{}, "")
 	require.NoError(t, loader.Apply(context.Background(), gdb))
 
 	// Ledger recorded both migrations.
@@ -162,7 +168,7 @@ func TestApply_IsIdempotent(t *testing.T) {
 	gdb := openGorm(t)
 	seedV141(t, gdb)
 
-	loader := schema.NewLoader(schema.DialectSQLite, nopLogger{})
+	loader := schema.NewLoader(schema.DialectSQLite, nopLogger{}, "")
 	require.NoError(t, loader.Apply(context.Background(), gdb))
 
 	// Second Apply must be a no-op and must not error or move anything again.
@@ -180,7 +186,7 @@ func TestApply_IsIdempotent(t *testing.T) {
 func TestApply_FreshDatabase(t *testing.T) {
 	gdb := openGorm(t)
 
-	loader := schema.NewLoader(schema.DialectSQLite, nopLogger{})
+	loader := schema.NewLoader(schema.DialectSQLite, nopLogger{}, "")
 	require.NoError(t, loader.Apply(context.Background(), gdb))
 
 	// Tables exist, ledger is populated, and there's no leftover deleted_at.
@@ -191,4 +197,41 @@ func TestApply_FreshDatabase(t *testing.T) {
 	var versions []int
 	require.NoError(t, gdb.Raw(`SELECT version FROM buckt_schema_migrations ORDER BY version`).Scan(&versions).Error)
 	assert.Equal(t, []int{1, 2}, versions)
+}
+
+func TestApply_WithTablePrefix(t *testing.T) {
+	const prefix = "myapp_"
+	gdb := openGormPrefixed(t, prefix)
+
+	loader := schema.NewLoader(schema.DialectSQLite, nopLogger{}, prefix)
+	require.NoError(t, loader.Apply(context.Background(), gdb))
+
+	// Prefixed tables and a prefixed ledger were created.
+	assert.True(t, colExists(t, gdb, prefix+"folder_models", "user_id"))
+	assert.True(t, colExists(t, gdb, prefix+"file_models", "user_id"))
+
+	var versions []int
+	require.NoError(t, gdb.Raw(`SELECT version FROM `+prefix+`buckt_schema_migrations ORDER BY version`).Scan(&versions).Error)
+	assert.Equal(t, []int{1, 2}, versions)
+
+	// No un-prefixed tables were created.
+	assert.False(t, colExists(t, gdb, "folder_models", "id"))
+}
+
+func TestApply_GuardsAgainstLegacyTablesWhenPrefixed(t *testing.T) {
+	// A database with legacy un-prefixed tables (i.e. an existing v1.4.1 install)
+	// must NOT be silently re-created empty under a new prefix.
+	gdb := openGormPrefixed(t, "myapp_")
+	seedV141(t, gdb) // creates un-prefixed folder_models / file_models
+
+	loader := schema.NewLoader(schema.DialectSQLite, nopLogger{}, "myapp_")
+	err := loader.Apply(context.Background(), gdb)
+	require.Error(t, err, "must refuse to run a prefix over legacy un-prefixed tables")
+	assert.Contains(t, err.Error(), "legacy un-prefixed tables")
+
+	// The legacy data is untouched — no empty prefixed tables were created.
+	assert.False(t, colExists(t, gdb, "myapp_folder_models", "id"))
+	var folderCount int64
+	require.NoError(t, gdb.Raw(`SELECT count(*) FROM folder_models`).Scan(&folderCount).Error)
+	assert.Equal(t, int64(3), folderCount)
 }

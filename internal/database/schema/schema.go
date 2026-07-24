@@ -58,12 +58,19 @@ type Logger interface {
 type Loader struct {
 	dialect Dialect
 	log     Logger
+	prefix  string
 }
 
-// NewLoader creates a Loader for the given dialect.
-func NewLoader(dialect Dialect, log Logger) *Loader {
-	return &Loader{dialect: dialect, log: log}
+// NewLoader creates a Loader for the given dialect. prefix is the table-name
+// prefix that must match the gorm NamingStrategy prefix the database was opened
+// with. The default (empty) prefix preserves buckt's historical table names
+// (folder_models, file_models), so existing databases are adopted unchanged.
+func NewLoader(dialect Dialect, log Logger, prefix string) *Loader {
+	return &Loader{dialect: dialect, log: log, prefix: prefix}
 }
+
+// ledgerTable returns the prefixed name of the migrations ledger.
+func (l *Loader) ledgerTable() string { return l.prefix + migrationsTable }
 
 // Apply brings db up to the latest schema version. It is safe to call on every
 // startup: already-applied migrations are skipped via the ledger, and the
@@ -103,20 +110,20 @@ func (l *Loader) ensureLedger(db *gorm.DB) error {
 			version    INT PRIMARY KEY,
 			name       TEXT NOT NULL DEFAULT '',
 			applied_at TIMESTAMPTZ NOT NULL DEFAULT now()
-		)`, migrationsTable)
+		)`, l.ledgerTable())
 	} else {
 		stmt = fmt.Sprintf(`CREATE TABLE IF NOT EXISTS %s (
 			version    INTEGER PRIMARY KEY,
 			name       TEXT NOT NULL DEFAULT '',
 			applied_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
-		)`, migrationsTable)
+		)`, l.ledgerTable())
 	}
 	return db.Exec(stmt).Error
 }
 
 func (l *Loader) appliedVersions(db *gorm.DB) (map[int]bool, error) {
 	var versions []int
-	if err := db.Raw(fmt.Sprintf(`SELECT version FROM %s`, migrationsTable)).Scan(&versions).Error; err != nil {
+	if err := db.Raw(fmt.Sprintf(`SELECT version FROM %s`, l.ledgerTable())).Scan(&versions).Error; err != nil {
 		return nil, err
 	}
 	out := make(map[int]bool, len(versions))
@@ -131,11 +138,11 @@ func (l *Loader) appliedVersions(db *gorm.DB) (map[int]bool, error) {
 // unrecorded — exactly matching loom's runMigration semantics.
 func (l *Loader) runMigration(ctx context.Context, db *gorm.DB, m Migration) error {
 	return db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := m.Up(ctx, tx, l.dialect); err != nil {
+		if err := m.Up(ctx, tx, l.prefix, l.dialect); err != nil {
 			return err
 		}
 		return tx.Exec(
-			fmt.Sprintf(`INSERT INTO %s (version, name) VALUES (?, ?)`, migrationsTable),
+			fmt.Sprintf(`INSERT INTO %s (version, name) VALUES (?, ?)`, l.ledgerTable()),
 			m.Version, m.Name,
 		).Error
 	})

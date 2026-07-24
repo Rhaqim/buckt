@@ -19,6 +19,13 @@ type FileModel struct {
 	Data        []byte    `gorm:"-" json:"data"`                                                        // File data
 	CreatedAt   time.Time `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
+
+	// Deprecated: soft-delete was replaced by the __trash__ folder. This field
+	// is retained only for source compatibility with pre-trash releases — it is
+	// fully ignored by the database (gorm:"-:all", so no deleted_at column and no
+	// soft-delete filtering) and is never populated (always reports Valid ==
+	// false). Enumerate trashed items via Client.GetTrashFolder instead.
+	DeletedAt gorm.DeletedAt `gorm:"-:all" json:"deleted_at"`
 }
 
 // BeforeCreate hook for FileModel to add a prefixed UUID

@@ -1,9 +1,9 @@
-go 1.25.0
+go 1.26.0
 
 use (
 	.
+	./client/web
 	./cloud/aws
 	./cloud/azure
 	./cloud/gcp
-	./client/web
 )

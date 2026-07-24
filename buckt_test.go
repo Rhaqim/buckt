@@ -711,7 +711,7 @@ func TestNewAppServices(t *testing.T) {
 	defer sqlDB.Close()
 
 	dbConf := DBConfig{Driver: SQLite, Database: sqlDB}
-	db, err := database.NewDB(dbConf.Database, dbConf.Driver, mockLogger, false)
+	db, err := database.NewDB(dbConf.Database, dbConf.Driver, mockLogger, false, "")
 	assert.NoError(t, err)
 	defer db.Close()
 

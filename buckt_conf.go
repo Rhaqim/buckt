@@ -27,6 +27,15 @@ const (
 type DBConfig struct {
 	Driver   DBDrivers
 	Database *sql.DB
+
+	// TablePrefix is prepended to every buckt table name (folder_models,
+	// file_models, the migration ledger, ...). Leave empty (the default) to keep
+	// buckt's historical un-prefixed names — required for existing databases.
+	// Set it (e.g. "buckt_" or "myapp_") for a FRESH database that shares a
+	// schema with other tables. Changing it on an existing database points buckt
+	// at a different, empty set of tables, so pick it once up front; buckt
+	// refuses to start if a prefix is set while legacy un-prefixed tables exist.
+	TablePrefix string
 }
 
 // FileCacheConfig holds the configuration for the file cache.
@@ -196,6 +205,16 @@ func WithDB(driver DBDrivers, db *sql.DB) ConfigFunc {
 	return func(c *Config) {
 		c.DB.Driver = DBDrivers(driver)
 		c.DB.Database = db
+	}
+}
+
+// WithTablePrefix sets a prefix applied to every buckt table name. Use it only
+// for a FRESH database that must share a schema with other tables; the default
+// empty prefix preserves buckt's historical table names, which existing
+// databases depend on. See DBConfig.TablePrefix for the full caveats.
+func WithTablePrefix(prefix string) ConfigFunc {
+	return func(c *Config) {
+		c.DB.TablePrefix = prefix
 	}
 }
 
