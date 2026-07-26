@@ -38,6 +38,7 @@ type Client struct {
 
 	logger   domain.BucktLogger
 	lruCache domain.LRUCache
+	metrics  metrics.Recorder
 
 	fileService   domain.FileService
 	folderService domain.FolderService
@@ -115,6 +116,7 @@ func New(conf Config, opts ...ConfigFunc) (*Client, error) {
 		db:                db,
 		logger:            bucktLog,
 		lruCache:          lruCache,
+		metrics:           conf.Metrics,
 		flatnameSpaces:    conf.FlatNameSpaces,
 		silence:           logConf.Silence,
 		maxFileSize:       maxFileSize,
@@ -181,6 +183,17 @@ func (b *Client) MaxFileSize() int64 {
 // operations (e.g. Cloudflare R2 Class B operations).
 func (b *Client) CacheStats() (hits, misses uint64) {
 	return b.lruCache.Hits(), b.lruCache.Misses()
+}
+
+// MetricsSnapshot returns the per-backend, per-operation metrics collected so
+// far, plus true, when metrics were configured with a *metrics.Collector via
+// WithMetrics. It returns (nil, false) when no metrics are configured or a
+// custom (non-Collector) recorder was supplied — read those directly instead.
+func (b *Client) MetricsSnapshot() (map[string]map[string]metrics.Stat, bool) {
+	if c, ok := b.metrics.(*metrics.Collector); ok {
+		return c.Snapshot(), true
+	}
+	return nil, false
 }
 
 // StorageBytes returns the total size, in bytes, of all stored files. Trashed

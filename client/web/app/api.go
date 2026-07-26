@@ -7,6 +7,7 @@ import (
 	"github.com/Rhaqim/buckt"
 	"github.com/Rhaqim/buckt/client/web/domain"
 	"github.com/Rhaqim/buckt/pkg/fileutil"
+	"github.com/Rhaqim/buckt/pkg/metrics"
 	"github.com/Rhaqim/buckt/pkg/response"
 	"github.com/gin-gonic/gin"
 )
@@ -19,6 +20,42 @@ func NewAPIService(client *buckt.Client) domain.APIService {
 	return &APIService{
 		client: client,
 	}
+}
+
+// Metrics reports what buckt gained in 1.6.0: backend operation counts (with
+// Cloudflare R2 billing class), total storage bytes, and cache hit/miss stats.
+// Backend op counts are only present when the app configured buckt.WithMetrics.
+func (svc *APIService) Metrics(c *gin.Context) {
+	storage, err := svc.client.StorageBytes(c.Request.Context())
+	if err != nil {
+		c.AbortWithStatusJSON(500, response.WrapError("failed to read storage bytes", err))
+		return
+	}
+	hits, misses := svc.client.CacheStats()
+
+	type opStat struct {
+		Count   int64  `json:"count"`
+		Errors  int64  `json:"errors"`
+		Bytes   int64  `json:"bytes"`
+		R2Class string `json:"r2_class,omitempty"`
+	}
+	backends := map[string]map[string]opStat{}
+	if snap, ok := svc.client.MetricsSnapshot(); ok {
+		for backend, ops := range snap {
+			m := make(map[string]opStat, len(ops))
+			for op, s := range ops {
+				m[op] = opStat{Count: s.Count, Errors: s.Errors, Bytes: s.Bytes, R2Class: metrics.R2Class(op)}
+			}
+			backends[backend] = m
+		}
+	}
+
+	c.JSON(200, gin.H{
+		"storage_bytes":   storage,
+		"cache":           gin.H{"hits": hits, "misses": misses},
+		"backends":        backends,
+		"metrics_enabled": len(backends) > 0,
+	})
 }
 
 // CreateFolder implements domain.APIService.

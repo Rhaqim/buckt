@@ -8,6 +8,11 @@ All notable changes to buckt are documented here. This project follows
 A backward-compatible **minor** release on top of v1.5.0: built-in backend
 metrics plus an S3-compatible-endpoint fix. No API removals; safe to adopt.
 
+> **If you use the Azure or GCP backend, upgrade.** v1.5.0's `Exists` is broken
+> on both — the Azure backend **panics** on any blob-properties error (including
+> the routine "not found" case), and the GCP backend can misreport a missing
+> object. Both are fixed here (see **Fixed**).
+
 ### ✨ Added
 
 - **Built-in backend metrics** (`WithMetrics`, new `pkg/metrics`). Opt-in,
@@ -27,6 +32,11 @@ metrics plus an S3-compatible-endpoint fix. No API removals; safe to adopt.
   `gcp.Config.Endpoint`), matching the AWS backend. Enables emulators (Azurite,
   fake-gcs-server) and private/self-hosted deployments. For GCP an endpoint skips
   credential-file auth.
+- **`Client.MetricsSnapshot()`** exposes the collected metrics from the `Client`
+  itself (when configured with a `metrics.Collector`), and the bundled web client
+  gained a **`GET /metrics`** JSON endpoint (storage bytes, cache hit/miss, and
+  per-backend op counts with R2 class). The web examples now enable metrics, so
+  running `example/client/web` and hitting `/metrics` shows live numbers.
 
 ### 🐛 Fixed
 

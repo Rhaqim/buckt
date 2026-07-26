@@ -7,6 +7,7 @@ import (
 
 	"github.com/Rhaqim/buckt"
 	"github.com/Rhaqim/buckt/client/web"
+	"github.com/Rhaqim/buckt/pkg/metrics"
 )
 
 func main() {
@@ -19,7 +20,8 @@ func main() {
 	flagPort := flag.String("port", port, "Port to run the server on")
 	flag.Parse()
 
-	client, err := buckt.Default(buckt.FlatNameSpaces(true))
+	// Enable built-in backend metrics so the /metrics endpoint has data to show.
+	client, err := buckt.Default(buckt.FlatNameSpaces(true), buckt.WithMetrics(metrics.NewCollector()))
 	if err != nil {
 		log.Fatalf("Failed to initialize Buckt: %v", err)
 	}

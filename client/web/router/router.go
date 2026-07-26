@@ -96,6 +96,11 @@ func (r *Router) registerBaseRoutes() {
 		serve.GET("serve/:file_id", r.APIService.ServeFile)
 		serve.GET("stream/:file_id", r.APIService.StreamFile)
 	}
+
+	// Metrics dashboard endpoint (JSON): storage bytes, cache hit/miss, and
+	// backend operation counts with R2 billing class. Surfaces the metrics added
+	// in buckt 1.6.0.
+	r.GET("/metrics", r.APIService.Metrics)
 }
 
 // RegisterAPIRoutes sets up API endpoints
