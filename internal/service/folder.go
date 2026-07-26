@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/Rhaqim/buckt/internal/constant"
@@ -276,6 +277,80 @@ func (f *FolderService) DeleteFolder(ctx context.Context, folder_id string) (str
 	}
 
 	return parent_id, nil
+}
+
+// RestoreFolder moves a trashed folder (and its subtree) back to its original
+// location — or root if that location no longer exists — and clears the trash
+// origin marker. Backend blobs for every descendant file are physically moved
+// in nested-namespace mode.
+func (f *FolderService) RestoreFolder(ctx context.Context, user_id, folder_id string) error {
+	folderID, err := uuid.Parse(folder_id)
+	if err != nil {
+		return fmt.Errorf("invalid id: %w", buckterr.ErrInvalidID)
+	}
+
+	folder, err := f.repo.GetFolder(ctx, folderID)
+	if err != nil {
+		return f.logger.WrapError("failed to get folder", err)
+	}
+
+	target, err := f.resolveRestoreTarget(ctx, user_id, folder.OriginParentID)
+	if err != nil {
+		return err
+	}
+
+	_, _, _, err = f.repo.RestoreFolder(ctx, folderID, target, func(oldPath, newPath string, fileMoves []model.PathMove) error {
+		if f.maxTrashBatchSize > 0 && len(fileMoves) > f.maxTrashBatchSize {
+			return fmt.Errorf("folder contains %d files which exceeds the max trash batch size of %d; restore subtrees first: %w", len(fileMoves), f.maxTrashBatchSize, buckterr.ErrTrashBatchExceeded)
+		}
+		if f.flatNameSpaces {
+			return nil
+		}
+		opCtx, cancel := f.backendCtx(ctx)
+		defer cancel()
+		for _, mv := range fileMoves {
+			if err := opCtx.Err(); err != nil {
+				return fmt.Errorf("backend op timed out: %w", err)
+			}
+			if err := f.backend.Move(opCtx, mv.Old, mv.New); err != nil {
+				return fmt.Errorf("failed to move %s to %s: %w", mv.Old, mv.New, err)
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return f.logger.WrapError("failed to restore folder", err)
+	}
+
+	return nil
+}
+
+// resolveRestoreTarget picks where a trashed item is restored to: its recorded
+// origin folder if that still exists outside the trash, otherwise the user's
+// root folder (also used for a nil origin — legacy items predating tracking).
+func (f *FolderService) resolveRestoreTarget(ctx context.Context, user_id string, origin *uuid.UUID) (uuid.UUID, error) {
+	root, err := f.repo.GetRootFolder(ctx, user_id)
+	if err != nil {
+		return uuid.Nil, f.logger.WrapError("failed to resolve root folder", err)
+	}
+	if origin == nil {
+		return root.ID, nil
+	}
+
+	// Origin folder gone → restore to root.
+	originFolder, err := f.repo.GetFolder(ctx, *origin)
+	if err != nil || originFolder == nil {
+		return root.ID, nil
+	}
+
+	// Origin folder itself in trash → don't restore back into trash.
+	if trash, terr := f.repo.GetTrashFolder(ctx, user_id); terr == nil && trash != nil {
+		if originFolder.ID == trash.ID || originFolder.Path == trash.Path || strings.HasPrefix(originFolder.Path, trash.Path+"/") {
+			return root.ID, nil
+		}
+	}
+
+	return originFolder.ID, nil
 }
 
 // ScrubFolder implements domain.FolderService.

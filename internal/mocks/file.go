@@ -77,6 +77,12 @@ func (m *FileService) DeleteFile(ctx context.Context, file_id string) (string, e
 	return args.String(0), args.Error(1)
 }
 
+// RestoreFile implements domain.FileService.
+func (m *FileService) RestoreFile(ctx context.Context, user_id, file_id string) error {
+	args := m.Called(user_id, file_id)
+	return args.Error(0)
+}
+
 // ScrubFile implements domain.FileService.
 func (m *FileService) ScrubFile(ctx context.Context, file_id string) (string, error) {
 	args := m.Called(file_id)

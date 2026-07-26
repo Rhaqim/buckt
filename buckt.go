@@ -439,6 +439,33 @@ func (b *Client) DeleteFilePermanently(file_id string) (string, error) {
 	return b.DeleteFilePermanentlyContext(context.Background(), file_id)
 }
 
+// RestoreFile moves a trashed file back to its original location (or the user's
+// root folder if that location no longer exists) and removes it from trash.
+//
+// Parameters:
+//   - user_id: The ID of the user who owns the file.
+//   - file_id: The ID of the trashed file to restore.
+//
+// Returns:
+//   - error: An error if the restore fails, otherwise nil.
+func (b *Client) RestoreFile(user_id, file_id string) error {
+	return b.RestoreFileContext(context.Background(), user_id, file_id)
+}
+
+// RestoreFolder moves a trashed folder (and its subtree) back to its original
+// location (or the user's root folder if that location no longer exists) and
+// removes it from trash.
+//
+// Parameters:
+//   - user_id: The ID of the user who owns the folder.
+//   - folder_id: The ID of the trashed folder to restore.
+//
+// Returns:
+//   - error: An error if the restore fails, otherwise nil.
+func (b *Client) RestoreFolder(user_id, folder_id string) error {
+	return b.RestoreFolderContext(context.Background(), user_id, folder_id)
+}
+
 /* Contextual Folder Methods */
 
 // NewFolderContext creates a new folder for a user within a specified parent folder.
@@ -548,6 +575,22 @@ func (b *Client) DeleteFolderPermanentlyContext(ctx context.Context, user_id, fo
 // GetTrashFolderContext returns the user's trash folder with its contents preloaded.
 func (b *Client) GetTrashFolderContext(ctx context.Context, user_id string) (*model.FolderModel, error) {
 	return b.folderService.GetTrashFolder(ctx, user_id)
+}
+
+// RestoreFolderContext moves a trashed folder (and its subtree) back to the
+// folder it was in before it was trashed, or the user's root folder if that
+// original location no longer exists. Blobs are physically moved in
+// nested-namespace mode.
+//
+// Parameters:
+//   - ctx: The context for the operation.
+//   - user_id: The ID of the user who owns the folder.
+//   - folder_id: The ID of the trashed folder to restore.
+//
+// Returns:
+//   - error: An error if the restore fails, otherwise nil.
+func (b *Client) RestoreFolderContext(ctx context.Context, user_id, folder_id string) error {
+	return b.folderService.RestoreFolder(ctx, user_id, folder_id)
 }
 
 /* File Methods */
@@ -720,6 +763,21 @@ func (b *Client) DeleteFileContext(ctx context.Context, file_id string) (string,
 //   - error: An error if the file deletion fails, otherwise nil.
 func (b *Client) DeleteFilePermanentlyContext(ctx context.Context, file_id string) (string, error) {
 	return b.fileService.ScrubFile(ctx, file_id)
+}
+
+// RestoreFileContext moves a trashed file back to the folder it was in before
+// it was trashed, or the user's root folder if that original location no longer
+// exists. The blob is physically moved in nested-namespace mode.
+//
+// Parameters:
+//   - ctx: The context for the operation.
+//   - user_id: The ID of the user who owns the file.
+//   - file_id: The ID of the trashed file to restore.
+//
+// Returns:
+//   - error: An error if the restore fails, otherwise nil.
+func (b *Client) RestoreFileContext(ctx context.Context, user_id, file_id string) error {
+	return b.fileService.RestoreFile(ctx, user_id, file_id)
 }
 
 /* Migration */

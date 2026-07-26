@@ -83,13 +83,7 @@ func (svc *WebService) RestoreFile(c *gin.Context) {
 		return
 	}
 
-	root, err := svc.client.GetFolderWithContent(user_id, "")
-	if err != nil {
-		c.AbortWithStatusJSON(500, response.WrapError("failed to resolve root folder", err))
-		return
-	}
-
-	if err := svc.client.MoveFile(fileID, root.ID.String()); err != nil {
+	if err := svc.client.RestoreFile(user_id, fileID); err != nil {
 		c.AbortWithStatusJSON(500, response.WrapError("failed to restore file", err))
 		return
 	}
@@ -112,13 +106,7 @@ func (svc *WebService) RestoreFolder(c *gin.Context) {
 		return
 	}
 
-	root, err := svc.client.GetFolderWithContent(user_id, "")
-	if err != nil {
-		c.AbortWithStatusJSON(500, response.WrapError("failed to resolve root folder", err))
-		return
-	}
-
-	if err := svc.client.MoveFolder(user_id, folderID, root.ID.String()); err != nil {
+	if err := svc.client.RestoreFolder(user_id, folderID); err != nil {
 		c.AbortWithStatusJSON(500, response.WrapError("failed to restore folder", err))
 		return
 	}

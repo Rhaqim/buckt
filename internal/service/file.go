@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/Rhaqim/buckt/internal/domain"
@@ -349,6 +350,76 @@ func (f *FileService) MoveFile(ctx context.Context, file_id string, new_parent_i
 	}
 
 	return nil
+}
+
+// RestoreFile moves a trashed file back to its original location (or root if
+// that location no longer exists) and clears the trash origin marker. The
+// backend blob is physically moved in nested-namespace mode.
+func (f *FileService) RestoreFile(ctx context.Context, user_id, file_id string) error {
+	fileID, err := uuid.Parse(file_id)
+	if err != nil {
+		return fmt.Errorf("invalid id: %w", buckterr.ErrInvalidID)
+	}
+
+	file, err := f.repo.GetFile(ctx, fileID)
+	if err != nil {
+		return f.logger.WrapError("failed to get file", err)
+	}
+
+	target, err := f.resolveRestoreTarget(ctx, user_id, file.OriginParentID)
+	if err != nil {
+		return err
+	}
+
+	// Parent and path change — drop any cached copy.
+	if f.cache != nil {
+		_ = f.cache.DeleteBucktValue(ctx, file_id)
+	}
+
+	_, _, err = f.repo.RestoreFile(ctx, fileID, target, func(oldPath, newPath string) error {
+		if f.flatNameSpaces || oldPath == newPath {
+			return nil
+		}
+		opCtx, cancel := f.backendCtx(ctx)
+		defer cancel()
+		return f.fileBackend.Move(opCtx, oldPath, newPath)
+	})
+	if err != nil {
+		return f.logger.WrapError("failed to restore file", err)
+	}
+
+	return nil
+}
+
+// resolveRestoreTarget picks where a trashed item should be restored to: its
+// recorded origin folder if that folder still exists outside the trash,
+// otherwise the user's root folder. Returns the root for a nil origin (legacy
+// trashed items predating origin tracking).
+func (f *FileService) resolveRestoreTarget(ctx context.Context, user_id string, origin *uuid.UUID) (uuid.UUID, error) {
+	root, err := f.folderService.GetRootFolder(ctx, user_id)
+	if err != nil {
+		return uuid.Nil, f.logger.WrapError("failed to resolve root folder", err)
+	}
+	if origin == nil {
+		return root.ID, nil
+	}
+
+	// GetFolder falls back to root when the folder is gone, so a root result
+	// means the origin no longer exists — restore to root.
+	originFolder, err := f.folderService.GetFolder(ctx, user_id, origin.String())
+	if err != nil || originFolder == nil || originFolder.ID == root.ID {
+		return root.ID, nil
+	}
+
+	// If the origin folder was itself moved to trash, don't restore back into
+	// the trash — fall back to root.
+	if trash, terr := f.folderService.GetTrashFolder(ctx, user_id); terr == nil && trash != nil {
+		if originFolder.ID == trash.ID || originFolder.Path == trash.Path || strings.HasPrefix(originFolder.Path, trash.Path+"/") {
+			return root.ID, nil
+		}
+	}
+
+	return originFolder.ID, nil
 }
 
 // RenameFile implements domain.FileService.

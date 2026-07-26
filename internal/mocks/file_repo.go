@@ -77,6 +77,23 @@ func (m *FileRepository) DeleteFile(ctx context.Context, fileID uuid.UUID, befor
 	return oldPath, newPath, nil
 }
 
+func (m *FileRepository) RestoreFile(ctx context.Context, id, target uuid.UUID, beforeCommit func(oldPath, newPath string) error) (string, string, error) {
+	args := m.Called(id, target)
+	oldPath, newPath := args.String(0), args.String(1)
+	repoErr := args.Error(2)
+
+	if repoErr != nil {
+		return "", "", repoErr
+	}
+
+	if beforeCommit != nil {
+		if cbErr := beforeCommit(oldPath, newPath); cbErr != nil {
+			return "", "", cbErr
+		}
+	}
+	return oldPath, newPath, nil
+}
+
 func (m *FileRepository) ScrubFile(ctx context.Context, fileID uuid.UUID) error {
 	args := m.Called(fileID)
 	return args.Error(0)

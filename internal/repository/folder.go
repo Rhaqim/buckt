@@ -208,7 +208,7 @@ func (f *FolderRepository) MoveFolder(ctx context.Context, folder_id uuid.UUID, 
 	}
 
 	return f.db.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := tx.Model(&folder).Updates(map[string]interface{}{
+		if err := tx.Model(&folder).Updates(map[string]any{
 			"path":      newPath,
 			"parent_id": newParentFolder.ID,
 		}).Error; err != nil {
@@ -249,7 +249,7 @@ func (f *FolderRepository) RenameFolder(ctx context.Context, user_id string, fol
 	newPath := strings.TrimSuffix(folder.Path, "/"+folder.Name) + "/" + new_name
 
 	return f.db.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := tx.Model(&folder).Updates(map[string]interface{}{
+		if err := tx.Model(&folder).Updates(map[string]any{
 			"name": new_name,
 			"path": newPath,
 		}).Error; err != nil {
@@ -375,10 +375,16 @@ func (f *FolderRepository) DeleteFolder(
 			})
 		}
 
-		if err := tx.Model(&folder).Updates(map[string]interface{}{
+		// Update by a bare model keyed on ID, NOT tx.Model(&folder): folder was
+		// loaded with Preload("Files"/"Folders"), and Updates on an
+		// association-loaded struct makes GORM re-insert those preloaded rows,
+		// hitting a duplicate-key error when the folder is non-empty.
+		if err := tx.Model(&model.FolderModel{}).Where("id = ?", folder.ID).Updates(map[string]any{
 			"name":      newName,
 			"path":      newPath,
 			"parent_id": trash.ID,
+			// Remember where it came from so restore can return it here.
+			"origin_parent_id": folder.ParentID,
 		}).Error; err != nil {
 			return err
 		}
@@ -399,6 +405,94 @@ func (f *FolderRepository) DeleteFolder(
 
 		// Run backend operation BEFORE commit. If it fails, the transaction
 		// rolls back and all path rewrites are undone.
+		if beforeCommit != nil {
+			if err := beforeCommit(oldPath, newPath, fileMoves); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	return
+}
+
+// RestoreFolder moves a trashed folder (and its whole subtree) to target — its
+// origin folder resolved by the caller, or root as a fallback — and clears its
+// origin marker. Mirrors DeleteFolder's move branch in reverse: descendant
+// paths are rewritten and the beforeCommit callback runs inside the transaction
+// so a backend-move failure rolls everything back.
+func (f *FolderRepository) RestoreFolder(
+	ctx context.Context,
+	folder_id uuid.UUID,
+	target uuid.UUID,
+	beforeCommit func(oldPath, newPath string, fileMoves []model.PathMove) error,
+) (oldPath, newPath string, fileMoves []model.PathMove, err error) {
+	err = f.db.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var folder model.FolderModel
+		if err := tx.Where("id = ?", folder_id).First(&folder).Error; err != nil {
+			return err
+		}
+
+		var dest model.FolderModel
+		if err := tx.Where("id = ?", target).First(&dest).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return fmt.Errorf("restore target folder not found: %w", buckterr.ErrNotFound)
+			}
+			return err
+		}
+
+		// Never restore a folder into itself or its own subtree.
+		if dest.ID == folder.ID || dest.Path == folder.Path || strings.HasPrefix(dest.Path, folder.Path+"/") {
+			return fmt.Errorf("invalid restore target: cannot restore a folder into itself")
+		}
+
+		oldPath = folder.Path
+
+		newName, err := uniqueTrashName(ctx, tx, dest.ID, folder.Name)
+		if err != nil {
+			return err
+		}
+		newPath = strings.TrimSuffix(dest.Path, "/") + "/" + newName
+
+		oldPrefix := oldPath + "/"
+		newPrefix := newPath + "/"
+
+		var files []model.FileModel
+		if err := tx.Where("path LIKE ? ESCAPE '\\'", escapeLike(oldPrefix)+"%").Find(&files).Error; err != nil {
+			return err
+		}
+		for _, file := range files {
+			fileMoves = append(fileMoves, model.PathMove{
+				Old: file.Path,
+				New: newPrefix + strings.TrimPrefix(file.Path, oldPrefix),
+			})
+		}
+
+		// Bare model keyed on ID (see DeleteFolder) so no preloaded association is
+		// re-saved.
+		if err := tx.Model(&model.FolderModel{}).Where("id = ?", folder.ID).Updates(map[string]any{
+			"name":      newName,
+			"path":      newPath,
+			"parent_id": dest.ID,
+			// Clear the origin marker — the folder is no longer in trash.
+			"origin_parent_id": nil,
+		}).Error; err != nil {
+			return err
+		}
+
+		prefixLen := len(oldPrefix)
+
+		if err := tx.Model(&model.FolderModel{}).
+			Where("path LIKE ? ESCAPE '\\'", escapeLike(oldPrefix)+"%").
+			Update("path", gorm.Expr("? || SUBSTR(path, ?)", newPrefix, prefixLen+1)).Error; err != nil {
+			return err
+		}
+
+		if err := tx.Model(&model.FileModel{}).
+			Where("path LIKE ? ESCAPE '\\'", escapeLike(oldPrefix)+"%").
+			Update("path", gorm.Expr("? || SUBSTR(path, ?)", newPrefix, prefixLen+1)).Error; err != nil {
+			return err
+		}
+
 		if beforeCommit != nil {
 			if err := beforeCommit(oldPath, newPath, fileMoves); err != nil {
 				return err

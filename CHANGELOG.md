@@ -42,10 +42,18 @@ metrics plus an S3-compatible-endpoint fix. No API removals; safe to adopt.
   toggle, a breadcrumb, and a **"Usage" panel** that renders the metrics (storage,
   cache hit rate, and per-op R2 A/B/free counts) right in the browser.
 - **Trash browsing in the bundled web UI.** A new **Trash** view (`GET /web/trash`)
-  lists items that were moved to trash, with **Restore** (moves the item back to
-  your root folder — `POST /web/restore-file/:id`, `POST /web/restore-folder/:id`)
-  and **Delete permanently** actions. Previously trashed items were only reachable
-  via the `Client.GetTrashFolder` API.
+  lists items that were moved to trash, with **Restore** and **Delete permanently**
+  actions. Previously trashed items were only reachable via the
+  `Client.GetTrashFolder` API.
+- **Restore returns items to their original location.** Trashing a file or folder
+  now records where it came from (new nullable `origin_parent_id` column, added by
+  migration `v3` — additive and non-destructive), and `Client.RestoreFile` /
+  `Client.RestoreFolder` (and the web Restore buttons) move it back there instead
+  of dumping it in root. If the original folder no longer exists (or was itself
+  trashed), restore falls back to root. Items trashed before this release have no
+  recorded origin and restore to root. In nested-namespace mode the underlying
+  blobs are physically moved back, inside the same transaction, so a backend
+  failure rolls the restore back.
 
 ### 🐛 Fixed
 
@@ -70,6 +78,11 @@ metrics plus an S3-compatible-endpoint fix. No API removals; safe to adopt.
   reports `metrics_enabled` from whether `WithMetrics` was configured, not from
   whether any backend op has been recorded, so a freshly started app with metrics
   enabled no longer claims metrics are off. The mount example now enables metrics.
+- **Moving a non-empty folder to trash no longer fails with a duplicate-key
+  error.** `DeleteFolder` updated the folder through a struct that had its child
+  files/folders preloaded, so GORM tried to re-insert those children. It now
+  updates by a bare model keyed on id (as the descendant path rewrites already
+  did). This affected non-empty folders; empty folders were unaffected.
 
 ### 🧪 Tests
 

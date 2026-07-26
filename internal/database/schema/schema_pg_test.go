@@ -95,7 +95,7 @@ func TestApply_PreservesLegacyTrashOnV141Upgrade_Postgres(t *testing.T) {
 
 	var versions []int
 	require.NoError(t, gdb.Raw(`SELECT version FROM buckt_schema_migrations ORDER BY version`).Scan(&versions).Error)
-	assert.Equal(t, []int{1, 2}, versions)
+	assert.Equal(t, []int{1, 2, 3}, versions)
 
 	assert.False(t, colExistsPG(t, gdb, "file_models", "deleted_at"))
 	assert.False(t, colExistsPG(t, gdb, "folder_models", "deleted_at"))
@@ -140,5 +140,5 @@ func TestApply_FreshDatabase_Postgres(t *testing.T) {
 
 	var versions []int
 	require.NoError(t, gdb.Raw(`SELECT version FROM buckt_schema_migrations ORDER BY version`).Scan(&versions).Error)
-	assert.Equal(t, []int{1, 2}, versions)
+	assert.Equal(t, []int{1, 2, 3}, versions)
 }

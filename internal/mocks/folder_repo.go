@@ -86,6 +86,28 @@ func (m *FolderRepository) DeleteFolder(ctx context.Context, folder_id uuid.UUID
 	return
 }
 
+// RestoreFolder implements domain.FolderRepository.
+func (m *FolderRepository) RestoreFolder(ctx context.Context, folder_id, target uuid.UUID, beforeCommit func(oldPath, newPath string, fileMoves []model.PathMove) error) (oldPath, newPath string, fileMoves []model.PathMove, err error) {
+	args := m.Called(folder_id, target)
+	oldPath = args.String(0)
+	newPath = args.String(1)
+	if v := args.Get(2); v != nil {
+		fileMoves, _ = v.([]model.PathMove)
+	}
+	repoErr := args.Error(3)
+
+	if repoErr != nil {
+		return "", "", nil, repoErr
+	}
+
+	if beforeCommit != nil {
+		if cbErr := beforeCommit(oldPath, newPath, fileMoves); cbErr != nil {
+			return "", "", nil, cbErr
+		}
+	}
+	return
+}
+
 // ScrubFolder implements domain.FolderRepository.
 func (m *FolderRepository) ScrubFolder(ctx context.Context, user_id string, folder_id uuid.UUID) (parent_id string, err error) {
 	args := m.Called(user_id, folder_id)
