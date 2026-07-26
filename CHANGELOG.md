@@ -3,7 +3,52 @@
 All notable changes to buckt are documented here. This project follows
 [Semantic Versioning](https://semver.org/).
 
-## [1.5.0] — unreleased
+## [1.6.0] — unreleased
+
+A backward-compatible **minor** release on top of v1.5.0: built-in backend
+metrics plus an S3-compatible-endpoint fix. No API removals; safe to adopt.
+
+### ✨ Added
+
+- **Built-in backend metrics** (`WithMetrics`, new `pkg/metrics`). Opt-in,
+  dependency-free (stdlib only). A metering decorator wraps every backend (local,
+  S3, Azure, GCP, and the migration source/target) and records one operation per
+  call — `put/get/list/exists/move/delete/delete_folder` — with counts, bytes,
+  errors, and duration, into a `metrics.Collector` you read via `Snapshot()`. The
+  S3 backend additionally reports exact per-API-call ops (`s3:PutObject`,
+  `s3:GetObject`, `s3:ListObjectsV2`, …, capturing pagination) so Cloudflare R2
+  Class A/B operations can be counted precisely; `metrics.R2Class` maps op names
+  to R2 billing classes. New `Client.StorageBytes(ctx)` (total stored bytes = R2
+  storage dimension) and `Client.CacheStats()` (cache hits/misses = backend reads
+  avoided). Nil metrics (the default) means zero overhead. The backend↔buckt hook
+  uses a stdlib-only callback signature, so cloud backends emit metrics without
+  importing buckt (the dependency stays one-way).
+- **`Endpoint` override for the Azure and GCP backends** (`azure.Config.Endpoint`,
+  `gcp.Config.Endpoint`), matching the AWS backend. Enables emulators (Azurite,
+  fake-gcs-server) and private/self-hosted deployments. For GCP an endpoint skips
+  credential-file auth.
+
+### 🐛 Fixed
+
+- **S3-compatible endpoints now use `BaseEndpoint` + path-style** instead of a
+  custom endpoint resolver that dropped the bucket from the request. Path-style
+  stores (e.g. MinIO) previously failed with `NoSuchBucket`; they now work.
+  Cloudflare R2 is unaffected (it already worked and continues to).
+- **Azure `Exists` no longer panics.** It called `errors.As` with a
+  `bloberror.Code` (a string), which panics on any `GetProperties` error —
+  including the common not-found case. Now uses `bloberror.HasCode`.
+- **GCP `Exists` correctly detects missing objects.** It compared the error with
+  `==` against `storage.ErrObjectNotExist`, which fails when the error is wrapped
+  (as GCS returns it). Now uses `errors.Is`.
+
+### 🧪 Tests
+
+- Config-validation unit tests and emulator-backed contract tests (Put/Get/
+  Exists/List/Move/Delete/DeleteFolder) for all three cloud backends — AWS via
+  MinIO, Azure via Azurite, GCP via fake-gcs-server. Integration tests are gated
+  by env vars and skip when unset.
+
+## [1.5.0]
 
 A **backward-compatible minor** release. The public API stays source-compatible
 with v1.4.1, and the database is upgraded in place, non-destructively, the first
@@ -39,19 +84,6 @@ call on every startup — applied migrations are recorded in a
 
 ### ✨ Added
 
-- **Built-in backend metrics** (`WithMetrics`, new `pkg/metrics`). Opt-in,
-  dependency-free (stdlib only). A metering decorator wraps every backend (local,
-  S3, Azure, GCP, and the migration source/target) and records one operation per
-  call — `put/get/list/exists/move/delete/delete_folder` — with counts, bytes,
-  errors, and duration, into a `metrics.Collector` you read via `Snapshot()`. The
-  S3 backend additionally reports exact per-API-call ops (`s3:PutObject`,
-  `s3:GetObject`, `s3:ListObjectsV2`, …, capturing pagination) so Cloudflare R2
-  Class A/B operations can be counted precisely; `metrics.R2Class` maps op names
-  to R2 billing classes. New `Client.StorageBytes(ctx)` (total stored bytes = R2
-  storage dimension) and `Client.CacheStats()` (cache hits/misses = backend reads
-  avoided). Nil metrics (the default) means zero overhead. The backend↔buckt hook
-  uses a stdlib-only callback signature, so cloud backends emit metrics without
-  importing buckt (the dependency stays one-way).
 - **Typed sentinel errors** for programmatic error handling. `Client` methods now
   wrap failures with `errors.Is`-matchable sentinels — `ErrNotFound`,
   `ErrInvalidID`, `ErrInvalidName`, `ErrAlreadyExists`, `ErrFileTooLarge`,

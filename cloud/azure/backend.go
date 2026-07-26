@@ -3,9 +3,9 @@ package azure
 import (
 	"bytes"
 	"context"
-	"errors"
 	"fmt"
 	"io"
+	"strings"
 	"time"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob"
@@ -24,7 +24,13 @@ func NewBackend(conf Config) (*AzureBackend, error) {
 		return nil, err
 	}
 
-	url := fmt.Sprintf("https://%s.blob.core.windows.net/%s", conf.AccountName, conf.Container)
+	// Default to the public Azure Blob endpoint; allow an override for emulators
+	// (Azurite) or private deployments.
+	base := fmt.Sprintf("https://%s.blob.core.windows.net", conf.AccountName)
+	if conf.Endpoint != "" {
+		base = strings.TrimRight(conf.Endpoint, "/")
+	}
+	url := base + "/" + conf.Container
 
 	cred, err := azblob.NewSharedKeyCredential(conf.AccountName, conf.AccountKey)
 	if err != nil {
@@ -117,8 +123,9 @@ func (a *AzureBackend) Exists(ctx context.Context, path string) (bool, error) {
 	blobClient := a.client.NewBlockBlobClient(path)
 	_, err := blobClient.GetProperties(ctx, nil)
 	if err != nil {
-		var respErr bloberror.Code
-		if ok := errorAs(err, &respErr); ok && respErr == bloberror.BlobNotFound {
+		// bloberror.HasCode is the SDK's way to match a service error code.
+		// (bloberror.Code is a string, so errors.As against it panics.)
+		if bloberror.HasCode(err, bloberror.BlobNotFound) {
 			return false, nil
 		}
 		return false, err
@@ -216,8 +223,4 @@ func safeDeref(s *string) string {
 		return ""
 	}
 	return *s
-}
-
-func errorAs(err error, target any) bool {
-	return errors.As(err, target)
 }

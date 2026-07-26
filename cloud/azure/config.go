@@ -9,6 +9,12 @@ type Config struct {
 	AccountName string
 	AccountKey  string
 	Container   string
+
+	// Endpoint optionally overrides the blob service URL. Leave empty for the
+	// real Azure Blob service (https://<account>.blob.core.windows.net). Set it
+	// to point at an emulator or private deployment, e.g. Azurite:
+	// "http://127.0.0.1:10000/devstoreaccount1". The container name is appended.
+	Endpoint string
 }
 
 func (a Config) Validate() error {

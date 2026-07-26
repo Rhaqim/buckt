@@ -82,11 +82,15 @@ func NewBackend(conf Config) (*S3Backend, error) {
 
 	var client *s3.Client
 
-	// Handle custom endpoint (R2, MinIO, etc.)
+	// Handle custom endpoint (R2, MinIO, and other S3-compatible stores). Use
+	// BaseEndpoint + UsePathStyle — the modern, Cloudflare-documented approach.
+	// (A custom EndpointResolverV2 that returns only the base URL drops the
+	// bucket from the request, which breaks path-style endpoints like MinIO with
+	// "NoSuchBucket".)
 	if conf.Endpoint != "" {
 		client = s3.NewFromConfig(cfg, func(o *s3.Options) {
+			o.BaseEndpoint = aws.String(conf.Endpoint)
 			o.UsePathStyle = conf.UsePathStyle || strings.HasSuffix(conf.Endpoint, CLOUDFLARE_R2_ENDPOINT_SUBSTRING)
-			o.EndpointResolverV2 = &customEndpointResolver{rawURL: conf.Endpoint}
 		})
 	} else {
 		client = s3.NewFromConfig(cfg)
