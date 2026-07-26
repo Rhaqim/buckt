@@ -639,7 +639,7 @@ func TestResolveBackend(t *testing.T) {
 			Source:           source,
 			Target:           target,
 		}
-		result := resolveBackend(mediaDir, bc, mockLogger, mockLRU)
+		result := resolveBackend(mediaDir, bc, mockLogger, mockLRU, nil)
 		_, ok := result.(*backend.MigrationBackendService)
 		assert.True(t, ok)
 	})
@@ -649,7 +649,7 @@ func TestResolveBackend(t *testing.T) {
 		bc := BackendConfig{
 			Source: source,
 		}
-		result := resolveBackend(mediaDir, bc, mockLogger, mockLRU)
+		result := resolveBackend(mediaDir, bc, mockLogger, mockLRU, nil)
 		// Placeholder should be replaced with real local backend
 		_, ok := result.(*backend.LocalFileSystemService)
 		assert.True(t, ok)
@@ -660,7 +660,7 @@ func TestResolveBackend(t *testing.T) {
 		bc := BackendConfig{
 			Source: source,
 		}
-		result := resolveBackend(mediaDir, bc, mockLogger, mockLRU)
+		result := resolveBackend(mediaDir, bc, mockLogger, mockLRU, nil)
 		assert.Equal(t, source, result)
 	})
 
@@ -669,14 +669,14 @@ func TestResolveBackend(t *testing.T) {
 		bc := BackendConfig{
 			Target: target,
 		}
-		result := resolveBackend(mediaDir, bc, mockLogger, mockLRU)
+		result := resolveBackend(mediaDir, bc, mockLogger, mockLRU, nil)
 		_, ok := result.(*backend.LocalFileSystemService)
 		assert.True(t, ok)
 	})
 
 	t.Run("No Source or Target", func(t *testing.T) {
 		bc := BackendConfig{}
-		result := resolveBackend(mediaDir, bc, mockLogger, mockLRU)
+		result := resolveBackend(mediaDir, bc, mockLogger, mockLRU, nil)
 		_, ok := result.(*backend.LocalFileSystemService)
 		assert.True(t, ok)
 	})

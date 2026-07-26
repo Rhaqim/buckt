@@ -39,6 +39,19 @@ call on every startup — applied migrations are recorded in a
 
 ### ✨ Added
 
+- **Built-in backend metrics** (`WithMetrics`, new `pkg/metrics`). Opt-in,
+  dependency-free (stdlib only). A metering decorator wraps every backend (local,
+  S3, Azure, GCP, and the migration source/target) and records one operation per
+  call — `put/get/list/exists/move/delete/delete_folder` — with counts, bytes,
+  errors, and duration, into a `metrics.Collector` you read via `Snapshot()`. The
+  S3 backend additionally reports exact per-API-call ops (`s3:PutObject`,
+  `s3:GetObject`, `s3:ListObjectsV2`, …, capturing pagination) so Cloudflare R2
+  Class A/B operations can be counted precisely; `metrics.R2Class` maps op names
+  to R2 billing classes. New `Client.StorageBytes(ctx)` (total stored bytes = R2
+  storage dimension) and `Client.CacheStats()` (cache hits/misses = backend reads
+  avoided). Nil metrics (the default) means zero overhead. The backend↔buckt hook
+  uses a stdlib-only callback signature, so cloud backends emit metrics without
+  importing buckt (the dependency stays one-way).
 - **Typed sentinel errors** for programmatic error handling. `Client` methods now
   wrap failures with `errors.Is`-matchable sentinels — `ErrNotFound`,
   `ErrInvalidID`, `ErrInvalidName`, `ErrAlreadyExists`, `ErrFileTooLarge`,

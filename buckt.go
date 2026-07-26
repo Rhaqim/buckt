@@ -24,6 +24,7 @@ import (
 	"github.com/Rhaqim/buckt/internal/repository"
 	"github.com/Rhaqim/buckt/internal/service"
 	"github.com/Rhaqim/buckt/pkg/logger"
+	"github.com/Rhaqim/buckt/pkg/metrics"
 )
 
 type Client struct {
@@ -80,7 +81,7 @@ func New(conf Config, opts ...ConfigFunc) (*Client, error) {
 	cacheManager, lruCache := initializeCache(conf.Cache, bucktLog)
 
 	// Initialise Backend
-	backend := resolveBackend(conf.MediaDir, conf.Backend, bucktLog, lruCache)
+	backend := resolveBackend(conf.MediaDir, conf.Backend, bucktLog, lruCache, conf.Metrics)
 
 	// Max file size: 0 means no limit (backward compatible)
 	maxFileSize := conf.MaxFileSize
@@ -173,6 +174,26 @@ func (b *Client) Close() error {
 // limit to HTTP handlers so they can reject oversized uploads early.
 func (b *Client) MaxFileSize() int64 {
 	return b.maxFileSize
+}
+
+// CacheStats returns the file cache hit and miss counts. Reads served from the
+// cache issue no backend Get, so a high hit ratio directly reduces backend read
+// operations (e.g. Cloudflare R2 Class B operations).
+func (b *Client) CacheStats() (hits, misses uint64) {
+	return b.lruCache.Hits(), b.lruCache.Misses()
+}
+
+// StorageBytes returns the total size, in bytes, of all stored files. Trashed
+// files are included because their blobs still occupy backend storage until they
+// are permanently deleted. This is the figure object stores like R2 bill for
+// storage. Pass a per-request context to bound the query.
+func (b *Client) StorageBytes(ctx context.Context) (int64, error) {
+	var total int64
+	if err := b.db.WithContext(ctx).Model(&model.FileModel{}).
+		Select("COALESCE(SUM(size), 0)").Scan(&total).Error; err != nil {
+		return 0, b.logger.WrapError("failed to compute storage bytes", err)
+	}
+	return total, nil
 }
 
 /* Folder Methods */
@@ -736,7 +757,13 @@ func newAppServices(
 	return folderService, fileService
 }
 
-func resolveBackend(mediaDir string, bc BackendConfig, log domain.BucktLogger, lru domain.LRUCache) Backend {
+func resolveBackend(mediaDir string, bc BackendConfig, log domain.BucktLogger, lru domain.LRUCache, rec metrics.Recorder) Backend {
+	// meter wraps a leaf backend so every operation is recorded. It is a no-op
+	// when rec is nil. In migration mode the leaves (source/target) are metered
+	// individually — never the composite — so per-backend counts stay distinct
+	// and nothing is double-counted.
+	meter := func(b Backend) Backend { return backend.NewMeteredBackend(b, rec) }
+
 	if bc.MigrationEnabled {
 		var source, target Backend
 
@@ -759,7 +786,7 @@ func resolveBackend(mediaDir string, bc BackendConfig, log domain.BucktLogger, l
 		// ensure both source and target are set and different
 		if source == nil || target == nil {
 			log.Errorf("❌ Migration enabled but one of the backends is nil — falling back to local")
-			return backend.NewLocalFileSystemService(log, mediaDir, lru)
+			return meter(backend.NewLocalFileSystemService(log, mediaDir, lru))
 		}
 
 		// Compare by pointer identity — only reject if the caller passed the
@@ -768,27 +795,31 @@ func resolveBackend(mediaDir string, bc BackendConfig, log domain.BucktLogger, l
 		// migration targets and should not be rejected here. Users are responsible
 		// for ensuring their source and target point to different underlying
 		// storage locations.
+		//
+		// NOTE: this identity check runs on the UNWRAPPED backends; metering
+		// below would otherwise produce two distinct wrapper instances and defeat
+		// the comparison.
 		if source == target {
 			log.Errorf("❌ Migration enabled but source and target are the same instance — disabling migration and using source only")
-			return source
+			return meter(source)
 		}
 
 		log.Infof("🔄 Migration mode: %s → %s", source.Name(), target.Name())
-		return backend.NewMigrationBackend(log, source, target)
+		return backend.NewMigrationBackend(log, meter(source), meter(target))
 	}
 
 	// Non-migration modes
 	switch {
 	case bc.Source != nil:
-		return resolveIfPlaceholder(bc.Source, mediaDir, log, lru)
+		return meter(resolveIfPlaceholder(bc.Source, mediaDir, log, lru))
 
 	case bc.Target != nil:
 		log.Warn("⚠️ Using target backend as primary because source is missing")
-		return resolveIfPlaceholder(bc.Target, mediaDir, log, lru)
+		return meter(resolveIfPlaceholder(bc.Target, mediaDir, log, lru))
 
 	default:
 		log.Warn("⚠️ No backend configured, falling back to local")
-		return backend.NewLocalFileSystemService(log, mediaDir, lru)
+		return meter(backend.NewLocalFileSystemService(log, mediaDir, lru))
 	}
 }
 

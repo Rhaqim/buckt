@@ -7,6 +7,7 @@ import (
 
 	"github.com/Rhaqim/buckt/internal/domain"
 	"github.com/Rhaqim/buckt/internal/model"
+	"github.com/Rhaqim/buckt/pkg/metrics"
 )
 
 type DBDrivers = model.DBDrivers // Type alias
@@ -185,6 +186,12 @@ type Config struct {
 	Cache   CacheConfig
 	Log     LogConfig
 	Backend BackendConfig
+
+	// Metrics, when non-nil, receives one record per storage-backend operation
+	// (put/get/list/...) for every backend. Use metrics.NewCollector for a
+	// built-in in-memory sink. Nil (the default) disables metrics with zero
+	// overhead.
+	Metrics metrics.Recorder
 }
 
 // ConfigFunc is a function type that takes a pointer to Config and modifies it.
@@ -297,6 +304,23 @@ func WithBackend(backend Backend) ConfigFunc {
 		c.Backend.Source = backend
 		c.Backend.Target = nil
 		c.Backend.MigrationEnabled = false
+	}
+}
+
+// WithMetrics enables per-operation backend metrics, recorded to r for every
+// backend (local, S3, Azure, GCP, and the migration source/target). Pass a
+// metrics.NewCollector for a built-in in-memory sink you can read with
+// Snapshot(), or your own metrics.Recorder implementation.
+//
+// Example:
+//
+//	m := metrics.NewCollector()
+//	client, _ := buckt.Default(buckt.WithBackend(s3), buckt.WithMetrics(m))
+//	// ... later ...
+//	snap := m.Snapshot() // backend -> operation -> Stat
+func WithMetrics(r metrics.Recorder) ConfigFunc {
+	return func(c *Config) {
+		c.Metrics = r
 	}
 }
 

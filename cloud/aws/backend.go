@@ -24,6 +24,39 @@ import (
 type S3Backend struct {
 	client     *s3.Client
 	bucketName string
+
+	// rec, when set via SetOpRecorder, receives one record per real S3 API call
+	// — including each ListObjectsV2 page and the CopyObject+DeleteObject a Move
+	// issues — so callers can count exact Cloudflare R2 Class A/B operations.
+	// nil means metrics are disabled.
+	//
+	// The signature uses only standard-library types on purpose: it lets buckt
+	// inject a recorder here WITHOUT this module ever importing buckt, keeping
+	// the dependency one-way (buckt depends on backends, never the reverse).
+	rec func(op string, bytes int64, dur time.Duration, err error)
+}
+
+// Compile-time guard that S3Backend keeps the exact SetOpRecorder signature
+// buckt detects structurally. If this stops compiling, the per-API-call metrics
+// hook drifted and buckt would silently stop injecting the recorder.
+var _ interface {
+	SetOpRecorder(func(op string, bytes int64, dur time.Duration, err error))
+} = (*S3Backend)(nil)
+
+// SetOpRecorder installs a per-API-call metrics callback. buckt calls this
+// (detected structurally) when its metrics are enabled; other callers may set it
+// directly. Reported operation names are "s3:PutObject", "s3:GetObject",
+// "s3:ListObjectsV2", etc. Safe to leave unset — metrics are then disabled.
+func (s *S3Backend) SetOpRecorder(rec func(op string, bytes int64, dur time.Duration, err error)) {
+	s.rec = rec
+}
+
+// record reports a single S3 API call. No-op when no recorder is set.
+func (s *S3Backend) record(name string, bytes int64, start time.Time, err error) {
+	if s.rec == nil {
+		return
+	}
+	s.rec("s3:"+name, bytes, time.Since(start), err)
 }
 
 func NewBackend(conf Config) (*S3Backend, error) {
@@ -72,9 +105,11 @@ func (s *S3Backend) Name() string {
 // Ping verifies connectivity to the S3 bucket by performing a lightweight HeadBucket call.
 // Call this after NewBackend to catch credential or network issues early.
 func (s *S3Backend) Ping(ctx context.Context) error {
+	start := time.Now()
 	_, err := s.client.HeadBucket(ctx, &s3.HeadBucketInput{
 		Bucket: aws.String(s.bucketName),
 	})
+	s.record("HeadBucket", 0, start, err)
 	if err != nil {
 		return fmt.Errorf("S3 connectivity check failed for bucket %q: %w", s.bucketName, err)
 	}
@@ -82,6 +117,7 @@ func (s *S3Backend) Ping(ctx context.Context) error {
 }
 
 func (s *S3Backend) Put(ctx context.Context, path string, data []byte) error {
+	start := time.Now()
 	err := withRetry(ctx, 3, func() error {
 		_, err := s.client.PutObject(ctx, &s3.PutObjectInput{
 			Bucket: aws.String(s.bucketName),
@@ -90,23 +126,27 @@ func (s *S3Backend) Put(ctx context.Context, path string, data []byte) error {
 		})
 		return err
 	})
-
+	s.record("PutObject", int64(len(data)), start, err)
 	return err
 }
 
 func (s *S3Backend) Get(ctx context.Context, path string) ([]byte, error) {
+	start := time.Now()
 	resp, err := s.client.GetObject(ctx, &s3.GetObjectInput{
 		Bucket: aws.String(s.bucketName),
 		Key:    aws.String(path),
 	})
 	if err != nil {
+		s.record("GetObject", 0, start, err)
 		return nil, err
 	}
 	defer func() { _ = resp.Body.Close() }()
 
 	buf := new(bytes.Buffer)
-	if _, err := io.Copy(buf, resp.Body); err != nil {
-		return nil, err
+	_, copyErr := io.Copy(buf, resp.Body)
+	s.record("GetObject", int64(buf.Len()), start, copyErr)
+	if copyErr != nil {
+		return nil, copyErr
 	}
 	return buf.Bytes(), nil
 }
@@ -120,7 +160,9 @@ func (s *S3Backend) List(ctx context.Context, prefix string) ([]string, error) {
 	})
 
 	for paginator.HasMorePages() {
+		start := time.Now()
 		page, err := paginator.NextPage(ctx)
+		s.record("ListObjectsV2", 0, start, err)
 		if err != nil {
 			return nil, err
 		}
@@ -134,10 +176,12 @@ func (s *S3Backend) List(ctx context.Context, prefix string) ([]string, error) {
 }
 
 func (s *S3Backend) Stream(ctx context.Context, path string) (io.ReadCloser, error) {
+	start := time.Now()
 	resp, err := s.client.GetObject(ctx, &s3.GetObjectInput{
 		Bucket: aws.String(s.bucketName),
 		Key:    aws.String(path),
 	})
+	s.record("GetObject", 0, start, err)
 	if err != nil {
 		return nil, err
 	}
@@ -146,18 +190,22 @@ func (s *S3Backend) Stream(ctx context.Context, path string) (io.ReadCloser, err
 }
 
 func (s *S3Backend) Delete(ctx context.Context, path string) error {
+	start := time.Now()
 	_, err := s.client.DeleteObject(ctx, &s3.DeleteObjectInput{
 		Bucket: aws.String(s.bucketName),
 		Key:    aws.String(path),
 	})
+	s.record("DeleteObject", 0, start, err)
 	return err
 }
 
 func (s *S3Backend) Exists(ctx context.Context, path string) (bool, error) {
+	start := time.Now()
 	_, err := s.client.HeadObject(ctx, &s3.HeadObjectInput{
 		Bucket: aws.String(s.bucketName),
 		Key:    aws.String(path),
 	})
+	s.record("HeadObject", 0, start, err)
 	if err != nil {
 		var ae smithy.APIError
 		if errors.As(err, &ae) && ae.ErrorCode() == "NotFound" {
@@ -169,10 +217,12 @@ func (s *S3Backend) Exists(ctx context.Context, path string) (bool, error) {
 }
 
 func (s *S3Backend) Stat(ctx context.Context, path string) (*FileInfo, error) {
+	start := time.Now()
 	resp, err := s.client.HeadObject(ctx, &s3.HeadObjectInput{
 		Bucket: aws.String(s.bucketName),
 		Key:    aws.String(path),
 	})
+	s.record("HeadObject", 0, start, err)
 	if err != nil {
 		return nil, err
 	}
@@ -198,20 +248,24 @@ func (s3b *S3Backend) Move(ctx context.Context, oldPath, newPath string) error {
 	ctx, cancel := withTimeoutIfNone(ctx, MOVE_TIMEOUT)
 	defer cancel()
 
+	copyStart := time.Now()
 	_, err := s3b.client.CopyObject(ctx, &s3.CopyObjectInput{
 		Bucket:     aws.String(s3b.bucketName),
 		CopySource: aws.String(s3b.bucketName + "/" + oldPath),
 		Key:        aws.String(newPath),
 	})
+	s3b.record("CopyObject", 0, copyStart, err)
 	if err != nil {
 		return fmt.Errorf("failed to copy object: %w", err)
 	}
 
 	// Delete the old object synchronously to ensure consistency
+	delStart := time.Now()
 	_, err = s3b.client.DeleteObject(ctx, &s3.DeleteObjectInput{
 		Bucket: aws.String(s3b.bucketName),
 		Key:    aws.String(oldPath),
 	})
+	s3b.record("DeleteObject", 0, delStart, err)
 	if err != nil {
 		// Log but don't fail — the copy succeeded, old object is just orphaned
 		log.Printf("warning: failed to delete old object %s after move: %v\n", oldPath, err)
@@ -233,7 +287,9 @@ func (s *S3Backend) DeleteFolder(ctx context.Context, prefix string) error {
 	var batch []types.ObjectIdentifier
 
 	for paginator.HasMorePages() {
+		start := time.Now()
 		page, err := paginator.NextPage(ctx)
+		s.record("ListObjectsV2", 0, start, err)
 		if err != nil {
 			return fmt.Errorf("failed to list objects: %w", err)
 		}
@@ -259,10 +315,12 @@ func (s *S3Backend) DeleteFolder(ctx context.Context, prefix string) error {
 }
 
 func (s *S3Backend) deleteBatch(ctx context.Context, objects []types.ObjectIdentifier) error {
+	start := time.Now()
 	_, err := s.client.DeleteObjects(ctx, &s3.DeleteObjectsInput{
 		Bucket: aws.String(s.bucketName),
 		Delete: &types.Delete{Objects: objects},
 	})
+	s.record("DeleteObjects", int64(len(objects)), start, err)
 	if err != nil {
 		return fmt.Errorf("failed to delete batch (%d items): %w", len(objects), err)
 	}
