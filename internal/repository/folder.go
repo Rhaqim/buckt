@@ -81,13 +81,51 @@ func (f *FolderRepository) GetTrashFolder(ctx context.Context, user_id string) (
 	return lookupOrCreateTrashFolder(ctx, f.db.DB, user_id)
 }
 
+// lookupOrCreateTrashFolderTx finds (or creates) the user's reserved top-level
+// trash folder using the given transaction/session, WITHOUT opening its own
+// transaction — so callers already inside a transaction (e.g. DeleteFolder) can
+// reuse the exact same invariant and race handling. The trash folder is
+// uniquely identified by (user_id, name=__trash__, parent_id IS NULL) so it can
+// never be confused with a user-created nested folder of the same name; keeping
+// this in one place is important because that invariant is security-relevant.
+func lookupOrCreateTrashFolderTx(ctx context.Context, tx *gorm.DB, user_id string) (*model.FolderModel, error) {
+	var trash model.FolderModel
+	err := tx.WithContext(ctx).
+		Where("user_id = ? AND name = ? AND parent_id IS NULL", user_id, constant.TRASH_FOLDER_NAME).
+		First(&trash).Error
+	if err == nil {
+		return &trash, nil
+	}
+	if !errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, err
+	}
+
+	newTrash := model.FolderModel{
+		UserID:      user_id,
+		Name:        constant.TRASH_FOLDER_NAME,
+		Description: "Trash",
+		Path:        "/" + user_id + "/" + constant.TRASH_FOLDER_NAME,
+	}
+	if err := tx.WithContext(ctx).Create(&newTrash).Error; err != nil {
+		// Possible race: another writer created it just now — re-select the winner.
+		var raced model.FolderModel
+		if rerr := tx.WithContext(ctx).
+			Where("user_id = ? AND name = ? AND parent_id IS NULL", user_id, constant.TRASH_FOLDER_NAME).
+			First(&raced).Error; rerr == nil {
+			return &raced, nil
+		}
+		return nil, err
+	}
+	return &newTrash, nil
+}
+
 // lookupOrCreateTrashFolder is the shared implementation used by both the
 // folder repository and the file repository (which can't depend on the
-// folder repo directly without a circular import).
+// folder repo directly without a circular import). It wraps the tx-scoped
+// helper in a transaction so a concurrent create can't insert duplicate rows.
 func lookupOrCreateTrashFolder(ctx context.Context, db *gorm.DB, user_id string) (*model.FolderModel, error) {
+	// Fast path: try to find the existing reserved trash folder without a tx.
 	var trash model.FolderModel
-
-	// Fast path: try to find the existing reserved trash folder
 	err := db.WithContext(ctx).
 		Where("user_id = ? AND name = ? AND parent_id IS NULL", user_id, constant.TRASH_FOLDER_NAME).
 		First(&trash).Error
@@ -98,49 +136,16 @@ func lookupOrCreateTrashFolder(ctx context.Context, db *gorm.DB, user_id string)
 		return nil, err
 	}
 
-	// Not found — create it inside a transaction so concurrent creators
-	// don't both insert duplicate rows. After the insert (or on any error),
-	// re-select to return whichever row actually won the race.
+	var result *model.FolderModel
 	txErr := db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		// Re-check inside the transaction in case another writer raced ahead
-		var existing model.FolderModel
-		recheckErr := tx.
-			Where("user_id = ? AND name = ? AND parent_id IS NULL", user_id, constant.TRASH_FOLDER_NAME).
-			First(&existing).Error
-		if recheckErr == nil {
-			trash = existing
-			return nil
-		}
-		if !errors.Is(recheckErr, gorm.ErrRecordNotFound) {
-			return recheckErr
-		}
-
-		path := "/" + user_id + "/" + constant.TRASH_FOLDER_NAME
-		newTrash := model.FolderModel{
-			UserID:      user_id,
-			Name:        constant.TRASH_FOLDER_NAME,
-			Description: "Trash",
-			Path:        path,
-		}
-		if err := tx.Create(&newTrash).Error; err != nil {
-			// Possible race: another transaction created it just now.
-			// Re-select and return that one.
-			var raced model.FolderModel
-			if rerr := tx.
-				Where("user_id = ? AND name = ? AND parent_id IS NULL", user_id, constant.TRASH_FOLDER_NAME).
-				First(&raced).Error; rerr == nil {
-				trash = raced
-				return nil
-			}
-			return err
-		}
-		trash = newTrash
-		return nil
+		var terr error
+		result, terr = lookupOrCreateTrashFolderTx(ctx, tx, user_id)
+		return terr
 	})
 	if txErr != nil {
 		return nil, txErr
 	}
-	return &trash, nil
+	return result, nil
 }
 
 // GetFolders implements domain.FolderRepository.
@@ -165,6 +170,43 @@ func (f *FolderRepository) GetFoldersPaginated(ctx context.Context, parent_id uu
 		Order("created_at DESC").
 		Find(&folders).Error
 	return folders, err
+}
+
+// rewriteDescendantPaths moves the stored path of every folder and file under
+// oldPrefix to sit under newPrefix instead. Both prefixes must end in "/". This
+// is the shared subtree path-rewrite used by move/rename/delete/restore; the
+// LIKE ... ESCAPE guards against `%`/`_` in names, and SUBSTR splices the tail
+// after the old prefix onto the new one.
+func rewriteDescendantPaths(tx *gorm.DB, oldPrefix, newPrefix string) error {
+	prefixLen := len(oldPrefix)
+	for _, m := range []any{&model.FolderModel{}, &model.FileModel{}} {
+		if err := tx.Model(m).
+			Where("path LIKE ? ESCAPE '\\'", escapeLike(oldPrefix)+"%").
+			Update("path", gorm.Expr("? || SUBSTR(path, ?)", newPrefix, prefixLen+1)).Error; err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// collectFileMoves returns the (oldPath, newPath) pairs for every file under
+// oldPath so the caller can relay them to the storage backend. Prefixes are the
+// folder paths with a trailing "/".
+func collectFileMoves(tx *gorm.DB, oldPath, newPath string) ([]model.PathMove, error) {
+	oldPrefix := oldPath + "/"
+	newPrefix := newPath + "/"
+	var files []model.FileModel
+	if err := tx.Where("path LIKE ? ESCAPE '\\'", escapeLike(oldPrefix)+"%").Find(&files).Error; err != nil {
+		return nil, err
+	}
+	moves := make([]model.PathMove, 0, len(files))
+	for _, file := range files {
+		moves = append(moves, model.PathMove{
+			Old: file.Path,
+			New: newPrefix + strings.TrimPrefix(file.Path, oldPrefix),
+		})
+	}
+	return moves, nil
 }
 
 // MoveFolder implements domain.FolderRepository.
@@ -208,30 +250,14 @@ func (f *FolderRepository) MoveFolder(ctx context.Context, folder_id uuid.UUID, 
 	}
 
 	return f.db.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := tx.Model(&folder).Updates(map[string]interface{}{
+		if err := tx.Model(&folder).Updates(map[string]any{
 			"path":      newPath,
 			"parent_id": newParentFolder.ID,
 		}).Error; err != nil {
 			return err
 		}
 
-		oldPrefix := oldPath + "/"
-		newPrefix := newPath + "/"
-		prefixLen := len(oldPrefix)
-
-		if err := tx.Model(&model.FolderModel{}).
-			Where("path LIKE ? ESCAPE '\\'", escapeLike(oldPrefix)+"%").
-			Update("path", gorm.Expr("? || SUBSTR(path, ?)", newPrefix, prefixLen+1)).Error; err != nil {
-			return err
-		}
-
-		if err := tx.Model(&model.FileModel{}).
-			Where("path LIKE ? ESCAPE '\\'", escapeLike(oldPrefix)+"%").
-			Update("path", gorm.Expr("? || SUBSTR(path, ?)", newPrefix, prefixLen+1)).Error; err != nil {
-			return err
-		}
-
-		return nil
+		return rewriteDescendantPaths(tx, oldPath+"/", newPath+"/")
 	})
 }
 
@@ -249,30 +275,14 @@ func (f *FolderRepository) RenameFolder(ctx context.Context, user_id string, fol
 	newPath := strings.TrimSuffix(folder.Path, "/"+folder.Name) + "/" + new_name
 
 	return f.db.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := tx.Model(&folder).Updates(map[string]interface{}{
+		if err := tx.Model(&folder).Updates(map[string]any{
 			"name": new_name,
 			"path": newPath,
 		}).Error; err != nil {
 			return err
 		}
 
-		oldPrefix := oldPath + "/"
-		newPrefix := newPath + "/"
-		prefixLen := len(oldPrefix)
-
-		if err := tx.Model(&model.FolderModel{}).
-			Where("path LIKE ? ESCAPE '\\'", escapeLike(oldPrefix)+"%").
-			Update("path", gorm.Expr("? || SUBSTR(path, ?)", newPrefix, prefixLen+1)).Error; err != nil {
-			return err
-		}
-
-		if err := tx.Model(&model.FileModel{}).
-			Where("path LIKE ? ESCAPE '\\'", escapeLike(oldPrefix)+"%").
-			Update("path", gorm.Expr("? || SUBSTR(path, ?)", newPrefix, prefixLen+1)).Error; err != nil {
-			return err
-		}
-
-		return nil
+		return rewriteDescendantPaths(tx, oldPath+"/", newPath+"/")
 	})
 }
 
@@ -302,34 +312,13 @@ func (f *FolderRepository) DeleteFolder(
 			parent_id = folder.ParentID.String()
 		}
 
-		// Get the user's reserved top-level trash folder (created if missing).
-		// Scoped by parent_id IS NULL so it can't be confused with a user-
-		// created nested folder.
-		var trash model.FolderModel
-		trashErr := tx.
-			Where("user_id = ? AND name = ? AND parent_id IS NULL", folder.UserID, constant.TRASH_FOLDER_NAME).
-			First(&trash).Error
-		if errors.Is(trashErr, gorm.ErrRecordNotFound) {
-			trash = model.FolderModel{
-				UserID:      folder.UserID,
-				Name:        constant.TRASH_FOLDER_NAME,
-				Description: "Trash",
-				Path:        "/" + folder.UserID + "/" + constant.TRASH_FOLDER_NAME,
-			}
-			if err := tx.Create(&trash).Error; err != nil {
-				// Concurrent creator may have won — re-select
-				var raced model.FolderModel
-				if rerr := tx.
-					Where("user_id = ? AND name = ? AND parent_id IS NULL", folder.UserID, constant.TRASH_FOLDER_NAME).
-					First(&raced).Error; rerr == nil {
-					trash = raced
-				} else {
-					return err
-				}
-			}
-		} else if trashErr != nil {
-			return trashErr
+		// Get the user's reserved top-level trash folder (created if missing),
+		// reusing the shared invariant helper on the current transaction.
+		trashPtr, err := lookupOrCreateTrashFolderTx(ctx, tx, folder.UserID)
+		if err != nil {
+			return err
 		}
+		trash := *trashPtr
 
 		// Refuse to delete the trash folder itself
 		if folder.ID == trash.ID {
@@ -360,45 +349,101 @@ func (f *FolderRepository) DeleteFolder(
 		newPath = trash.Path + "/" + newName
 
 		// Collect all descendant file paths BEFORE the rewrite so we can return
-		// the (oldPath, newPath) pairs to the caller
-		oldPrefix := oldPath + "/"
-		newPrefix := newPath + "/"
-
-		var files []model.FileModel
-		if err := tx.Where("path LIKE ? ESCAPE '\\'", escapeLike(oldPrefix)+"%").Find(&files).Error; err != nil {
+		// the (oldPath, newPath) pairs to the caller.
+		fileMoves, err = collectFileMoves(tx, oldPath, newPath)
+		if err != nil {
 			return err
 		}
-		for _, file := range files {
-			fileMoves = append(fileMoves, model.PathMove{
-				Old: file.Path,
-				New: newPrefix + strings.TrimPrefix(file.Path, oldPrefix),
-			})
-		}
 
-		if err := tx.Model(&folder).Updates(map[string]interface{}{
+		// Update by a bare model keyed on ID, NOT tx.Model(&folder): folder was
+		// loaded with Preload("Files"/"Folders"), and Updates on an
+		// association-loaded struct makes GORM re-insert those preloaded rows,
+		// hitting a duplicate-key error when the folder is non-empty.
+		if err := tx.Model(&model.FolderModel{}).Where("id = ?", folder.ID).Updates(map[string]any{
 			"name":      newName,
 			"path":      newPath,
 			"parent_id": trash.ID,
+			// Remember where it came from so restore can return it here.
+			"origin_parent_id": folder.ParentID,
 		}).Error; err != nil {
 			return err
 		}
 
-		prefixLen := len(oldPrefix)
-
-		if err := tx.Model(&model.FolderModel{}).
-			Where("path LIKE ? ESCAPE '\\'", escapeLike(oldPrefix)+"%").
-			Update("path", gorm.Expr("? || SUBSTR(path, ?)", newPrefix, prefixLen+1)).Error; err != nil {
-			return err
-		}
-
-		if err := tx.Model(&model.FileModel{}).
-			Where("path LIKE ? ESCAPE '\\'", escapeLike(oldPrefix)+"%").
-			Update("path", gorm.Expr("? || SUBSTR(path, ?)", newPrefix, prefixLen+1)).Error; err != nil {
+		if err := rewriteDescendantPaths(tx, oldPath+"/", newPath+"/"); err != nil {
 			return err
 		}
 
 		// Run backend operation BEFORE commit. If it fails, the transaction
 		// rolls back and all path rewrites are undone.
+		if beforeCommit != nil {
+			if err := beforeCommit(oldPath, newPath, fileMoves); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	return
+}
+
+// RestoreFolder moves a trashed folder (and its whole subtree) to target — its
+// origin folder resolved by the caller, or root as a fallback — and clears its
+// origin marker. Mirrors DeleteFolder's move branch in reverse: descendant
+// paths are rewritten and the beforeCommit callback runs inside the transaction
+// so a backend-move failure rolls everything back.
+func (f *FolderRepository) RestoreFolder(
+	ctx context.Context,
+	folder_id uuid.UUID,
+	target uuid.UUID,
+	beforeCommit func(oldPath, newPath string, fileMoves []model.PathMove) error,
+) (oldPath, newPath string, fileMoves []model.PathMove, err error) {
+	err = f.db.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var folder model.FolderModel
+		if err := tx.Where("id = ?", folder_id).First(&folder).Error; err != nil {
+			return err
+		}
+
+		var dest model.FolderModel
+		if err := tx.Where("id = ?", target).First(&dest).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return fmt.Errorf("restore target folder not found: %w", buckterr.ErrNotFound)
+			}
+			return err
+		}
+
+		// Never restore a folder into itself or its own subtree.
+		if dest.ID == folder.ID || dest.Path == folder.Path || strings.HasPrefix(dest.Path, folder.Path+"/") {
+			return fmt.Errorf("invalid restore target: cannot restore a folder into itself")
+		}
+
+		oldPath = folder.Path
+
+		newName, err := uniqueTrashName(ctx, tx, dest.ID, folder.Name)
+		if err != nil {
+			return err
+		}
+		newPath = strings.TrimSuffix(dest.Path, "/") + "/" + newName
+
+		fileMoves, err = collectFileMoves(tx, oldPath, newPath)
+		if err != nil {
+			return err
+		}
+
+		// Bare model keyed on ID (see DeleteFolder) so no preloaded association is
+		// re-saved.
+		if err := tx.Model(&model.FolderModel{}).Where("id = ?", folder.ID).Updates(map[string]any{
+			"name":      newName,
+			"path":      newPath,
+			"parent_id": dest.ID,
+			// Clear the origin marker — the folder is no longer in trash.
+			"origin_parent_id": nil,
+		}).Error; err != nil {
+			return err
+		}
+
+		if err := rewriteDescendantPaths(tx, oldPath+"/", newPath+"/"); err != nil {
+			return err
+		}
+
 		if beforeCommit != nil {
 			if err := beforeCommit(oldPath, newPath, fileMoves); err != nil {
 				return err
@@ -434,27 +479,9 @@ func (f *FolderRepository) ScrubFolder(ctx context.Context, user_id string, fold
 // "Photos (3)", etc. Folder names are not split on extensions since folders
 // don't have them.
 func uniqueTrashName(ctx context.Context, db *gorm.DB, trashID uuid.UUID, name string) (string, error) {
-	count, err := countFolderName(ctx, db, trashID, name)
-	if err != nil {
-		return "", err
-	}
-	if count == 0 {
-		return name, nil
-	}
-
-	// Try suffixes until we find one that's free
-	for i := 2; i < 10000; i++ {
-		candidate := fmt.Sprintf("%s (%d)", name, i)
-		count, err := countFolderName(ctx, db, trashID, candidate)
-		if err != nil {
-			return "", err
-		}
-		if count == 0 {
-			return candidate, nil
-		}
-	}
-	// Fallback: use a random uuid suffix
-	return name + "-" + uuid.New().String()[:8], nil
+	return uniqueChildName(name, false, func(candidate string) (int64, error) {
+		return countFolderName(ctx, db, trashID, candidate)
+	})
 }
 
 // asNotFound maps GORM's record-not-found to the public buckterr.ErrNotFound

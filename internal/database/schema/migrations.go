@@ -40,7 +40,28 @@ func migrations() []Migration {
 			Name:    "preserve-legacy-trash",
 			Up:      migratePreserveLegacyTrash,
 		},
+		{
+			Version: 3,
+			Name:    "trash-origin-parent",
+			Up:      migrateTrashOriginParent,
+		},
 	}
+}
+
+// migrateTrashOriginParent adds the nullable origin_parent_id column to both
+// folder and file tables. It records where an item lived before being moved to
+// trash so restore returns it to its original location instead of root. The
+// change is additive and non-destructive: AutoMigrate only ADDs the missing
+// column, existing rows get NULL (they restore to root, the prior behavior),
+// and on a fresh database V1 already created the column so this is a no-op.
+func migrateTrashOriginParent(ctx context.Context, tx *gorm.DB, prefix string, d Dialect) error {
+	if err := tx.AutoMigrate(&model.FolderModel{}); err != nil {
+		return fmt.Errorf("folder origin_parent_id: %w", err)
+	}
+	if err := tx.AutoMigrate(&model.FileModel{}); err != nil {
+		return fmt.Errorf("file origin_parent_id: %w", err)
+	}
+	return nil
 }
 
 // migrateBaseline creates or adopts the folder and file tables from the current

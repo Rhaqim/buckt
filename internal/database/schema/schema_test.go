@@ -117,7 +117,7 @@ func TestApply_PreservesLegacyTrashOnV141Upgrade(t *testing.T) {
 	// Ledger recorded both migrations.
 	var versions []int
 	require.NoError(t, gdb.Raw(`SELECT version FROM buckt_schema_migrations ORDER BY version`).Scan(&versions).Error)
-	assert.Equal(t, []int{1, 2}, versions)
+	assert.Equal(t, []int{1, 2, 3}, versions)
 
 	// deleted_at columns are gone from both tables.
 	assert.False(t, colExists(t, gdb, "file_models", "deleted_at"), "file_models.deleted_at should be dropped")
@@ -180,7 +180,7 @@ func TestApply_IsIdempotent(t *testing.T) {
 
 	var versions []int
 	require.NoError(t, gdb.Raw(`SELECT version FROM buckt_schema_migrations ORDER BY version`).Scan(&versions).Error)
-	assert.Equal(t, []int{1, 2}, versions)
+	assert.Equal(t, []int{1, 2, 3}, versions)
 }
 
 func TestApply_FreshDatabase(t *testing.T) {
@@ -196,7 +196,7 @@ func TestApply_FreshDatabase(t *testing.T) {
 
 	var versions []int
 	require.NoError(t, gdb.Raw(`SELECT version FROM buckt_schema_migrations ORDER BY version`).Scan(&versions).Error)
-	assert.Equal(t, []int{1, 2}, versions)
+	assert.Equal(t, []int{1, 2, 3}, versions)
 }
 
 func TestApply_WithTablePrefix(t *testing.T) {
@@ -212,7 +212,7 @@ func TestApply_WithTablePrefix(t *testing.T) {
 
 	var versions []int
 	require.NoError(t, gdb.Raw(`SELECT version FROM `+prefix+`buckt_schema_migrations ORDER BY version`).Scan(&versions).Error)
-	assert.Equal(t, []int{1, 2}, versions)
+	assert.Equal(t, []int{1, 2, 3}, versions)
 
 	// No un-prefixed tables were created.
 	assert.False(t, colExists(t, gdb, "folder_models", "id"))

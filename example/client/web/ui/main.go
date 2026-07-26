@@ -9,6 +9,7 @@ import (
 
 	"github.com/Rhaqim/buckt"
 	"github.com/Rhaqim/buckt/client/web"
+	"github.com/Rhaqim/buckt/pkg/metrics"
 )
 
 func main() {
@@ -37,7 +38,8 @@ func main() {
 		config = buckt.WithDB(buckt.Postgres, db)
 	}
 
-	client, err := buckt.Default(buckt.FlatNameSpaces(flatNamespaces), config)
+	// Enable built-in backend metrics so the /metrics endpoint has data to show.
+	client, err := buckt.Default(buckt.FlatNameSpaces(flatNamespaces), config, buckt.WithMetrics(metrics.NewCollector()))
 	if err != nil {
 		log.Fatalf("Failed to initialize Buckt: %v", err)
 	}

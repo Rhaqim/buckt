@@ -24,6 +24,7 @@ import (
 	"github.com/Rhaqim/buckt/internal/repository"
 	"github.com/Rhaqim/buckt/internal/service"
 	"github.com/Rhaqim/buckt/pkg/logger"
+	"github.com/Rhaqim/buckt/pkg/metrics"
 )
 
 type Client struct {
@@ -37,6 +38,7 @@ type Client struct {
 
 	logger   domain.BucktLogger
 	lruCache domain.LRUCache
+	metrics  metrics.Recorder
 
 	fileService   domain.FileService
 	folderService domain.FolderService
@@ -80,7 +82,7 @@ func New(conf Config, opts ...ConfigFunc) (*Client, error) {
 	cacheManager, lruCache := initializeCache(conf.Cache, bucktLog)
 
 	// Initialise Backend
-	backend := resolveBackend(conf.MediaDir, conf.Backend, bucktLog, lruCache)
+	backend := resolveBackend(conf.MediaDir, conf.Backend, bucktLog, lruCache, conf.Metrics)
 
 	// Max file size: 0 means no limit (backward compatible)
 	maxFileSize := conf.MaxFileSize
@@ -114,6 +116,7 @@ func New(conf Config, opts ...ConfigFunc) (*Client, error) {
 		db:                db,
 		logger:            bucktLog,
 		lruCache:          lruCache,
+		metrics:           conf.Metrics,
 		flatnameSpaces:    conf.FlatNameSpaces,
 		silence:           logConf.Silence,
 		maxFileSize:       maxFileSize,
@@ -173,6 +176,37 @@ func (b *Client) Close() error {
 // limit to HTTP handlers so they can reject oversized uploads early.
 func (b *Client) MaxFileSize() int64 {
 	return b.maxFileSize
+}
+
+// CacheStats returns the file cache hit and miss counts. Reads served from the
+// cache issue no backend Get, so a high hit ratio directly reduces backend read
+// operations (e.g. Cloudflare R2 Class B operations).
+func (b *Client) CacheStats() (hits, misses uint64) {
+	return b.lruCache.Hits(), b.lruCache.Misses()
+}
+
+// MetricsSnapshot returns the per-backend, per-operation metrics collected so
+// far, plus true, when metrics were configured with a *metrics.Collector via
+// WithMetrics. It returns (nil, false) when no metrics are configured or a
+// custom (non-Collector) recorder was supplied — read those directly instead.
+func (b *Client) MetricsSnapshot() (map[string]map[string]metrics.Stat, bool) {
+	if c, ok := b.metrics.(*metrics.Collector); ok {
+		return c.Snapshot(), true
+	}
+	return nil, false
+}
+
+// StorageBytes returns the total size, in bytes, of all stored files. Trashed
+// files are included because their blobs still occupy backend storage until they
+// are permanently deleted. This is the figure object stores like R2 bill for
+// storage. Pass a per-request context to bound the query.
+func (b *Client) StorageBytes(ctx context.Context) (int64, error) {
+	var total int64
+	if err := b.db.WithContext(ctx).Model(&model.FileModel{}).
+		Select("COALESCE(SUM(size), 0)").Scan(&total).Error; err != nil {
+		return 0, b.logger.WrapError("failed to compute storage bytes", err)
+	}
+	return total, nil
 }
 
 /* Folder Methods */
@@ -405,6 +439,33 @@ func (b *Client) DeleteFilePermanently(file_id string) (string, error) {
 	return b.DeleteFilePermanentlyContext(context.Background(), file_id)
 }
 
+// RestoreFile moves a trashed file back to its original location (or the user's
+// root folder if that location no longer exists) and removes it from trash.
+//
+// Parameters:
+//   - user_id: The ID of the user who owns the file.
+//   - file_id: The ID of the trashed file to restore.
+//
+// Returns:
+//   - error: An error if the restore fails, otherwise nil.
+func (b *Client) RestoreFile(user_id, file_id string) error {
+	return b.RestoreFileContext(context.Background(), user_id, file_id)
+}
+
+// RestoreFolder moves a trashed folder (and its subtree) back to its original
+// location (or the user's root folder if that location no longer exists) and
+// removes it from trash.
+//
+// Parameters:
+//   - user_id: The ID of the user who owns the folder.
+//   - folder_id: The ID of the trashed folder to restore.
+//
+// Returns:
+//   - error: An error if the restore fails, otherwise nil.
+func (b *Client) RestoreFolder(user_id, folder_id string) error {
+	return b.RestoreFolderContext(context.Background(), user_id, folder_id)
+}
+
 /* Contextual Folder Methods */
 
 // NewFolderContext creates a new folder for a user within a specified parent folder.
@@ -514,6 +575,22 @@ func (b *Client) DeleteFolderPermanentlyContext(ctx context.Context, user_id, fo
 // GetTrashFolderContext returns the user's trash folder with its contents preloaded.
 func (b *Client) GetTrashFolderContext(ctx context.Context, user_id string) (*model.FolderModel, error) {
 	return b.folderService.GetTrashFolder(ctx, user_id)
+}
+
+// RestoreFolderContext moves a trashed folder (and its subtree) back to the
+// folder it was in before it was trashed, or the user's root folder if that
+// original location no longer exists. Blobs are physically moved in
+// nested-namespace mode.
+//
+// Parameters:
+//   - ctx: The context for the operation.
+//   - user_id: The ID of the user who owns the folder.
+//   - folder_id: The ID of the trashed folder to restore.
+//
+// Returns:
+//   - error: An error if the restore fails, otherwise nil.
+func (b *Client) RestoreFolderContext(ctx context.Context, user_id, folder_id string) error {
+	return b.folderService.RestoreFolder(ctx, user_id, folder_id)
 }
 
 /* File Methods */
@@ -688,6 +765,21 @@ func (b *Client) DeleteFilePermanentlyContext(ctx context.Context, file_id strin
 	return b.fileService.ScrubFile(ctx, file_id)
 }
 
+// RestoreFileContext moves a trashed file back to the folder it was in before
+// it was trashed, or the user's root folder if that original location no longer
+// exists. The blob is physically moved in nested-namespace mode.
+//
+// Parameters:
+//   - ctx: The context for the operation.
+//   - user_id: The ID of the user who owns the file.
+//   - file_id: The ID of the trashed file to restore.
+//
+// Returns:
+//   - error: An error if the restore fails, otherwise nil.
+func (b *Client) RestoreFileContext(ctx context.Context, user_id, file_id string) error {
+	return b.fileService.RestoreFile(ctx, user_id, file_id)
+}
+
 /* Migration */
 
 /* Helper Methods */
@@ -736,7 +828,13 @@ func newAppServices(
 	return folderService, fileService
 }
 
-func resolveBackend(mediaDir string, bc BackendConfig, log domain.BucktLogger, lru domain.LRUCache) Backend {
+func resolveBackend(mediaDir string, bc BackendConfig, log domain.BucktLogger, lru domain.LRUCache, rec metrics.Recorder) Backend {
+	// meter wraps a leaf backend so every operation is recorded. It is a no-op
+	// when rec is nil. In migration mode the leaves (source/target) are metered
+	// individually — never the composite — so per-backend counts stay distinct
+	// and nothing is double-counted.
+	meter := func(b Backend) Backend { return backend.NewMeteredBackend(b, rec) }
+
 	if bc.MigrationEnabled {
 		var source, target Backend
 
@@ -759,7 +857,7 @@ func resolveBackend(mediaDir string, bc BackendConfig, log domain.BucktLogger, l
 		// ensure both source and target are set and different
 		if source == nil || target == nil {
 			log.Errorf("❌ Migration enabled but one of the backends is nil — falling back to local")
-			return backend.NewLocalFileSystemService(log, mediaDir, lru)
+			return meter(backend.NewLocalFileSystemService(log, mediaDir, lru))
 		}
 
 		// Compare by pointer identity — only reject if the caller passed the
@@ -768,27 +866,31 @@ func resolveBackend(mediaDir string, bc BackendConfig, log domain.BucktLogger, l
 		// migration targets and should not be rejected here. Users are responsible
 		// for ensuring their source and target point to different underlying
 		// storage locations.
+		//
+		// NOTE: this identity check runs on the UNWRAPPED backends; metering
+		// below would otherwise produce two distinct wrapper instances and defeat
+		// the comparison.
 		if source == target {
 			log.Errorf("❌ Migration enabled but source and target are the same instance — disabling migration and using source only")
-			return source
+			return meter(source)
 		}
 
 		log.Infof("🔄 Migration mode: %s → %s", source.Name(), target.Name())
-		return backend.NewMigrationBackend(log, source, target)
+		return backend.NewMigrationBackend(log, meter(source), meter(target))
 	}
 
 	// Non-migration modes
 	switch {
 	case bc.Source != nil:
-		return resolveIfPlaceholder(bc.Source, mediaDir, log, lru)
+		return meter(resolveIfPlaceholder(bc.Source, mediaDir, log, lru))
 
 	case bc.Target != nil:
 		log.Warn("⚠️ Using target backend as primary because source is missing")
-		return resolveIfPlaceholder(bc.Target, mediaDir, log, lru)
+		return meter(resolveIfPlaceholder(bc.Target, mediaDir, log, lru))
 
 	default:
 		log.Warn("⚠️ No backend configured, falling back to local")
-		return backend.NewLocalFileSystemService(log, mediaDir, lru)
+		return meter(backend.NewLocalFileSystemService(log, mediaDir, lru))
 	}
 }
 

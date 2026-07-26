@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"database/sql"
 	"io"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/Rhaqim/buckt/internal/backend"
@@ -11,14 +13,105 @@ import (
 	"github.com/Rhaqim/buckt/internal/domain"
 	"github.com/Rhaqim/buckt/internal/mocks"
 	"github.com/Rhaqim/buckt/internal/model"
+	"github.com/Rhaqim/buckt/pkg/metrics"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
-func UUIDFromString(name string) uuid.UUID {
-	namespace := uuid.NameSpaceDNS // You can change this to another namespace if needed
-	return uuid.NewSHA1(namespace, []byte(name))
+/* ------------------------------------------------------------------ */
+/* Shared real-DB test harness                                        */
+/*                                                                    */
+/* newTestClient builds a real Client (real services, not mocks) for  */
+/* the integration-style suites in the buckt_*_test.go files. It      */
+/* replaces the five near-identical per-file constructors these tests */
+/* used to carry. Defaults: SQLite (temp file), temp media dir,       */
+/* silent logs, flat namespaces, no size limit. Override via options. */
+/* ------------------------------------------------------------------ */
+
+type testClientConfig struct {
+	driver         DBDrivers
+	flatNameSpaces bool
+	maxFileSize    int64
+	metrics        metrics.Recorder
+}
+
+type testClientOption func(*testClientConfig)
+
+// withPostgres runs the Client against the Postgres in BUCKT_PG_DSN (the test
+// skips when it is unset). Nested + Postgres is the production configuration.
+func withPostgres() testClientOption { return func(c *testClientConfig) { c.driver = Postgres } }
+
+// withNested uses nested-namespace mode so trash/move/restore exercise physical
+// backend blob moves, not just DB path rewrites.
+func withNested() testClientOption { return func(c *testClientConfig) { c.flatNameSpaces = false } }
+
+// withMaxFileSize caps the upload size (used to trigger ErrFileTooLarge).
+func withMaxFileSize(n int64) testClientOption {
+	return func(c *testClientConfig) { c.maxFileSize = n }
+}
+
+// withMetrics attaches a metrics recorder so backend ops are collected.
+func withMetrics(m metrics.Recorder) testClientOption {
+	return func(c *testClientConfig) { c.metrics = m }
+}
+
+// pgDSN returns the Postgres DSN from BUCKT_PG_DSN or skips the test.
+func pgDSN(t *testing.T) string {
+	t.Helper()
+	dsn := os.Getenv("BUCKT_PG_DSN")
+	if dsn == "" {
+		t.Skip("BUCKT_PG_DSN not set; skipping Postgres integration test")
+	}
+	return dsn
+}
+
+// dropBucktTables clears any existing buckt schema so a Postgres test starts
+// from a fresh slate (and re-runs the migrations cleanly).
+func dropBucktTables(t *testing.T, sqlDB *sql.DB) {
+	t.Helper()
+	for _, tbl := range []string{"file_models", "folder_models", "buckt_schema_migrations", "buckt_migration_models"} {
+		_, err := sqlDB.Exec("DROP TABLE IF EXISTS " + tbl + " CASCADE")
+		require.NoError(t, err)
+	}
+}
+
+func newTestClient(t *testing.T, opts ...testClientOption) *Client {
+	t.Helper()
+
+	cfg := testClientConfig{driver: SQLite, flatNameSpaces: true}
+	for _, o := range opts {
+		o(&cfg)
+	}
+
+	dir := t.TempDir()
+
+	var sqlDB *sql.DB
+	var err error
+	switch cfg.driver {
+	case Postgres:
+		sqlDB, err = sql.Open("postgres", pgDSN(t))
+		require.NoError(t, err)
+		t.Cleanup(func() { _ = sqlDB.Close() })
+		dropBucktTables(t, sqlDB)
+	default:
+		sqlDB, err = sql.Open("sqlite3", filepath.Join(dir, "buckt.db"))
+		require.NoError(t, err)
+		t.Cleanup(func() { _ = sqlDB.Close() })
+	}
+
+	client, err := New(Config{
+		DB:             DBConfig{Driver: cfg.driver, Database: sqlDB},
+		MediaDir:       filepath.Join(dir, "media"),
+		Log:            LogConfig{Silence: true},
+		FlatNameSpaces: cfg.flatNameSpaces,
+		MaxFileSize:    cfg.maxFileSize,
+		Metrics:        cfg.metrics,
+	})
+	require.NoError(t, err) // also proves the migrations run cleanly on this driver
+	t.Cleanup(func() { _ = client.Close() })
+	return client
 }
 
 type MockBuckt struct {
@@ -27,10 +120,22 @@ type MockBuckt struct {
 	MockFolderService *mocks.FolderService
 }
 
+// memSQLite opens a throwaway in-memory SQLite DB and registers its cleanup.
+func memSQLite(t *testing.T) *sql.DB {
+	t.Helper()
+	db, err := sql.Open("sqlite3", ":memory:")
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+	return db
+}
+
+// setup builds a Client from the given config and swaps in mock file/folder
+// services. Client cleanup is registered so callers don't repeat it.
 func setup(t *testing.T, bucktOpts Config) MockBuckt {
 	buckt, err := New(bucktOpts)
-	assert.NoError(t, err)
-	assert.NotNil(t, buckt)
+	require.NoError(t, err)
+	require.NotNil(t, buckt)
+	t.Cleanup(func() { _ = buckt.Close() })
 
 	mockFileService := new(mocks.FileService)
 	mockFolderService := new(mocks.FolderService)
@@ -45,19 +150,15 @@ func setup(t *testing.T, bucktOpts Config) MockBuckt {
 	}
 }
 
+// setupBucktTest returns a mock-backed Client (in-memory SQLite). Cleanup for
+// both the DB and the Client is registered via t.Cleanup.
 func setupBucktTest(t *testing.T) MockBuckt {
-	sqlDB, err := sql.Open("sqlite3", ":memory:")
-	assert.NoError(t, err)
-	defer func() { _ = sqlDB.Close() }()
-
-	bucktOpts := Config{
-		DB:             DBConfig{Driver: SQLite, Database: sqlDB},
+	return setup(t, Config{
+		DB:             DBConfig{Driver: SQLite, Database: memSQLite(t)},
 		Log:            LogConfig{LogTerminal: false, Silence: false},
 		MediaDir:       "media",
 		FlatNameSpaces: false,
-	}
-
-	return setup(t, bucktOpts)
+	})
 }
 
 func TestNew(t *testing.T) {
@@ -68,9 +169,7 @@ func TestNew(t *testing.T) {
 	})
 
 	t.Run("SQLite without provided instance", func(t *testing.T) {
-		sqlDB, err := sql.Open("sqlite3", ":memory:")
-		assert.NoError(t, err)
-		defer func() { _ = sqlDB.Close() }()
+		sqlDB := memSQLite(t)
 
 		bucktOpts := Config{
 			DB:             DBConfig{Driver: SQLite, Database: sqlDB},
@@ -120,108 +219,46 @@ func TestNew(t *testing.T) {
 
 }
 
+// requireDefault builds a Client via Default with the given options, asserts it
+// succeeded, and registers its cleanup.
+func requireDefault(t *testing.T, opts ...ConfigFunc) {
+	t.Helper()
+	buckt, err := Default(opts...)
+	require.NoError(t, err)
+	require.NotNil(t, buckt)
+	t.Cleanup(func() { _ = buckt.Close() })
+}
+
+// noopCacheConfig is the standard test cache (no-op manager + a valid ristretto
+// file-cache config).
+func noopCacheConfig() CacheConfig {
+	return CacheConfig{
+		Manager: mocks.NewNoopCache(),
+		FileCacheConfig: FileCacheConfig{
+			NumCounters: 1e7,     // 10M
+			MaxCost:     1 << 30, // 1GB
+			BufferItems: 64,
+		},
+	}
+}
+
 func TestDefault(t *testing.T) {
-	t.Run("With Default", func(t *testing.T) {
-		buckt, err := Default()
-		// Cleanup to ensure the server is closed after the test
-		t.Cleanup(func() {
-			_ = buckt.Close()
-		})
-
-		assert.NoError(t, err)
-		assert.NotNil(t, buckt)
-	})
-
-	t.Run("With FlatNameSpaces", func(t *testing.T) {
-		buckt, err := Default(FlatNameSpaces(true))
-		// Cleanup to ensure the server is closed after the test
-		t.Cleanup(func() {
-			_ = buckt.Close()
-		})
-		assert.NoError(t, err)
-		assert.NotNil(t, buckt)
-	})
-
-	t.Run("With MediaDir", func(t *testing.T) {
-		buckt, err := Default(MediaDir("media"))
-		// Cleanup to ensure the server is closed after the test
-		t.Cleanup(func() {
-			_ = buckt.Close()
-		})
-		assert.NoError(t, err)
-		assert.NotNil(t, buckt)
-	})
-
-	t.Run("With Cache", func(t *testing.T) {
-		fileCacheConfig := FileCacheConfig{
-			NumCounters: 1e7,     // 10M
-			MaxCost:     1 << 30, // 1GB
-			BufferItems: 64,
-		}
-
-		cacheConfig := CacheConfig{
-			Manager:         mocks.NewNoopCache(),
-			FileCacheConfig: fileCacheConfig,
-		}
-
-		buckt, err := Default(WithCache(cacheConfig))
-		// Cleanup to ensure the server is closed after the test
-		t.Cleanup(func() {
-			_ = buckt.Close()
-		})
-		assert.NoError(t, err)
-		assert.NotNil(t, buckt)
-	})
-
+	t.Run("With Default", func(t *testing.T) { requireDefault(t) })
+	t.Run("With FlatNameSpaces", func(t *testing.T) { requireDefault(t, FlatNameSpaces(true)) })
+	t.Run("With MediaDir", func(t *testing.T) { requireDefault(t, MediaDir("media")) })
+	t.Run("With Cache", func(t *testing.T) { requireDefault(t, WithCache(noopCacheConfig())) })
 	t.Run("With Log", func(t *testing.T) {
-		buckt, err := Default(WithLog(LogConfig{LogTerminal: false, Silence: false}))
-		// Cleanup to ensure the server is closed after the test
-		t.Cleanup(func() {
-			_ = buckt.Close()
-		})
-		assert.NoError(t, err)
-		assert.NotNil(t, buckt)
+		requireDefault(t, WithLog(LogConfig{LogTerminal: false, Silence: false}))
 	})
-
-	t.Run("With DB", func(t *testing.T) {
-		sqlDB, err := sql.Open("sqlite3", ":memory:")
-		assert.NoError(t, err)
-		defer func() { _ = sqlDB.Close() }()
-
-		buckt, err := Default(WithDB(SQLite, sqlDB))
-		// Cleanup to ensure the server is closed after the test
-		t.Cleanup(func() {
-			_ = buckt.Close()
-		})
-		assert.NoError(t, err)
-		assert.NotNil(t, buckt)
-	})
-
+	t.Run("With DB", func(t *testing.T) { requireDefault(t, WithDB(SQLite, memSQLite(t))) })
 	t.Run("With all options", func(t *testing.T) {
-		sqlDB, err := sql.Open("sqlite3", ":memory:")
-		assert.NoError(t, err)
-		defer func() { _ = sqlDB.Close() }()
-
-		fileCacheConfig := FileCacheConfig{
-			NumCounters: 1e7,     // 10M
-			MaxCost:     1 << 30, // 1GB
-			BufferItems: 64,
-		}
-
-		cacheConfig := CacheConfig{
-			Manager:         mocks.NewNoopCache(),
-			FileCacheConfig: fileCacheConfig,
-		}
-
-		buckt, err := Default(
+		requireDefault(t,
 			FlatNameSpaces(true),
 			MediaDir("media"),
-			WithCache(cacheConfig),
+			WithCache(noopCacheConfig()),
 			WithLog(LogConfig{LogTerminal: false, Silence: false}),
-			WithDB(SQLite, sqlDB),
+			WithDB(SQLite, memSQLite(t)),
 		)
-		assert.NoError(t, err)
-		assert.NotNil(t, buckt)
 	})
 }
 
@@ -234,11 +271,6 @@ func TestClose(t *testing.T) {
 
 func TestNewFolder(t *testing.T) {
 	buckt := setupBucktTest(t)
-
-	// Ensure cleanup after test execution
-	t.Cleanup(func() {
-		_ = buckt.Close() // Assuming there's a method to clean up resources
-	})
 
 	// Expected folder ID
 	expectedFolderID := "550e8400-e29b-41d4-a716-446655440000"
@@ -261,11 +293,6 @@ func TestNewFolder(t *testing.T) {
 func TestListFolders(t *testing.T) {
 	buckt := setupBucktTest(t)
 
-	// Ensure cleanup after test execution
-	t.Cleanup(func() {
-		_ = buckt.Close() // Assuming there's a method to clean up resources
-	})
-
 	// Mock the expected behavior
 	expectedFolders := []model.FolderModel{
 		{ID: uuid.MustParse("550e8400-e29b-41d4-a716-446655440000"), Name: "folder1", Description: "description1"},
@@ -286,11 +313,6 @@ func TestListFolders(t *testing.T) {
 
 func TestGetFolderWithContent(t *testing.T) {
 	buckt := setupBucktTest(t)
-
-	// Ensure cleanup after test execution
-	t.Cleanup(func() {
-		_ = buckt.Close() // Assuming there's a method to clean up resources
-	})
 
 	// Mock the expected behavior
 	expectedFolder := model.FolderModel{
@@ -322,11 +344,6 @@ func TestGetFolderWithContent(t *testing.T) {
 func TestMoveFolder(t *testing.T) {
 	buckt := setupBucktTest(t)
 
-	// Ensure cleanup after test execution
-	t.Cleanup(func() {
-		_ = buckt.Close() // Assuming there's a method to clean up resources
-	})
-
 	// Mock the expected behavior
 	buckt.MockFolderService.On("MoveFolder", "550e8400-e29b-41d4-a716-446655440000", "550e8400-e29b-41d4-a716-446655440001").
 		Return(nil)
@@ -343,11 +360,6 @@ func TestMoveFolder(t *testing.T) {
 func TestDeleteFolder(t *testing.T) {
 	buckt := setupBucktTest(t)
 
-	// Ensure cleanup after test execution
-	t.Cleanup(func() {
-		_ = buckt.Close() // Assuming there's a method to clean up resources
-	})
-
 	// Mock the expected behavior
 	buckt.MockFolderService.On("DeleteFolder", "550e8400-e29b-41d4-a716-446655440000").
 		Return("550e8400-e29b-41d4-a716-446655440001", nil)
@@ -362,11 +374,6 @@ func TestDeleteFolder(t *testing.T) {
 
 func TestDeleteFolderPermanently(t *testing.T) {
 	buckt := setupBucktTest(t)
-
-	// Ensure cleanup after test execution
-	t.Cleanup(func() {
-		_ = buckt.Close() // Assuming there's a method to clean up resources
-	})
 
 	// Mock the expected behavior
 	buckt.MockFolderService.On("ScrubFolder", "user1", "550e8400-e29b-41d4-a716-446655440000").
@@ -383,11 +390,6 @@ func TestDeleteFolderPermanently(t *testing.T) {
 func TestUploadFile(t *testing.T) {
 	buckt := setupBucktTest(t)
 
-	// Ensure cleanup after test execution
-	t.Cleanup(func() {
-		_ = buckt.Close() // Assuming there's a method to clean up resources
-	})
-
 	// Mock the expected behavior
 	buckt.MockFileService.On("CreateFile", "user1", "folder1", "file1", "text/plain", []byte("file content")).
 		Return("550e8400-e29b-41d4-a716-446655440000", nil)
@@ -403,11 +405,6 @@ func TestUploadFile(t *testing.T) {
 
 func TestGetFile(t *testing.T) {
 	buckt := setupBucktTest(t)
-
-	// Ensure cleanup after test execution
-	t.Cleanup(func() {
-		_ = buckt.Close() // Assuming there's a method to clean up resources
-	})
 
 	// Mock the expected behavior
 	expectedFile := model.FileModel{
@@ -430,11 +427,6 @@ func TestGetFile(t *testing.T) {
 
 func TestGetFileStream(t *testing.T) {
 	buckt := setupBucktTest(t)
-
-	// Ensure cleanup after test execution
-	t.Cleanup(func() {
-		_ = buckt.Close() // Assuming there's a method to clean up resources
-	})
 
 	// Mock the expected behavior
 	expectedFile := model.FileModel{
@@ -462,11 +454,6 @@ func TestGetFileStream(t *testing.T) {
 func TestListFilesMetadata(t *testing.T) {
 	buckt := setupBucktTest(t)
 
-	// Ensure cleanup after test execution
-	t.Cleanup(func() {
-		_ = buckt.Close() // Assuming there's a method to clean up resources
-	})
-
 	// Mock the expected behavior
 	expectedFiles := []model.FileModel{
 		{ID: uuid.MustParse("550e8400-e29b-41d4-a716-446655440000"), Name: "file1", ContentType: "text/plain", Data: []byte("file content")},
@@ -487,11 +474,6 @@ func TestListFilesMetadata(t *testing.T) {
 
 func TestListFiles(t *testing.T) {
 	buckt := setupBucktTest(t)
-
-	// Ensure cleanup after test execution
-	t.Cleanup(func() {
-		_ = buckt.Close() // Assuming there's a method to clean up resources
-	})
 
 	// Mock the expected behavior
 	expectedFiles := []model.FileModel{
@@ -514,11 +496,6 @@ func TestListFiles(t *testing.T) {
 func TestMoveFile(t *testing.T) {
 	buckt := setupBucktTest(t)
 
-	// Ensure cleanup after test execution
-	t.Cleanup(func() {
-		_ = buckt.Close() // Assuming there's a method to clean up resources
-	})
-
 	// Mock the expected behavior
 	buckt.MockFileService.On("MoveFile", "550e8400-e29b-41d4-a716-446655440000", "550e8400-e29b-41d4-a716-446655440001").
 		Return(nil)
@@ -534,11 +511,6 @@ func TestMoveFile(t *testing.T) {
 func TestDeleteFile(t *testing.T) {
 	buckt := setupBucktTest(t)
 
-	// Ensure cleanup after test execution
-	t.Cleanup(func() {
-		_ = buckt.Close() // Assuming there's a method to clean up resources
-	})
-
 	// Mock the expected behavior
 	buckt.MockFileService.On("DeleteFile", "550e8400-e29b-41d4-a716-446655440000").
 		Return("parent1", nil)
@@ -553,11 +525,6 @@ func TestDeleteFile(t *testing.T) {
 
 func TestDeleteFilePermanently(t *testing.T) {
 	buckt := setupBucktTest(t)
-
-	// Ensure cleanup after test execution
-	t.Cleanup(func() {
-		_ = buckt.Close() // Assuming there's a method to clean up resources
-	})
 
 	// Mock the expected behavior
 	buckt.MockFileService.On("ScrubFile", "550e8400-e29b-41d4-a716-446655440000").
@@ -639,7 +606,7 @@ func TestResolveBackend(t *testing.T) {
 			Source:           source,
 			Target:           target,
 		}
-		result := resolveBackend(mediaDir, bc, mockLogger, mockLRU)
+		result := resolveBackend(mediaDir, bc, mockLogger, mockLRU, nil)
 		_, ok := result.(*backend.MigrationBackendService)
 		assert.True(t, ok)
 	})
@@ -649,7 +616,7 @@ func TestResolveBackend(t *testing.T) {
 		bc := BackendConfig{
 			Source: source,
 		}
-		result := resolveBackend(mediaDir, bc, mockLogger, mockLRU)
+		result := resolveBackend(mediaDir, bc, mockLogger, mockLRU, nil)
 		// Placeholder should be replaced with real local backend
 		_, ok := result.(*backend.LocalFileSystemService)
 		assert.True(t, ok)
@@ -660,7 +627,7 @@ func TestResolveBackend(t *testing.T) {
 		bc := BackendConfig{
 			Source: source,
 		}
-		result := resolveBackend(mediaDir, bc, mockLogger, mockLRU)
+		result := resolveBackend(mediaDir, bc, mockLogger, mockLRU, nil)
 		assert.Equal(t, source, result)
 	})
 
@@ -669,14 +636,14 @@ func TestResolveBackend(t *testing.T) {
 		bc := BackendConfig{
 			Target: target,
 		}
-		result := resolveBackend(mediaDir, bc, mockLogger, mockLRU)
+		result := resolveBackend(mediaDir, bc, mockLogger, mockLRU, nil)
 		_, ok := result.(*backend.LocalFileSystemService)
 		assert.True(t, ok)
 	})
 
 	t.Run("No Source or Target", func(t *testing.T) {
 		bc := BackendConfig{}
-		result := resolveBackend(mediaDir, bc, mockLogger, mockLRU)
+		result := resolveBackend(mediaDir, bc, mockLogger, mockLRU, nil)
 		_, ok := result.(*backend.LocalFileSystemService)
 		assert.True(t, ok)
 	})
@@ -706,9 +673,7 @@ func TestNewAppServices(t *testing.T) {
 	mockCacheManager := &mocks.NoopCache{}
 	mockBackend := &mocks.Backend{}
 	// Use an in-memory SQLite DB for testing
-	sqlDB, err := sql.Open("sqlite3", ":memory:")
-	assert.NoError(t, err)
-	defer func() { _ = sqlDB.Close() }()
+	sqlDB := memSQLite(t)
 
 	dbConf := DBConfig{Driver: SQLite, Database: sqlDB}
 	db, err := database.NewDB(dbConf.Database, dbConf.Driver, mockLogger, false, "")

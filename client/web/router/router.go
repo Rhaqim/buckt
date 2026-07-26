@@ -76,26 +76,40 @@ func (r *Router) Handler() http.Handler {
 }
 
 // RegisterAllRoutes registers all routes for the router.
-func (r *Router) registerBaseRoutes() {
+func (r *Router) registerBaseRoutes(mode model.WebMode) {
 	r.GET("/", func(c *gin.Context) {
 		// redirect to /web
 		c.Redirect(http.StatusMovedPermanently, "/web")
 	})
 
-	// /serve and /stream expose raw file *contents* by id. They were previously
-	// registered outside any guard, making them the only unauthenticated content
-	// endpoints — anyone who learned a file id could read any file. Put them
-	// behind the API guard: in standalone mode it requires the buckt-User-ID
-	// header; in mount mode it sets owner_id="default" and passes through, so
-	// mounted consumers are unaffected. (This is authentication only; the bundled
-	// handlers still call the un-scoped core GetFile — front them with your own
-	// signed URLs for per-object authorization.)
+	// /serve and /stream expose raw file *contents* by id. Browsers load these
+	// directly (<img src>, <video>, download links) and cannot attach the
+	// buckt-User-ID header, so guarding them with header auth breaks the bundled
+	// UI — the symptom is a 401 when viewing an uploaded file. Scope the guard to
+	// the mode instead:
+	//   - UI / All: the bundled UI is single-tenant, so serve content as the
+	//     default owner (consistent with the open /web routes).
+	//   - API: standalone API callers can send the header, so require it.
+	//   - Mount: the guard sets owner_id="default" and passes through; the
+	//     mounting app applies its own auth upstream.
+	// For per-object authorization in production, front buckt with signed URLs —
+	// the bundled handlers still call the un-scoped core GetFile.
 	serve := r.Group("/")
-	serve.Use(r.APIGuardMiddleware())
+	switch mode {
+	case model.WebModeAPI, model.WebModeMount:
+		serve.Use(r.APIGuardMiddleware())
+	default: // WebModeUI, WebModeAll — browser-facing, single-tenant
+		serve.Use(r.WebGuardMiddleware())
+	}
 	{
 		serve.GET("serve/:file_id", r.APIService.ServeFile)
 		serve.GET("stream/:file_id", r.APIService.StreamFile)
 	}
+
+	// Metrics dashboard endpoint (JSON): storage bytes, cache hit/miss, and
+	// backend operation counts with R2 billing class. Surfaces the metrics added
+	// in buckt 1.6.0.
+	r.GET("/metrics", r.APIService.Metrics)
 }
 
 // RegisterAPIRoutes sets up API endpoints
@@ -132,6 +146,9 @@ func (r *Router) registerWebRoutes() {
 		{
 			web.GET("/", r.WebService.ViewFolder)
 			web.GET("/folder/:folder_id", r.WebService.ViewFolder)
+			web.GET("/trash", r.WebService.ViewTrash)
+			web.POST("/restore-file/:file_id", r.WebService.RestoreFile)
+			web.POST("/restore-folder/:folder_id", r.WebService.RestoreFolder)
 			web.POST("/new-folder", r.WebService.NewFolder)
 			web.POST("/rename-folder", r.WebService.RenameFolder)
 			web.POST("/move-folder", r.WebService.MoveFolder)
@@ -150,7 +167,7 @@ func (r *Router) registerWebRoutes() {
 // registerAllRoutes registers all required routes
 func (r *Router) registerAllRoutes(mode model.WebMode) {
 	// Register core routes
-	r.registerBaseRoutes()
+	r.registerBaseRoutes(mode)
 
 	switch mode {
 	case model.WebModeAPI, model.WebModeMount:

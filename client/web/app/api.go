@@ -7,6 +7,7 @@ import (
 	"github.com/Rhaqim/buckt"
 	"github.com/Rhaqim/buckt/client/web/domain"
 	"github.com/Rhaqim/buckt/pkg/fileutil"
+	"github.com/Rhaqim/buckt/pkg/metrics"
 	"github.com/Rhaqim/buckt/pkg/response"
 	"github.com/gin-gonic/gin"
 )
@@ -19,6 +20,47 @@ func NewAPIService(client *buckt.Client) domain.APIService {
 	return &APIService{
 		client: client,
 	}
+}
+
+// Metrics reports what buckt gained in 1.6.0: backend operation counts (with
+// Cloudflare R2 billing class), total storage bytes, and cache hit/miss stats.
+// Backend op counts are only present when the app configured buckt.WithMetrics.
+func (svc *APIService) Metrics(c *gin.Context) {
+	storage, err := svc.client.StorageBytes(c.Request.Context())
+	if err != nil {
+		abort500(c, "failed to read storage bytes", err)
+		return
+	}
+	hits, misses := svc.client.CacheStats()
+
+	type opStat struct {
+		Count   int64  `json:"count"`
+		Errors  int64  `json:"errors"`
+		Bytes   int64  `json:"bytes"`
+		R2Class string `json:"r2_class,omitempty"`
+	}
+	// metricsOn reflects whether the app configured buckt.WithMetrics — not
+	// whether any ops have been recorded yet. A freshly started app has metrics
+	// enabled but an empty backends map until the first backend call, and the UI
+	// must distinguish "off" from "on but idle".
+	snap, metricsOn := svc.client.MetricsSnapshot()
+	backends := map[string]map[string]opStat{}
+	if metricsOn {
+		for backend, ops := range snap {
+			m := make(map[string]opStat, len(ops))
+			for op, s := range ops {
+				m[op] = opStat{Count: s.Count, Errors: s.Errors, Bytes: s.Bytes, R2Class: metrics.R2Class(op)}
+			}
+			backends[backend] = m
+		}
+	}
+
+	c.JSON(200, gin.H{
+		"storage_bytes":   storage,
+		"cache":           gin.H{"hits": hits, "misses": misses},
+		"backends":        backends,
+		"metrics_enabled": metricsOn,
+	})
 }
 
 // CreateFolder implements domain.APIService.
@@ -40,7 +82,7 @@ func (svc *APIService) CreateFolder(c *gin.Context) {
 	// create the folder
 	new_folder_id, err := svc.client.NewFolder(user_id, req.ParentID, req.FolderName, req.Description)
 	if err != nil {
-		c.AbortWithStatusJSON(500, response.WrapError("failed to create folder", err))
+		abort500(c, "failed to create folder", err)
 		return
 	}
 
@@ -52,16 +94,15 @@ func (svc *APIService) GetFolderContent(c *gin.Context) {
 	user_id := c.GetString("owner_id")
 
 	// get the folder_id from the request
-	folderID := c.Param("folder_id")
-	if folderID == "" {
-		c.AbortWithStatusJSON(400, response.Error("folder_id is required", ""))
+	folderID, ok := requireParam(c, "folder_id")
+	if !ok {
 		return
 	}
 
 	// get the folder content
 	folderContent, err := svc.client.GetFolderWithContent(user_id, folderID)
 	if err != nil {
-		c.AbortWithStatusJSON(500, response.WrapError("failed to get folder content", err))
+		abort500(c, "failed to get folder content", err)
 		return
 	}
 
@@ -71,16 +112,15 @@ func (svc *APIService) GetFolderContent(c *gin.Context) {
 // GetFilesInFolder implements domain.APIService.
 func (svc *APIService) GetFilesInFolder(c *gin.Context) {
 	// get the parent_id from the request
-	parentID := c.Param("parent_id")
-	if parentID == "" {
-		c.AbortWithStatusJSON(400, response.Error("parent_id is required", ""))
+	parentID, ok := requireParam(c, "parent_id")
+	if !ok {
 		return
 	}
 
 	// get the files in the folder
 	files, err := svc.client.ListFiles(parentID)
 	if err != nil {
-		c.AbortWithStatusJSON(500, response.WrapError("failed to get files", err))
+		abort500(c, "failed to get files", err)
 		return
 	}
 
@@ -89,15 +129,14 @@ func (svc *APIService) GetFilesInFolder(c *gin.Context) {
 
 // GetSubFolders implements domain.APIService.
 func (svc *APIService) GetSubFolders(c *gin.Context) {
-	parentID := c.Param("parent_id")
-	if parentID == "" {
-		c.AbortWithStatusJSON(400, response.Error("parent_id is required", ""))
+	parentID, ok := requireParam(c, "parent_id")
+	if !ok {
 		return
 	}
 
 	folders, err := svc.client.ListFolders(parentID)
 	if err != nil {
-		c.AbortWithStatusJSON(500, response.WrapError("failed to get sub-folders", err))
+		abort500(c, "failed to get sub-folders", err)
 		return
 	}
 
@@ -108,15 +147,14 @@ func (svc *APIService) GetSubFolders(c *gin.Context) {
 func (svc *APIService) GetDescendants(c *gin.Context) {
 	user_id := c.GetString("owner_id")
 
-	folderID := c.Param("folder_id")
-	if folderID == "" {
-		c.AbortWithStatusJSON(400, response.Error("folder_id is required", ""))
+	folderID, ok := requireParam(c, "folder_id")
+	if !ok {
 		return
 	}
 
 	folder, err := svc.client.GetFolderWithContent(user_id, folderID)
 	if err != nil {
-		c.AbortWithStatusJSON(500, response.WrapError("failed to get descendants", err))
+		abort500(c, "failed to get descendants", err)
 		return
 	}
 
@@ -126,16 +164,15 @@ func (svc *APIService) GetDescendants(c *gin.Context) {
 // DeleteFolder implements domain.APIService.
 func (svc *APIService) DeleteFolder(c *gin.Context) {
 	// get the folder_id from the request
-	folderID := c.Param("folder_id")
-	if folderID == "" {
-		c.AbortWithStatusJSON(400, response.Error("folder_id is required", ""))
+	folderID, ok := requireParam(c, "folder_id")
+	if !ok {
 		return
 	}
 
 	// ge tthe folder with content
 	_, err := svc.client.DeleteFolder(folderID)
 	if err != nil {
-		c.AbortWithStatusJSON(500, response.WrapError("failed to delete folder", err))
+		abort500(c, "failed to delete folder", err)
 		return
 	}
 
@@ -147,16 +184,15 @@ func (svc *APIService) DeleteFolderPermanently(c *gin.Context) {
 	user_id := c.GetString("owner_id")
 
 	// get the folder_id from the request
-	folderID := c.Param("folder_id")
-	if folderID == "" {
-		c.AbortWithStatusJSON(400, response.Error("folder_id is required", ""))
+	folderID, ok := requireParam(c, "folder_id")
+	if !ok {
 		return
 	}
 
 	// ge tthe folder with content
 	_, err := svc.client.DeleteFolderPermanently(user_id, folderID)
 	if err != nil {
-		c.AbortWithStatusJSON(500, response.WrapError("failed to delete folder", err))
+		abort500(c, "failed to delete folder", err)
 		return
 	}
 
@@ -179,7 +215,7 @@ func (svc *APIService) MoveFolder(c *gin.Context) {
 
 	// move the folder
 	if err := svc.client.MoveFolder(user_id, req.FolderID, req.NewParentID); err != nil {
-		c.AbortWithStatusJSON(500, response.WrapError("failed to move folder", err))
+		abort500(c, "failed to move folder", err)
 		return
 	}
 
@@ -203,7 +239,7 @@ func (svc *APIService) RenameFolder(c *gin.Context) {
 
 	// rename the folder
 	if err := svc.client.RenameFolder(user_id, req.FolderID, req.Name); err != nil {
-		c.AbortWithStatusJSON(500, response.WrapError("failed to rename folder", err))
+		abort500(c, "failed to rename folder", err)
 		return
 	}
 
@@ -222,22 +258,21 @@ func (svc *APIService) UploadFile(c *gin.Context) {
 	}
 
 	// get the parent_id from the request
-	parentID := c.PostForm("parent_id")
-	if parentID == "" {
-		c.AbortWithStatusJSON(400, response.Error("parent_id is required", ""))
+	parentID, ok := requireForm(c, "parent_id")
+	if !ok {
 		return
 	}
 
 	// Read file from request
 	fileName, fileByte, err := fileutil.ProcessFileWithLimit(file, svc.client.MaxFileSize())
 	if err != nil {
-		c.AbortWithStatusJSON(500, response.WrapError("failed to process file", err))
+		abort500(c, "failed to process file", err)
 		return
 	}
 
 	fileID, err := svc.client.UploadFile(user_id, parentID, fileName, file.Header.Get("Content-Type"), fileByte)
 	if err != nil {
-		c.AbortWithStatusJSON(500, response.WrapError("failed to create file", err))
+		abort500(c, "failed to create file", err)
 		return
 	}
 
@@ -249,15 +284,14 @@ func (svc *APIService) UploadFile(c *gin.Context) {
 // DownloadFile implements domain.APIService.
 func (svc *APIService) DownloadFile(c *gin.Context) {
 	// get the file_id from the request
-	fileID := c.Param("file_id")
-	if fileID == "" {
-		c.AbortWithStatusJSON(400, response.Error("file_id is required", ""))
+	fileID, ok := requireParam(c, "file_id")
+	if !ok {
 		return
 	}
 
 	file, err := svc.client.GetFile(fileID)
 	if err != nil {
-		c.AbortWithStatusJSON(500, response.WrapError("failed to get file", err))
+		abort500(c, "failed to get file", err)
 		return
 	}
 
@@ -269,10 +303,7 @@ func (svc *APIService) DownloadFile(c *gin.Context) {
 
 	// Set headers
 	c.Header("Cache-Control", "public, max-age=86400")
-	c.Header("Content-Disposition", fileutil.SafeContentDisposition("attachment", file.Name))
-	c.Header("Content-Type", file.ContentType)
-	c.Header("Content-Length", fmt.Sprintf("%d", file.Size))
-	c.Header("X-Content-Type-Options", "nosniff")
+	writeFileHeaders(c, file.Name, file.ContentType, file.Size, "attachment")
 
 	// Send file data
 	c.Data(200, file.ContentType, file.Data)
@@ -281,15 +312,14 @@ func (svc *APIService) DownloadFile(c *gin.Context) {
 // ServeFile implements domain.APIService.
 func (svc *APIService) ServeFile(c *gin.Context) {
 	// get the file_id from the request
-	fileID := c.Param("file_id")
-	if fileID == "" {
-		c.AbortWithStatusJSON(400, response.Error("file_id is required", ""))
+	fileID, ok := requireParam(c, "file_id")
+	if !ok {
 		return
 	}
 
 	file, err := svc.client.GetFile(fileID)
 	if err != nil {
-		c.AbortWithStatusJSON(500, response.WrapError("failed to get file", err))
+		abort500(c, "failed to get file", err)
 		return
 	}
 
@@ -307,10 +337,7 @@ func (svc *APIService) ServeFile(c *gin.Context) {
 
 	// Set headers
 	c.Header("Cache-Control", "public, max-age=86400")
-	c.Header("Content-Disposition", fileutil.SafeContentDisposition(disposition, file.Name))
-	c.Header("Content-Type", file.ContentType)
-	c.Header("Content-Length", fmt.Sprintf("%d", file.Size))
-	c.Header("X-Content-Type-Options", "nosniff")
+	writeFileHeaders(c, file.Name, file.ContentType, file.Size, disposition)
 	// Defense in depth: even if a type slips through as inline, this CSP blocks
 	// script execution and sub-resource loads from the served document.
 	c.Header("Content-Security-Policy", "default-src 'none'; sandbox; img-src 'self'; media-src 'self'")
@@ -321,29 +348,25 @@ func (svc *APIService) ServeFile(c *gin.Context) {
 
 func (svc *APIService) StreamFile(c *gin.Context) {
 	// get the file_id from the request
-	fileID := c.Param("file_id")
-	if fileID == "" {
-		c.AbortWithStatusJSON(400, response.Error("file_id is required", ""))
+	fileID, ok := requireParam(c, "file_id")
+	if !ok {
 		return
 	}
 
 	file, stream, err := svc.client.GetFileStream(fileID)
 	if err != nil {
-		c.AbortWithStatusJSON(500, response.WrapError("failed to get file", err))
+		abort500(c, "failed to get file", err)
 		return
 	}
 	defer func() { _ = stream.Close() }()
 
 	// Set headers
-	c.Header("Content-Disposition", fileutil.SafeContentDisposition("attachment", file.Name))
-	c.Header("Content-Type", file.ContentType)
-	c.Header("Content-Length", fmt.Sprintf("%d", file.Size))
-	c.Header("X-Content-Type-Options", "nosniff")
+	writeFileHeaders(c, file.Name, file.ContentType, file.Size, "attachment")
 
 	// If file is small, use io.Copy
 	if file.Size < 10*1024*1024 { // 10 MB threshold
 		if _, err := io.Copy(c.Writer, stream); err != nil {
-			c.AbortWithStatusJSON(500, response.WrapError("failed to stream file", err))
+			abort500(c, "failed to stream file", err)
 		}
 		return
 	}
@@ -407,16 +430,15 @@ func (svc *APIService) StreamFile(c *gin.Context) {
 // Subtle: this method shadows the method (FileService).DeleteFile of APIService.FileService.
 func (svc *APIService) DeleteFile(c *gin.Context) {
 	// get the file_id from the request
-	fileID := c.Param("file_id")
-	if fileID == "" {
-		c.AbortWithStatusJSON(400, response.Error("file_id is required", ""))
+	fileID, ok := requireParam(c, "file_id")
+	if !ok {
 		return
 	}
 
 	// delete the file
 	_, err := svc.client.DeleteFile(fileID)
 	if err != nil {
-		c.AbortWithStatusJSON(500, response.WrapError("failed to delete file", err))
+		abort500(c, "failed to delete file", err)
 		return
 	}
 
@@ -425,16 +447,15 @@ func (svc *APIService) DeleteFile(c *gin.Context) {
 
 func (svc *APIService) DeleteFilePermanently(c *gin.Context) {
 	// get the file_id from the request
-	fileID := c.Param("file_id")
-	if fileID == "" {
-		c.AbortWithStatusJSON(400, response.Error("file_id is required", ""))
+	fileID, ok := requireParam(c, "file_id")
+	if !ok {
 		return
 	}
 
 	// delete the file
 	_, err := svc.client.DeleteFilePermanently(fileID)
 	if err != nil {
-		c.AbortWithStatusJSON(500, response.WrapError("failed to delete file", err))
+		abort500(c, "failed to delete file", err)
 		return
 	}
 

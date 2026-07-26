@@ -1,6 +1,6 @@
 {{ define "files" }}{{ range . }}
 <div
-	class="file-card bg-white border border-gray-200 rounded-xl group relative"
+	class="file-card card relative group bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden"
 	id="file-{{ .ID }}"
 	data-id="{{ .ID }}"
 	data-name="{{ .Name }}"
@@ -9,44 +9,40 @@
 	ondragstart="dragStart(event)"
 	ondragend="dragEnd(event)"
 >
-	<div class="bg-gray-100 rounded-t-xl" style="height: 140px; overflow: hidden;">
+	<div class="thumb bg-slate-100 dark:bg-slate-800" style="height:140px;overflow:hidden;">
 		{{ if hasPrefix .ContentType "image/" }}
 			<img src="/serve/{{ .ID }}" class="w-full h-full object-cover" loading="lazy" alt="{{ .Name }}" />
 		{{ else if hasPrefix .ContentType "audio/" }}
-			<div class="w-full h-full flex flex-col items-center justify-center bg-purple-50">
-				<svg class="w-10 h-10 text-purple-400 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"/></svg>
-				<audio controls class="w-4/5" preload="none">
-					<source src="/serve/{{ .ID }}" type="{{ .ContentType }}" />
-				</audio>
+			<div class="w-full h-full flex flex-col items-center justify-center bg-purple-50 dark:bg-purple-900/20">
+				<svg class="w-9 h-9 text-purple-400 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2z"/></svg>
+				<audio controls class="w-4/5" preload="none"><source src="/serve/{{ .ID }}" type="{{ .ContentType }}" /></audio>
 			</div>
 		{{ else if hasPrefix .ContentType "video/" }}
-			<video class="w-full h-full object-cover" preload="metadata" muted playsinline>
-				<source src="/stream/{{ .ID }}" type="{{ .ContentType }}" />
-			</video>
+			<video class="w-full h-full object-cover" preload="metadata" muted playsinline><source src="/stream/{{ .ID }}" type="{{ .ContentType }}" /></video>
 		{{ else if hasPrefix .ContentType "application/pdf" }}
-			<div class="w-full h-full flex items-center justify-center bg-red-50">
+			<div class="w-full h-full grid place-items-center bg-red-50 dark:bg-red-900/20">
 				<svg class="w-12 h-12 text-red-400" fill="currentColor" viewBox="0 0 24 24"><path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zM6 20V4h7v5h5v11H6z"/></svg>
 			</div>
 		{{ else }}
-			<div class="w-full h-full flex items-center justify-center bg-gray-50">
-				<svg class="w-12 h-12 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
+			<div class="w-full h-full grid place-items-center text-slate-300 dark:text-slate-600">
+				<svg class="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
 			</div>
 		{{ end }}
 	</div>
-	<div class="p-3">
-		<p class="text-sm font-medium text-gray-800 truncate" title="{{ .Name }}">{{ .Name }}</p>
-		<p class="text-xs text-gray-400 mt-0.5">{{ formatSize .Size }} &middot; {{ .CreatedAt.Format "Jan 02, 2006" }}</p>
+	<div class="p-3 min-w-0">
+		<p class="name text-sm font-medium truncate" title="{{ .Name }}">{{ .Name }}</p>
+		<p class="text-xs text-slate-400 mt-0.5">{{ formatSize .Size }} &middot; {{ .CreatedAt.Format "Jan 02, 2006" }}</p>
 	</div>
-	<div class="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity" style="z-index: 30;">
-		<button type="button" class="menu-trigger p-1.5 rounded-md bg-black bg-opacity-40 hover:bg-opacity-60 text-white" data-menu="file-menu-{{ .ID }}">
+	<div class="absolute top-2 right-2 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity" style="z-index:30;">
+		<button type="button" class="menu-trigger p-1.5 rounded-md bg-black/40 hover:bg-black/60 text-white" data-menu="file-menu-{{ .ID }}" aria-label="File actions">
 			<svg class="w-5 h-5 pointer-events-none" fill="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg>
 		</button>
-		<div id="file-menu-{{ .ID }}" class="context-menu hidden absolute right-0 top-8 bg-white rounded-lg shadow-lg border border-gray-200 py-1 w-36" style="z-index: 40;">
-			<a href="/web/file/{{ .ID }}" class="block px-3 py-2 text-sm text-gray-700 hover:bg-gray-50">Download</a>
-			<button type="button" class="action-move w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50" data-type="file" data-id="{{ .ID }}">Move</button>
-			<hr class="my-1">
-			<button type="button" hx-delete="/web/file/{{ .ID }}" hx-target="#file-{{ .ID }}" hx-swap="outerHTML" hx-confirm="Move this file to trash?" class="w-full text-left px-3 py-2 text-sm text-red-600 hover:bg-red-50">Move to Trash</button>
-			<button type="button" hx-delete="/web/scrub/{{ .ID }}" hx-target="#file-{{ .ID }}" hx-swap="outerHTML" hx-confirm="Permanently delete this file? This cannot be undone." class="w-full text-left px-3 py-2 text-sm text-red-700 hover:bg-red-50 font-semibold">Delete Permanently</button>
+		<div id="file-menu-{{ .ID }}" class="context-menu hidden absolute right-0 top-8 w-40 py-1 rounded-lg shadow-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700" style="z-index:40;">
+			<a href="/web/file/{{ .ID }}" class="block px-3 py-2 text-sm hover:bg-slate-50 dark:hover:bg-slate-700">Download</a>
+			<button type="button" class="action-move w-full text-left px-3 py-2 text-sm hover:bg-slate-50 dark:hover:bg-slate-700" data-type="file" data-id="{{ .ID }}">Move</button>
+			<hr class="my-1 border-slate-200 dark:border-slate-700">
+			<button type="button" hx-delete="/web/file/{{ .ID }}" hx-target="#file-{{ .ID }}" hx-swap="outerHTML" hx-confirm="Move this file to trash?" class="w-full text-left px-3 py-2 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40">Move to Trash</button>
+			<button type="button" hx-delete="/web/scrub/{{ .ID }}" hx-target="#file-{{ .ID }}" hx-swap="outerHTML" hx-confirm="Permanently delete this file? This cannot be undone." class="w-full text-left px-3 py-2 text-sm font-semibold text-red-700 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40">Delete Permanently</button>
 		</div>
 	</div>
 </div>

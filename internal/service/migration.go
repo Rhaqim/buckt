@@ -13,9 +13,9 @@ import (
 )
 
 type MetadataService interface {
-	GetMetadata(filePath string) (map[string]interface{}, error)
-	InsertMetadata(filePath string, data map[string]interface{}) error
-	SyncMetadata(filePath string, data map[string]interface{}) error
+	GetMetadata(filePath string) (map[string]any, error)
+	InsertMetadata(filePath string, data map[string]any) error
+	SyncMetadata(filePath string, data map[string]any) error
 	RestoreFromMetadata() error
 }
 
@@ -30,7 +30,7 @@ func NewMetadataService(metaPath string) MetadataService {
 	}
 }
 
-func (s *metadataService) GetMetadata(filePath string) (map[string]interface{}, error) {
+func (s *metadataService) GetMetadata(filePath string) (map[string]any, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -40,7 +40,7 @@ func (s *metadataService) GetMetadata(filePath string) (map[string]interface{}, 
 		return nil, err
 	}
 
-	var metadata map[string]interface{}
+	var metadata map[string]any
 	if err := json.Unmarshal(data, &metadata); err != nil {
 		return nil, err
 	}
@@ -48,7 +48,7 @@ func (s *metadataService) GetMetadata(filePath string) (map[string]interface{}, 
 	return metadata, nil
 }
 
-func (s *metadataService) InsertMetadata(filePath string, data map[string]interface{}) error {
+func (s *metadataService) InsertMetadata(filePath string, data map[string]any) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -61,10 +61,10 @@ func (s *metadataService) InsertMetadata(filePath string, data map[string]interf
 	return os.WriteFile(metaFile, fileData, 0644)
 }
 
-func (s *metadataService) SyncMetadata(filePath string, data map[string]interface{}) error {
+func (s *metadataService) SyncMetadata(filePath string, data map[string]any) error {
 	existingData, err := s.GetMetadata(filePath)
 	if err != nil {
-		existingData = make(map[string]interface{}) // Create new if not found
+		existingData = make(map[string]any) // Create new if not found
 	}
 
 	maps.Copy(existingData, data)
@@ -87,7 +87,7 @@ func (s *metadataService) RestoreFromMetadata() error {
 			return err
 		}
 
-		var metadata map[string]interface{}
+		var metadata map[string]any
 		if err := json.Unmarshal(data, &metadata); err != nil {
 			return err
 		}
@@ -100,7 +100,7 @@ func (s *metadataService) RestoreFromMetadata() error {
 }
 
 func (s *metadataService) GenerateMetadata(file *model.FileModel) ([]byte, error) {
-	metadata := map[string]interface{}{
+	metadata := map[string]any{
 		"filename":    file.Name,
 		"size":        file.Size,
 		"uploaded_at": file.CreatedAt.Format(time.RFC3339),

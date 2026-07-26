@@ -1,9 +1,7 @@
 package buckt
 
 import (
-	"database/sql"
 	"errors"
-	"path/filepath"
 	"testing"
 
 	"github.com/Rhaqim/buckt/pkg/buckterr"
@@ -12,31 +10,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// newSentinelTestClient builds a real Client backed by a temp SQLite file and a
-// temp media directory, with a small max file size so ErrFileTooLarge is easy to
-// trigger.
-func newSentinelTestClient(t *testing.T) *Client {
-	t.Helper()
-	dir := t.TempDir()
-
-	sqlDB, err := sql.Open("sqlite3", filepath.Join(dir, "buckt.db"))
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = sqlDB.Close() })
-
-	client, err := New(Config{
-		DB:             DBConfig{Driver: SQLite, Database: sqlDB},
-		MediaDir:       filepath.Join(dir, "media"),
-		Log:            LogConfig{Silence: true},
-		FlatNameSpaces: true,
-		MaxFileSize:    1024,
-	})
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = client.Close() })
-	return client
-}
-
 func TestClientSentinelErrors(t *testing.T) {
-	c := newSentinelTestClient(t)
+	c := newTestClient(t, withMaxFileSize(1024))
 	const user = "u1"
 
 	t.Run("invalid id", func(t *testing.T) {

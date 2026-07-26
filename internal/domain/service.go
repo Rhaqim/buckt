@@ -16,6 +16,7 @@ type FolderService interface {
 	MoveFolder(ctx context.Context, folder_id, new_parent_id string) error
 	RenameFolder(ctx context.Context, user_id, folder_id, new_name string) error
 	DeleteFolder(ctx context.Context, folder_id string) (string, error)
+	RestoreFolder(ctx context.Context, user_id, folder_id string) error
 	ScrubFolder(ctx context.Context, user_id, folder_id string) (string, error)
 }
 
@@ -29,5 +30,6 @@ type FileService interface {
 	RenameFile(ctx context.Context, file_id, new_name string) error
 	UpdateFile(ctx context.Context, user_id, file_id, new_file_name string, new_file_data []byte) error
 	DeleteFile(ctx context.Context, file_id string) (string, error)
+	RestoreFile(ctx context.Context, user_id, file_id string) error
 	ScrubFile(ctx context.Context, file_id string) (string, error)
 }

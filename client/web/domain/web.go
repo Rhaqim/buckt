@@ -4,6 +4,9 @@ import "github.com/gin-gonic/gin"
 
 type WebService interface {
 	ViewFolder(c *gin.Context)
+	ViewTrash(c *gin.Context)
+	RestoreFile(c *gin.Context)
+	RestoreFolder(c *gin.Context)
 	NewFolder(c *gin.Context)
 	RenameFolder(c *gin.Context)
 	MoveFolder(c *gin.Context)

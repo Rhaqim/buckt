@@ -67,6 +67,12 @@ func (m *FolderService) DeleteFolder(ctx context.Context, folder_id string) (str
 	return args.String(0), args.Error(1)
 }
 
+// RestoreFolder implements domain.FolderService.
+func (m *FolderService) RestoreFolder(ctx context.Context, user_id string, folder_id string) error {
+	args := m.Called(user_id, folder_id)
+	return args.Error(0)
+}
+
 // ScrubFolder implements domain.FolderService.
 func (m *FolderService) ScrubFolder(ctx context.Context, user_id string, folder_id string) (string, error) {
 	args := m.Called(user_id, folder_id)

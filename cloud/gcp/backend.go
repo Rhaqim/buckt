@@ -3,6 +3,7 @@ package gcp
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 
@@ -24,10 +25,19 @@ func NewBackend(conf Config) (*GCPBackend, error) {
 
 	ctx := context.Background()
 
-	// WithCredentialsFile is deprecated upstream but remains the supported way to
-	// pass a service-account key file path, which is this backend's configured
-	// auth model. Migrating to ADC / WithCredentialsJSON is a separate change.
-	client, err := storage.NewClient(ctx, option.WithCredentialsFile(conf.CredentialsFile)) //nolint:staticcheck // intentional: key-file auth is the configured model
+	var opts []option.ClientOption
+	if conf.Endpoint != "" {
+		// Emulator / private endpoint: skip auth and target the given API URL.
+		opts = append(opts, option.WithEndpoint(conf.Endpoint), option.WithoutAuthentication())
+	} else {
+		// WithCredentialsFile is deprecated upstream but remains the supported way
+		// to pass a service-account key file path, which is this backend's
+		// configured auth model. Migrating to ADC / WithCredentialsJSON is a
+		// separate change.
+		opts = append(opts, option.WithAuthCredentialsFile(option.ServiceAccount, conf.CredentialsFile)) //nolint:staticcheck // intentional: key-file auth is the configured model
+	}
+
+	client, err := storage.NewClient(ctx, opts...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create GCP client: %w", err)
 	}
@@ -112,7 +122,7 @@ func (g *GCPBackend) Delete(ctx context.Context, path string) error {
 
 func (g *GCPBackend) Exists(ctx context.Context, path string) (bool, error) {
 	_, err := g.client.Bucket(g.bucketName).Object(path).Attrs(ctx)
-	if err == storage.ErrObjectNotExist {
+	if errors.Is(err, storage.ErrObjectNotExist) {
 		return false, nil
 	}
 	if err != nil {

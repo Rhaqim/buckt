@@ -17,6 +17,9 @@ type APIService interface {
 	DeleteFile(c *gin.Context)
 	DeleteFilePermanently(c *gin.Context)
 
+	// Metrics reports backend operation counts, storage bytes, and cache stats.
+	Metrics(c *gin.Context)
+
 	// TODO: Might not be needed
 	GetFilesInFolder(c *gin.Context)
 	GetSubFolders(c *gin.Context)

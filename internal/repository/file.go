@@ -197,6 +197,8 @@ func (f *FileRepository) DeleteFile(
 		updates := map[string]any{
 			"name":      newName,
 			"parent_id": trash.ID,
+			// Remember where it came from so restore can return it here.
+			"origin_parent_id": file.ParentID,
 		}
 		if !isFlatPath {
 			newPath = trash.Path + "/" + newName
@@ -213,6 +215,72 @@ func (f *FileRepository) DeleteFile(
 
 		// Run backend operation BEFORE commit. If it fails, the transaction
 		// rolls back and the path rewrite is undone.
+		if beforeCommit != nil {
+			if err := beforeCommit(oldPath, newPath); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	return
+}
+
+// RestoreFile moves a trashed file to target (its origin folder, resolved by
+// the caller, or root as a fallback) and clears its origin marker. Mirrors
+// DeleteFile: the beforeCommit callback runs inside the transaction after the
+// path rewrite, so a backend-move failure rolls the whole thing back. Returns
+// the old and new paths (newPath == oldPath in flat-namespace mode = no backend
+// op needed).
+func (f *FileRepository) RestoreFile(
+	ctx context.Context,
+	id uuid.UUID,
+	target uuid.UUID,
+	beforeCommit func(oldPath, newPath string) error,
+) (oldPath, newPath string, err error) {
+	err = f.db.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var file model.FileModel
+		if err := tx.First(&file, id).Error; err != nil {
+			return err
+		}
+
+		var dest model.FolderModel
+		if err := tx.First(&dest, target).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return fmt.Errorf("restore target folder not found: %w", buckterr.ErrNotFound)
+			}
+			return err
+		}
+
+		oldPath = file.Path
+
+		// Dedupe the name at the destination (uniqueFileTrashName is generic —
+		// it just finds a non-colliding name under a parent), in case a new file
+		// with the same name now lives there.
+		newName, err := uniqueFileTrashName(ctx, tx, dest.ID, file.Name)
+		if err != nil {
+			return err
+		}
+
+		isFlatPath := !strings.ContainsAny(file.Path, "/\\")
+
+		updates := map[string]any{
+			"name":      newName,
+			"parent_id": dest.ID,
+			// Clear the origin marker — the file is no longer in trash. A map
+			// update writes NULL for a nil value (struct updates would skip it).
+			"origin_parent_id": nil,
+		}
+		if !isFlatPath {
+			newPath = dest.Path + "/" + newName
+			updates["path"] = newPath
+		} else {
+			newPath = file.Path
+		}
+
+		if err := tx.Model(&file).Updates(updates).Error; err != nil {
+			return err
+		}
+
 		if beforeCommit != nil {
 			if err := beforeCommit(oldPath, newPath); err != nil {
 				return err
@@ -241,33 +309,9 @@ func getOrCreateTrashFolder(ctx context.Context, db *gorm.DB, user_id string) (*
 // files in the trash folder. If "photo.png" already exists, it returns
 // "photo (2).png", "photo (3).png", etc., preserving the extension.
 func uniqueFileTrashName(ctx context.Context, db *gorm.DB, trashID uuid.UUID, name string) (string, error) {
-	count, err := countFileName(ctx, db, trashID, name)
-	if err != nil {
-		return "", err
-	}
-	if count == 0 {
-		return name, nil
-	}
-
-	// Split into base and extension to insert the suffix sensibly
-	ext := ""
-	base := name
-	if idx := strings.LastIndex(name, "."); idx > 0 {
-		ext = name[idx:]
-		base = name[:idx]
-	}
-
-	for i := 2; i < 10000; i++ {
-		candidate := fmt.Sprintf("%s (%d)%s", base, i, ext)
-		count, err := countFileName(ctx, db, trashID, candidate)
-		if err != nil {
-			return "", err
-		}
-		if count == 0 {
-			return candidate, nil
-		}
-	}
-	return base + "-" + uuid.New().String()[:8] + ext, nil
+	return uniqueChildName(name, true, func(candidate string) (int64, error) {
+		return countFileName(ctx, db, trashID, candidate)
+	})
 }
 
 func countFileName(ctx context.Context, db *gorm.DB, parentID uuid.UUID, name string) (int64, error) {

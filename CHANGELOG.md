@@ -3,7 +3,95 @@
 All notable changes to buckt are documented here. This project follows
 [Semantic Versioning](https://semver.org/).
 
-## [1.5.0] — unreleased
+## [1.6.0] — unreleased
+
+A backward-compatible **minor** release on top of v1.5.0: built-in backend
+metrics plus an S3-compatible-endpoint fix. No API removals; safe to adopt.
+
+> **If you use the Azure or GCP backend, upgrade.** v1.5.0's `Exists` is broken
+> on both — the Azure backend **panics** on any blob-properties error (including
+> the routine "not found" case), and the GCP backend can misreport a missing
+> object. Both are fixed here (see **Fixed**).
+
+### ✨ Added
+
+- **Built-in backend metrics** (`WithMetrics`, new `pkg/metrics`). Opt-in,
+  dependency-free (stdlib only). A metering decorator wraps every backend (local,
+  S3, Azure, GCP, and the migration source/target) and records one operation per
+  call — `put/get/list/exists/move/delete/delete_folder` — with counts, bytes,
+  errors, and duration, into a `metrics.Collector` you read via `Snapshot()`. The
+  S3 backend additionally reports exact per-API-call ops (`s3:PutObject`,
+  `s3:GetObject`, `s3:ListObjectsV2`, …, capturing pagination) so Cloudflare R2
+  Class A/B operations can be counted precisely; `metrics.R2Class` maps op names
+  to R2 billing classes. New `Client.StorageBytes(ctx)` (total stored bytes = R2
+  storage dimension) and `Client.CacheStats()` (cache hits/misses = backend reads
+  avoided). Nil metrics (the default) means zero overhead. The backend↔buckt hook
+  uses a stdlib-only callback signature, so cloud backends emit metrics without
+  importing buckt (the dependency stays one-way).
+- **`Endpoint` override for the Azure and GCP backends** (`azure.Config.Endpoint`,
+  `gcp.Config.Endpoint`), matching the AWS backend. Enables emulators (Azurite,
+  fake-gcs-server) and private/self-hosted deployments. For GCP an endpoint skips
+  credential-file auth.
+- **`Client.MetricsSnapshot()`** exposes the collected metrics from the `Client`
+  itself (when configured with a `metrics.Collector`), and the bundled web client
+  gained a **`GET /metrics`** JSON endpoint (storage bytes, cache hit/miss, and
+  per-backend op counts with R2 class). The web examples now enable metrics, so
+  running `example/client/web` and hitting `/metrics` shows live numbers.
+- **Bundled web UI refresh** (`client/web` templates): **dark mode** (system-aware
+  with a toggle), a **responsive** mobile-friendly layout, a **grid/list** view
+  toggle, a breadcrumb, and a **"Usage" panel** that renders the metrics (storage,
+  cache hit rate, and per-op R2 A/B/free counts) right in the browser.
+- **Trash browsing in the bundled web UI.** A new **Trash** view (`GET /web/trash`)
+  lists items that were moved to trash, with **Restore** and **Delete permanently**
+  actions. Previously trashed items were only reachable via the
+  `Client.GetTrashFolder` API.
+- **Restore returns items to their original location.** Trashing a file or folder
+  now records where it came from (new nullable `origin_parent_id` column, added by
+  migration `v3` — additive and non-destructive), and `Client.RestoreFile` /
+  `Client.RestoreFolder` (and the web Restore buttons) move it back there instead
+  of dumping it in root. If the original folder no longer exists (or was itself
+  trashed), restore falls back to root. Items trashed before this release have no
+  recorded origin and restore to root. In nested-namespace mode the underlying
+  blobs are physically moved back, inside the same transaction, so a backend
+  failure rolls the restore back.
+
+### 🐛 Fixed
+
+- **S3-compatible endpoints now use `BaseEndpoint` + path-style** instead of a
+  custom endpoint resolver that dropped the bucket from the request. Path-style
+  stores (e.g. MinIO) previously failed with `NoSuchBucket`; they now work.
+  Cloudflare R2 is unaffected (it already worked and continues to).
+- **Azure `Exists` no longer panics.** It called `errors.As` with a
+  `bloberror.Code` (a string), which panics on any `GetProperties` error —
+  including the common not-found case. Now uses `bloberror.HasCode`.
+- **GCP `Exists` correctly detects missing objects.** It compared the error with
+  `==` against `storage.ErrObjectNotExist`, which fails when the error is wrapped
+  (as GCS returns it). Now uses `errors.Is`.
+- **Bundled web UI: viewing a file no longer returns `401`.** v1.5.0 moved
+  `/serve` and `/stream` behind the header-based API guard, but browsers can't
+  attach the `buckt-User-ID` header to `<img>`, `<video>`, or download requests,
+  so the standalone UI (`WebModeUI`/`WebModeAll`) broke. These endpoints are now
+  scoped by mode: the single-tenant UI serves content as the default owner (like
+  the `/web` routes), standalone API mode still requires the header, and mount
+  mode still defers to the mounting app's auth.
+- **Usage panel distinguishes "metrics off" from "no ops yet."** `/metrics` now
+  reports `metrics_enabled` from whether `WithMetrics` was configured, not from
+  whether any backend op has been recorded, so a freshly started app with metrics
+  enabled no longer claims metrics are off. The mount example now enables metrics.
+- **Moving a non-empty folder to trash no longer fails with a duplicate-key
+  error.** `DeleteFolder` updated the folder through a struct that had its child
+  files/folders preloaded, so GORM tried to re-insert those children. It now
+  updates by a bare model keyed on id (as the descendant path rewrites already
+  did). This affected non-empty folders; empty folders were unaffected.
+
+### 🧪 Tests
+
+- Config-validation unit tests and emulator-backed contract tests (Put/Get/
+  Exists/List/Move/Delete/DeleteFolder) for all three cloud backends — AWS via
+  MinIO, Azure via Azurite, GCP via fake-gcs-server. Integration tests are gated
+  by env vars and skip when unset.
+
+## [1.5.0]
 
 A **backward-compatible minor** release. The public API stays source-compatible
 with v1.4.1, and the database is upgraded in place, non-destructively, the first
