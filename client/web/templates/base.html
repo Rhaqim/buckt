@@ -1,72 +1,177 @@
 {{ define "base" }}
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="h-full">
 	<head>
 		<meta charset="UTF-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<meta name="color-scheme" content="light dark" />
 		<title>{{ .Title }} - Buckt</title>
-		<script src="https://unpkg.com/htmx.org"></script>
-		<link
-			href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css"
-			rel="stylesheet"
-		/>
+
+		<!-- No-flash theme init: apply the saved/system theme before paint. -->
+		<script>
+			(function () {
+				try {
+					var t = localStorage.getItem("buckt-theme");
+					if (!t) t = matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+					if (t === "dark") document.documentElement.classList.add("dark");
+				} catch (e) {}
+			})();
+		</script>
 		<style>
-			.folder-card, .file-card {
-				transition: all 0.15s ease;
-			}
-			.folder-card:hover, .file-card:hover {
-				transform: translateY(-2px);
-				box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-			}
-			.drag-over {
-				border-color: #3b82f6 !important;
-				background-color: #eff6ff !important;
-			}
-			.modal-backdrop {
-				backdrop-filter: blur(4px);
-			}
-			.drop-indicator {
-				position: relative;
-			}
-			/* Ensure action menus are clickable above card content */
-			.file-card .aspect-w-16 img,
-			.file-card .aspect-w-16 video,
-			.file-card .aspect-w-16 audio,
-			.file-card .aspect-w-16 div {
-				pointer-events: none;
-			}
-			.file-card a, .file-card button, .file-card audio {
-				pointer-events: auto;
-			}
+			html { background: #f8fafc; }
+			html.dark { background: #0b1120; }
+			/* Keep async Tailwind from flashing unstyled content. */
+			[x-cloak] { display: none !important; }
+		</style>
+
+		<script src="https://cdn.tailwindcss.com"></script>
+		<script>
+			tailwind.config = {
+				darkMode: "class",
+				theme: { extend: {} },
+			};
+		</script>
+		<script src="https://unpkg.com/htmx.org@1.9.12"></script>
+
+		<style>
+			.card { transition: transform .12s ease, box-shadow .12s ease, border-color .12s ease; }
+			.card:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(2,6,23,.12); }
+			.drag-over { border-color: #3b82f6 !important; }
 			.drop-indicator.drag-over::after {
-				content: "Drop here";
-				position: absolute;
-				inset: 0;
-				display: flex;
-				align-items: center;
-				justify-content: center;
-				background: rgba(59, 130, 246, 0.1);
-				border-radius: 0.5rem;
-				font-weight: 600;
-				color: #3b82f6;
-				pointer-events: none;
+				content: "Drop here"; position: absolute; inset: 0; display: flex;
+				align-items: center; justify-content: center; background: rgba(59,130,246,.12);
+				border-radius: .75rem; font-weight: 600; color: #3b82f6; pointer-events: none;
 			}
+			.file-card .thumb img, .file-card .thumb video, .file-card .thumb div { pointer-events: none; }
+			.file-card a, .file-card button, .file-card audio { pointer-events: auto; }
+			/* List view: turn the responsive grid into stacked rows. */
+			.view-list .grid { display: block !important; }
+			.view-list .card { display: flex; align-items: center; gap: .75rem; margin-bottom: .5rem; }
+			.view-list .file-card .thumb { width: 44px; height: 44px; flex: none; border-radius: .5rem; }
+			.view-list .card p.name { white-space: nowrap; }
 		</style>
 	</head>
-	<body class="bg-gray-50 text-gray-800 min-h-screen flex flex-col">
-		<header class="bg-white border-b shadow-sm">
-			<div class="container mx-auto px-4 py-3 flex justify-between items-center">
-				<a href="/web/" class="text-xl font-bold text-blue-600">Buckt</a>
+
+	<body class="h-full bg-slate-50 text-slate-800 dark:bg-slate-950 dark:text-slate-100 antialiased flex flex-col">
+		<header class="sticky top-0 z-40 backdrop-blur bg-white/80 dark:bg-slate-900/80 border-b border-slate-200 dark:border-slate-800">
+			<div class="max-w-6xl mx-auto px-4 h-14 flex items-center gap-3">
+				<a href="/web/" class="flex items-center gap-2 font-bold text-blue-600 dark:text-blue-400 shrink-0">
+					<svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24"><path d="M10 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/></svg>
+					<span class="hidden sm:inline">Buckt</span>
+				</a>
+
+				<div class="flex-1 min-w-0">{{ template "toolbar" . }}</div>
+
+				<button type="button" onclick="openUsage()" title="Usage &amp; metrics"
+					class="shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800">
+					<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6m4 6V7m4 12v-9M5 19h14"/></svg>
+					<span class="hidden sm:inline">Usage</span>
+				</button>
+
+				<button type="button" onclick="toggleTheme()" title="Toggle dark mode"
+					class="shrink-0 p-1.5 rounded-lg text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800">
+					<svg class="w-5 h-5 hidden dark:block" fill="currentColor" viewBox="0 0 24 24"><path d="M12 3a1 1 0 011 1v1a1 1 0 11-2 0V4a1 1 0 011-1zm0 14a5 5 0 100-10 5 5 0 000 10zm7-5a1 1 0 011 1h1a1 1 0 110 2h-1a1 1 0 01-1-1 1 1 0 010-2zM4 12a1 1 0 011-1 1 1 0 010 2H4a1 1 0 01-1-1 1 1 0 011-1zm13.66 5.66a1 1 0 011.41 0l.71.71a1 1 0 11-1.41 1.41l-.71-.71a1 1 0 010-1.41zM4.22 4.22a1 1 0 011.42 0l.7.7A1 1 0 115 6.34l-.71-.7a1 1 0 01-.07-1.42zM12 19a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zm7.78-14.78a1 1 0 010 1.42l-.71.7A1 1 0 1117.66 5l.71-.71a1 1 0 011.41-.07zM5.64 17.66a1 1 0 010 1.41l-.71.71a1 1 0 01-1.41-1.41l.7-.71a1 1 0 011.42 0z"/></svg>
+					<svg class="w-5 h-5 block dark:hidden" fill="currentColor" viewBox="0 0 24 24"><path d="M21.64 13a1 1 0 00-1.05-.14 8 8 0 01-9.45-9.45 1 1 0 00-1.19-1.19A10 10 0 1022 14.05a1 1 0 00-.36-1.05z"/></svg>
+				</button>
 			</div>
 		</header>
-		<main class="container mx-auto px-4 py-6 flex-1">
+
+		<main class="flex-1 w-full max-w-6xl mx-auto px-4 py-6">
 			{{ template "body" . }}
 		</main>
-		<footer class="bg-white border-t text-gray-500 text-sm py-3">
-			<div class="container mx-auto px-4 text-center">
-				Buckt File Manager
-			</div>
+
+		<footer class="border-t border-slate-200 dark:border-slate-800 text-slate-400 text-xs py-3 text-center">
+			Buckt File Manager
 		</footer>
+
+		<!-- Usage / metrics slide-over -->
+		<div id="usage" class="fixed inset-0 z-50 hidden">
+			<div class="absolute inset-0 bg-black/40" onclick="closeUsage()"></div>
+			<aside class="absolute right-0 top-0 h-full w-full max-w-md bg-white dark:bg-slate-900 shadow-2xl flex flex-col">
+				<div class="flex items-center justify-between px-5 h-14 border-b border-slate-200 dark:border-slate-800">
+					<h2 class="font-semibold">Usage &amp; metrics</h2>
+					<button onclick="closeUsage()" class="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800">
+						<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+					</button>
+				</div>
+				<div id="usage-body" class="p-5 overflow-y-auto text-sm space-y-5">Loading…</div>
+			</aside>
+		</div>
+
+		<script>
+			function toggleTheme() {
+				var dark = document.documentElement.classList.toggle("dark");
+				try { localStorage.setItem("buckt-theme", dark ? "dark" : "light"); } catch (e) {}
+			}
+
+			function fmtBytes(n) {
+				if (!n) return "0 B";
+				var u = ["B", "KB", "MB", "GB", "TB"], i = Math.floor(Math.log(n) / Math.log(1024));
+				return (n / Math.pow(1024, i)).toFixed(i ? 1 : 0) + " " + u[i];
+			}
+
+			function openUsage() {
+				document.getElementById("usage").classList.remove("hidden");
+				renderUsage();
+			}
+			function closeUsage() { document.getElementById("usage").classList.add("hidden"); }
+
+			async function renderUsage() {
+				var body = document.getElementById("usage-body");
+				try {
+					var r = await fetch("/metrics", { headers: { "buckt-User-ID": "default" } });
+					var m = await r.json();
+					var hits = m.cache.hits, miss = m.cache.misses, tot = hits + miss;
+					var rate = tot ? Math.round((hits / tot) * 100) : 0;
+
+					var html = "";
+					html += tile("Storage used", fmtBytes(m.storage_bytes), "blue");
+					html += tile("Cache hit rate", rate + "%", "green", hits + " hits · " + miss + " misses");
+
+					if (m.metrics_enabled) {
+						for (var be in m.backends) {
+							html += '<div><div class="text-xs font-semibold uppercase tracking-wide text-slate-400 mt-4 mb-2">' + be + ' backend</div>';
+							html += '<div class="rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden">';
+							html += '<table class="w-full text-left"><thead class="text-xs text-slate-400"><tr>' +
+								'<th class="px-3 py-2 font-medium">Operation</th><th class="px-3 py-2 font-medium text-right">Count</th>' +
+								'<th class="px-3 py-2 font-medium text-right">Bytes</th><th class="px-3 py-2 font-medium text-center">R2</th></tr></thead><tbody>';
+							var ops = m.backends[be], names = Object.keys(ops).sort();
+							for (var i = 0; i < names.length; i++) {
+								var op = names[i], s = ops[op];
+								html += '<tr class="border-t border-slate-100 dark:border-slate-800">' +
+									'<td class="px-3 py-2 font-mono text-xs">' + op + '</td>' +
+									'<td class="px-3 py-2 text-right tabular-nums">' + s.count + '</td>' +
+									'<td class="px-3 py-2 text-right tabular-nums text-slate-500">' + (s.bytes ? fmtBytes(s.bytes) : "—") + '</td>' +
+									'<td class="px-3 py-2 text-center">' + r2Badge(s.r2_class) + '</td></tr>';
+							}
+							html += '</tbody></table></div></div>';
+						}
+					} else {
+						html += '<p class="text-slate-500">Backend operation metrics are off. Enable them with <code class="px-1 rounded bg-slate-100 dark:bg-slate-800">buckt.WithMetrics(metrics.NewCollector())</code>.</p>';
+					}
+					body.innerHTML = html;
+				} catch (e) {
+					body.innerHTML = '<p class="text-red-500">Failed to load metrics: ' + e + '</p>';
+				}
+			}
+
+			function tile(label, value, color, sub) {
+				var c = { blue: "text-blue-600 dark:text-blue-400", green: "text-emerald-600 dark:text-emerald-400" }[color] || "";
+				return '<div class="rounded-xl border border-slate-200 dark:border-slate-800 p-4">' +
+					'<div class="text-xs text-slate-400">' + label + '</div>' +
+					'<div class="text-2xl font-bold ' + c + '">' + value + '</div>' +
+					(sub ? '<div class="text-xs text-slate-400 mt-0.5">' + sub + '</div>' : '') + '</div>';
+			}
+			function r2Badge(cls) {
+				if (!cls) return "";
+				var m = { A: "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300",
+						  B: "bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300",
+						  free: "bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400" };
+				return '<span class="px-1.5 py-0.5 rounded text-xs font-semibold ' + (m[cls] || "") + '">' + cls + '</span>';
+			}
+
+			document.addEventListener("keydown", function (e) { if (e.key === "Escape") closeUsage(); });
+		</script>
 	</body>
 </html>
 {{ end }}

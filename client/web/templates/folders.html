@@ -1,6 +1,6 @@
 {{ define "folders" }}{{ range . }}
 <div
-	class="folder-card drop-indicator bg-white border border-gray-200 rounded-xl p-4 group relative"
+	class="folder-card card drop-indicator relative group bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-3"
 	id="folder-{{ .ID }}"
 	data-id="{{ .ID }}"
 	data-name="{{ .Name }}"
@@ -13,27 +13,25 @@
 	ondragenter="dragEnter(event)"
 	ondragleave="dragLeave(event)"
 >
-	<a href="/web/folder/{{ .ID }}" class="block">
-		<div class="flex items-center space-x-3">
-			<div class="flex-shrink-0">
-				<svg class="w-10 h-10 text-blue-400" fill="currentColor" viewBox="0 0 24 24"><path d="M10 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/></svg>
-			</div>
-			<div class="min-w-0 flex-1">
-				<p class="text-sm font-medium text-gray-800 truncate">{{ .Name }}</p>
-				<p class="text-xs text-gray-400">{{ .CreatedAt.Format "Jan 02, 2006" }}</p>
-			</div>
-		</div>
+	<a href="/web/folder/{{ .ID }}" class="flex items-center gap-3 min-w-0">
+		<span class="thumb shrink-0 grid place-items-center w-11 h-11 rounded-lg bg-blue-50 dark:bg-blue-900/30 text-blue-500 dark:text-blue-400">
+			<svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24"><path d="M10 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/></svg>
+		</span>
+		<span class="min-w-0 flex-1">
+			<span class="name block text-sm font-medium truncate">{{ .Name }}</span>
+			<span class="block text-xs text-slate-400">{{ .CreatedAt.Format "Jan 02, 2006" }}</span>
+		</span>
 	</a>
-	<div class="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity" style="z-index: 30;">
-		<button type="button" class="menu-trigger p-1.5 rounded-md hover:bg-gray-200 text-gray-400 hover:text-gray-600" data-menu="folder-menu-{{ .ID }}">
+	<div class="absolute top-2 right-2 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity" style="z-index:30;">
+		<button type="button" class="menu-trigger p-1.5 rounded-md text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800" data-menu="folder-menu-{{ .ID }}" aria-label="Folder actions">
 			<svg class="w-5 h-5 pointer-events-none" fill="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg>
 		</button>
-		<div id="folder-menu-{{ .ID }}" class="context-menu hidden absolute right-0 top-8 bg-white rounded-lg shadow-lg border border-gray-200 py-1 w-36" style="z-index: 40;">
-			<button type="button" class="action-rename w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50" data-type="folder" data-id="{{ .ID }}">Rename</button>
-			<button type="button" class="action-move w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50" data-type="folder" data-id="{{ .ID }}">Move</button>
-			<hr class="my-1">
-			<button type="button" hx-delete="/web/folder/{{ .ID }}" hx-target="#folder-{{ .ID }}" hx-swap="outerHTML" hx-confirm="Move this folder to trash?" class="w-full text-left px-3 py-2 text-sm text-red-600 hover:bg-red-50">Move to Trash</button>
-			<button type="button" hx-delete="/web/scrub-folder/{{ .ID }}" hx-target="#folder-{{ .ID }}" hx-swap="outerHTML" hx-confirm="Permanently delete this folder and all its contents? This cannot be undone." class="w-full text-left px-3 py-2 text-sm text-red-700 hover:bg-red-50 font-semibold">Delete Permanently</button>
+		<div id="folder-menu-{{ .ID }}" class="context-menu hidden absolute right-0 top-8 w-40 py-1 rounded-lg shadow-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700" style="z-index:40;">
+			<button type="button" class="action-rename w-full text-left px-3 py-2 text-sm hover:bg-slate-50 dark:hover:bg-slate-700" data-type="folder" data-id="{{ .ID }}">Rename</button>
+			<button type="button" class="action-move w-full text-left px-3 py-2 text-sm hover:bg-slate-50 dark:hover:bg-slate-700" data-type="folder" data-id="{{ .ID }}">Move</button>
+			<hr class="my-1 border-slate-200 dark:border-slate-700">
+			<button type="button" hx-delete="/web/folder/{{ .ID }}" hx-target="#folder-{{ .ID }}" hx-swap="outerHTML" hx-confirm="Move this folder to trash?" class="w-full text-left px-3 py-2 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40">Move to Trash</button>
+			<button type="button" hx-delete="/web/scrub-folder/{{ .ID }}" hx-target="#folder-{{ .ID }}" hx-swap="outerHTML" hx-confirm="Permanently delete this folder and all its contents? This cannot be undone." class="w-full text-left px-3 py-2 text-sm font-semibold text-red-700 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40">Delete Permanently</button>
 		</div>
 	</div>
 </div>

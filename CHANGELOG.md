@@ -37,6 +37,10 @@ metrics plus an S3-compatible-endpoint fix. No API removals; safe to adopt.
   gained a **`GET /metrics`** JSON endpoint (storage bytes, cache hit/miss, and
   per-backend op counts with R2 class). The web examples now enable metrics, so
   running `example/client/web` and hitting `/metrics` shows live numbers.
+- **Bundled web UI refresh** (`client/web` templates): **dark mode** (system-aware
+  with a toggle), a **responsive** mobile-friendly layout, a **grid/list** view
+  toggle, a breadcrumb, and a **"Usage" panel** that renders the metrics (storage,
+  cache hit rate, and per-op R2 A/B/free counts) right in the browser.
 
 ### 🐛 Fixed
 
