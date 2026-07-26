@@ -21,13 +21,12 @@ func NewWebService(client *buckt.Client) domain.WebService {
 func (svc *WebService) ViewFolder(c *gin.Context) {
 	user_id := c.GetString("owner_id")
 
-	// get the folder_id from the request
+	// folder_id is optional here — empty means the user's root folder.
 	folderID := c.Param("folder_id")
 
-	// get the folder content
 	folderContent, err := svc.client.GetFolderWithContent(user_id, folderID)
 	if err != nil {
-		c.AbortWithStatusJSON(500, response.WrapError("failed to get folder content", err))
+		abort500(c, "failed to get folder content", err)
 		return
 	}
 
@@ -55,7 +54,7 @@ func (svc *WebService) ViewTrash(c *gin.Context) {
 
 	trash, err := svc.client.GetTrashFolder(user_id)
 	if err != nil {
-		c.AbortWithStatusJSON(500, response.WrapError("failed to get trash", err))
+		abort500(c, "failed to get trash", err)
 		return
 	}
 
@@ -73,47 +72,41 @@ func (svc *WebService) ViewTrash(c *gin.Context) {
 	})
 }
 
-// RestoreFile moves a trashed file back to the user's root folder.
+// RestoreFile moves a trashed file back to its original location.
 func (svc *WebService) RestoreFile(c *gin.Context) {
 	user_id := c.GetString("owner_id")
 
-	fileID := c.Param("file_id")
-	if fileID == "" {
-		c.AbortWithStatusJSON(400, response.Error("file_id is required", ""))
+	fileID, ok := requireParam(c, "file_id")
+	if !ok {
 		return
 	}
 
 	if err := svc.client.RestoreFile(user_id, fileID); err != nil {
-		c.AbortWithStatusJSON(500, response.WrapError("failed to restore file", err))
+		abort500(c, "failed to restore file", err)
 		return
 	}
 
-	// HTMX requests: return empty body so hx-swap="outerHTML" removes the card.
-	if c.GetHeader("HX-Request") == "true" {
-		c.String(200, "")
+	if htmxHandled(c) {
 		return
 	}
 	c.Redirect(302, "/web/trash")
 }
 
-// RestoreFolder moves a trashed folder back to the user's root folder.
+// RestoreFolder moves a trashed folder back to its original location.
 func (svc *WebService) RestoreFolder(c *gin.Context) {
 	user_id := c.GetString("owner_id")
 
-	folderID := c.Param("folder_id")
-	if folderID == "" {
-		c.AbortWithStatusJSON(400, response.Error("folder_id is required", ""))
+	folderID, ok := requireParam(c, "folder_id")
+	if !ok {
 		return
 	}
 
 	if err := svc.client.RestoreFolder(user_id, folderID); err != nil {
-		c.AbortWithStatusJSON(500, response.WrapError("failed to restore folder", err))
+		abort500(c, "failed to restore folder", err)
 		return
 	}
 
-	// HTMX requests: return empty body so hx-swap="outerHTML" removes the card.
-	if c.GetHeader("HX-Request") == "true" {
-		c.String(200, "")
+	if htmxHandled(c) {
 		return
 	}
 	c.Redirect(302, "/web/trash")
@@ -123,27 +116,20 @@ func (svc *WebService) RestoreFolder(c *gin.Context) {
 func (svc *WebService) NewFolder(c *gin.Context) {
 	user_id := c.GetString("owner_id")
 
-	parentID := c.PostForm("parent_id")
-	if parentID == "" {
-		c.AbortWithStatusJSON(400, gin.H{"error": "parent_id is required"})
+	parentID, ok := requireForm(c, "parent_id")
+	if !ok {
+		return
+	}
+	name, ok := requireForm(c, "name")
+	if !ok {
 		return
 	}
 
-	name := c.PostForm("name")
-	if name == "" {
-		c.AbortWithStatusJSON(400, gin.H{"error": "name is required"})
+	if _, err := svc.client.NewFolder(user_id, parentID, name, c.PostForm("description")); err != nil {
+		abort500(c, "failed to create folder", err)
 		return
 	}
 
-	description := c.PostForm("description")
-
-	_, err := svc.client.NewFolder(user_id, parentID, name, description)
-	if err != nil {
-		c.AbortWithStatusJSON(500, response.WrapError("failed to create folder", err))
-		return
-	}
-
-	// reload the page
 	c.Redirect(302, "/web/folder/"+parentID)
 }
 
@@ -152,27 +138,21 @@ func (svc *WebService) NewFolder(c *gin.Context) {
 func (svc *WebService) MoveFolder(c *gin.Context) {
 	user_id := c.GetString("owner_id")
 
-	folder_id := c.PostForm("folder_id")
-	new_parent_id := c.PostForm("new_parent_id")
-
-	if folder_id == "" {
-		c.AbortWithStatusJSON(400, gin.H{"error": "folder_id is required"})
+	folderID, ok := requireForm(c, "folder_id")
+	if !ok {
+		return
+	}
+	newParentID, ok := requireForm(c, "new_parent_id")
+	if !ok {
 		return
 	}
 
-	if new_parent_id == "" {
-		c.AbortWithStatusJSON(400, gin.H{"error": "new_parent_id is required"})
+	if err := svc.client.MoveFolder(user_id, folderID, newParentID); err != nil {
+		abort500(c, "failed to move folder", err)
 		return
 	}
 
-	err := svc.client.MoveFolder(user_id, folder_id, new_parent_id)
-	if err != nil {
-		c.AbortWithStatusJSON(500, response.WrapError("failed to move folder", err))
-		return
-	}
-
-	// reload the page
-	c.Redirect(302, "/web/folder/"+new_parent_id)
+	c.Redirect(302, "/web/folder/"+newParentID)
 }
 
 // RenameFolder implements domain.WebService.
@@ -180,50 +160,38 @@ func (svc *WebService) MoveFolder(c *gin.Context) {
 func (svc *WebService) RenameFolder(c *gin.Context) {
 	user_id := c.GetString("owner_id")
 
-	folder_id := c.PostForm("folder_id")
-	new_name := c.PostForm("new_name")
-
-	if folder_id == "" {
-		c.AbortWithStatusJSON(400, gin.H{"error": "folder_id is required"})
+	folderID, ok := requireForm(c, "folder_id")
+	if !ok {
+		return
+	}
+	newName, ok := requireForm(c, "new_name")
+	if !ok {
 		return
 	}
 
-	if new_name == "" {
-		c.AbortWithStatusJSON(400, gin.H{"error": "new_name is required"})
+	if err := svc.client.RenameFolder(user_id, folderID, newName); err != nil {
+		abort500(c, "failed to rename folder", err)
 		return
 	}
 
-	// rename the folder
-	err := svc.client.RenameFolder(user_id, folder_id, new_name)
-	if err != nil {
-		c.AbortWithStatusJSON(500, response.WrapError("failed to rename folder", err))
-		return
-	}
-
-	// reload the page
-	c.Redirect(302, "/web/folder/"+folder_id)
+	c.Redirect(302, "/web/folder/"+folderID)
 }
 
 // DeleteFolder implements domain.WebService.
 func (svc *WebService) DeleteFolder(c *gin.Context) {
-	folderID := c.Param("folder_id")
-	if folderID == "" {
-		c.AbortWithStatusJSON(400, response.Error("folder_id is required", ""))
+	folderID, ok := requireParam(c, "folder_id")
+	if !ok {
 		return
 	}
 
-	_, err := svc.client.DeleteFolder(folderID)
-	if err != nil {
-		c.AbortWithStatusJSON(500, response.WrapError("failed to delete folder", err))
+	if _, err := svc.client.DeleteFolder(folderID); err != nil {
+		abort500(c, "failed to delete folder", err)
 		return
 	}
 
-	// HTMX requests: return empty body so hx-swap="outerHTML" removes the element
-	if c.GetHeader("HX-Request") == "true" {
-		c.String(200, "")
+	if htmxHandled(c) {
 		return
 	}
-
 	c.JSON(200, response.Success("folder deleted"))
 }
 
@@ -231,161 +199,121 @@ func (svc *WebService) DeleteFolder(c *gin.Context) {
 func (svc *WebService) DeleteFolderPermanently(c *gin.Context) {
 	user_id := c.GetString("owner_id")
 
-	folderID := c.Param("folder_id")
-	if folderID == "" {
-		c.AbortWithStatusJSON(400, response.Error("folder_id is required", ""))
+	folderID, ok := requireParam(c, "folder_id")
+	if !ok {
 		return
 	}
 
-	_, err := svc.client.DeleteFolderPermanently(user_id, folderID)
-	if err != nil {
-		c.AbortWithStatusJSON(500, response.WrapError("failed to delete folder", err))
+	if _, err := svc.client.DeleteFolderPermanently(user_id, folderID); err != nil {
+		abort500(c, "failed to delete folder", err)
 		return
 	}
 
-	// HTMX requests: return empty body so hx-swap="outerHTML" removes the element
-	if c.GetHeader("HX-Request") == "true" {
-		c.String(200, "")
+	if htmxHandled(c) {
 		return
 	}
-
 	c.JSON(200, response.Success("folder deleted"))
-
 }
 
 // UploadFile implements domain.WebService.
 func (svc *WebService) UploadFile(c *gin.Context) {
 	user_id := c.GetString("owner_id")
 
-	folderID := c.PostForm("folder_id")
-	if folderID == "" {
-		c.AbortWithStatusJSON(400, gin.H{"error": "folder_id is required"})
+	folderID, ok := requireForm(c, "folder_id")
+	if !ok {
 		return
 	}
 
-	// Handle file upload
 	form, err := c.MultipartForm()
 	if err != nil {
-		c.AbortWithStatusJSON(400, gin.H{"error": "Invalid form data"})
+		c.AbortWithStatusJSON(400, response.Error("invalid form data", err.Error()))
 		return
 	}
 
-	files := form.File["files"]
-
-	// Loop through each file
-	for _, file := range files {
-		// Save each file (this example just prints)
+	for _, file := range form.File["files"] {
 		fileName, fileByte, err := fileutil.ProcessFileWithLimit(file, svc.client.MaxFileSize())
 		if err != nil {
-			c.AbortWithStatusJSON(500, response.WrapError("failed to process file", err))
+			abort500(c, "failed to process file", err)
 			return
 		}
 
-		_, err = svc.client.UploadFile(user_id, folderID, fileName, file.Header.Get("Content-Type"), fileByte)
-		if err != nil {
-			c.AbortWithStatusJSON(500, response.WrapError("failed to create file", err))
+		if _, err := svc.client.UploadFile(user_id, folderID, fileName, file.Header.Get("Content-Type"), fileByte); err != nil {
+			abort500(c, "failed to create file", err)
 			return
 		}
-
 	}
 
-	// reload the page
 	c.Redirect(302, "/web/folder/"+folderID)
-
-	// for _, file := range files {
-	// 	// Save each file (this example just prints)
-	// 	c.SaveUploadedFile(file, "./uploads/"+file.Filename)
-	// }
 }
 
 // DownloadFile implements domain.WebService.
 func (svc *WebService) DownloadFile(c *gin.Context) {
-	// get the file_id from the request
-	fileID := c.Param("file_id")
-	if fileID == "" {
-		c.AbortWithStatusJSON(400, response.Error("file_id is required", ""))
+	fileID, ok := requireParam(c, "file_id")
+	if !ok {
 		return
 	}
 
-	// get the file
 	file, err := svc.client.GetFile(fileID)
 	if err != nil {
-		c.AbortWithStatusJSON(500, response.WrapError("failed to get file", err))
+		abort500(c, "failed to get file", err)
 		return
 	}
 
-	// serve the file
-	c.Header("Content-Disposition", fileutil.SafeContentDisposition("attachment", file.Name))
-	c.Header("Content-Type", file.ContentType)
-	c.Header("X-Content-Type-Options", "nosniff")
+	writeFileHeaders(c, file.Name, file.ContentType, file.Size, "attachment")
 	c.Data(200, file.ContentType, file.Data)
 }
 
 // MoveFile implements domain.WebService.
 func (svc *WebService) MoveFile(c *gin.Context) {
-	fileID := c.Param("file_id")
-	if fileID == "" {
-		c.AbortWithStatusJSON(400, response.Error("file_id is required", ""))
+	fileID, ok := requireParam(c, "file_id")
+	if !ok {
 		return
 	}
-
-	newParentID := c.PostForm("new_parent_id")
-	if newParentID == "" {
-		c.AbortWithStatusJSON(400, response.Error("new_parent_id is required", ""))
+	newParentID, ok := requireForm(c, "new_parent_id")
+	if !ok {
 		return
 	}
 
 	if err := svc.client.MoveFile(fileID, newParentID); err != nil {
-		c.AbortWithStatusJSON(500, response.WrapError("failed to move file", err))
+		abort500(c, "failed to move file", err)
 		return
 	}
 
-	// Redirect to the target folder after move
 	c.Redirect(302, "/web/folder/"+newParentID)
 }
 
 // DeleteFile implements domain.WebService.
 // Subtle: this method shadows the method (FileService).DeleteFile of WebService.FileService.
 func (svc *WebService) DeleteFile(c *gin.Context) {
-	fileID := c.Param("file_id")
-	if fileID == "" {
-		c.AbortWithStatusJSON(400, response.Error("file_id is required", ""))
+	fileID, ok := requireParam(c, "file_id")
+	if !ok {
 		return
 	}
 
-	_, err := svc.client.DeleteFile(fileID)
-	if err != nil {
-		c.AbortWithStatusJSON(500, response.WrapError("failed to delete file", err))
+	if _, err := svc.client.DeleteFile(fileID); err != nil {
+		abort500(c, "failed to delete file", err)
 		return
 	}
 
-	// HTMX: return empty body so the element is removed
-	if c.GetHeader("HX-Request") == "true" {
-		c.String(200, "")
+	if htmxHandled(c) {
 		return
 	}
-
 	c.JSON(200, response.Success("file deleted"))
 }
 
 func (svc *WebService) DeleteFilePermanently(c *gin.Context) {
-	fileID := c.Param("file_id")
-	if fileID == "" {
-		c.AbortWithStatusJSON(400, response.Error("file_id is required", ""))
+	fileID, ok := requireParam(c, "file_id")
+	if !ok {
 		return
 	}
 
-	_, err := svc.client.DeleteFilePermanently(fileID)
-	if err != nil {
-		c.AbortWithStatusJSON(500, response.WrapError("failed to delete file", err))
+	if _, err := svc.client.DeleteFilePermanently(fileID); err != nil {
+		abort500(c, "failed to delete file", err)
 		return
 	}
 
-	// HTMX requests: return empty body so hx-swap="outerHTML" removes the element
-	if c.GetHeader("HX-Request") == "true" {
-		c.String(200, "")
+	if htmxHandled(c) {
 		return
 	}
-
 	c.JSON(200, response.Success("file deleted"))
 }
