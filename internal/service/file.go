@@ -501,19 +501,8 @@ func (f *FileService) DeleteFile(ctx context.Context, file_id string) (string, e
 
 	var file *model.FileModel
 
-	// Check cache first
-	if f.cache != nil {
-		cached, err := f.cache.GetBucktValue(ctx, file_id)
-		if err == nil {
-			var cachedFile model.FileModel
-			if jsonErr := json.Unmarshal([]byte(cached.(string)), &cachedFile); jsonErr == nil {
-				file = &cachedFile
-			}
-
-			// Delete from cache
-			_ = f.cache.DeleteBucktValue(ctx, file_id)
-		}
-	}
+	// Check cache first (and invalidate it, since we're deleting the file).
+	file = f.cachedFileAndInvalidate(ctx, file_id)
 
 	// If not found in cache, fetch from repository
 	if file == nil {
@@ -559,21 +548,8 @@ func (f *FileService) ScrubFile(ctx context.Context, file_id string) (string, er
 		return parentID, fmt.Errorf("invalid id: %w", buckterr.ErrInvalidID)
 	}
 
-	var file *model.FileModel
-
-	// Check cache first
-	if f.cache != nil {
-		cached, err := f.cache.GetBucktValue(ctx, file_id)
-		if err == nil {
-			var cachedFile model.FileModel
-			if jsonErr := json.Unmarshal([]byte(cached.(string)), &cachedFile); jsonErr == nil {
-				file = &cachedFile
-			}
-
-			// Delete from cache
-			_ = f.cache.DeleteBucktValue(ctx, file_id)
-		}
-	}
+	// Check cache first (and invalidate it, since we're removing the file).
+	file := f.cachedFileAndInvalidate(ctx, file_id)
 
 	// If not found in cache, fetch from repository
 	if file == nil {
@@ -599,8 +575,31 @@ func (f *FileService) ScrubFile(ctx context.Context, file_id string) (string, er
 // backendCtx returns a context with backendOpTimeout applied (if positive).
 // Returns the original context unchanged if no timeout is configured.
 func (f *FileService) backendCtx(parent context.Context) (context.Context, context.CancelFunc) {
-	if f.backendOpTimeout <= 0 {
-		return parent, func() {}
+	return withBackendTimeout(parent, f.backendOpTimeout)
+}
+
+// cachedFileAndInvalidate returns the cached FileModel for file_id if one is
+// present and well-formed, and removes it from the cache (the caller is about to
+// mutate or delete the file). Returns nil when there's no usable cached value.
+// It tolerates a non-string cache value instead of panicking on the type
+// assertion, which the delete/scrub paths previously did.
+func (f *FileService) cachedFileAndInvalidate(ctx context.Context, file_id string) *model.FileModel {
+	if f.cache == nil {
+		return nil
 	}
-	return context.WithTimeout(parent, f.backendOpTimeout)
+	cached, err := f.cache.GetBucktValue(ctx, file_id)
+	if err != nil || cached == nil {
+		return nil
+	}
+	defer func() { _ = f.cache.DeleteBucktValue(ctx, file_id) }()
+
+	s, ok := cached.(string)
+	if !ok {
+		return nil
+	}
+	var m model.FileModel
+	if json.Unmarshal([]byte(s), &m) != nil {
+		return nil
+	}
+	return &m
 }

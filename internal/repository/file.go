@@ -309,33 +309,9 @@ func getOrCreateTrashFolder(ctx context.Context, db *gorm.DB, user_id string) (*
 // files in the trash folder. If "photo.png" already exists, it returns
 // "photo (2).png", "photo (3).png", etc., preserving the extension.
 func uniqueFileTrashName(ctx context.Context, db *gorm.DB, trashID uuid.UUID, name string) (string, error) {
-	count, err := countFileName(ctx, db, trashID, name)
-	if err != nil {
-		return "", err
-	}
-	if count == 0 {
-		return name, nil
-	}
-
-	// Split into base and extension to insert the suffix sensibly
-	ext := ""
-	base := name
-	if idx := strings.LastIndex(name, "."); idx > 0 {
-		ext = name[idx:]
-		base = name[:idx]
-	}
-
-	for i := 2; i < 10000; i++ {
-		candidate := fmt.Sprintf("%s (%d)%s", base, i, ext)
-		count, err := countFileName(ctx, db, trashID, candidate)
-		if err != nil {
-			return "", err
-		}
-		if count == 0 {
-			return candidate, nil
-		}
-	}
-	return base + "-" + uuid.New().String()[:8] + ext, nil
+	return uniqueChildName(name, true, func(candidate string) (int64, error) {
+		return countFileName(ctx, db, trashID, candidate)
+	})
 }
 
 func countFileName(ctx context.Context, db *gorm.DB, parentID uuid.UUID, name string) (int64, error) {

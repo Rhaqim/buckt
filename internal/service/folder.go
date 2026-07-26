@@ -262,15 +262,7 @@ func (f *FolderService) DeleteFolder(ctx context.Context, folder_id string) (str
 
 		// Move every file under the folder to its new path. If any move
 		// fails, returning an error rolls back the entire DB transaction.
-		for _, mv := range fileMoves {
-			if err := opCtx.Err(); err != nil {
-				return fmt.Errorf("backend op timed out: %w", err)
-			}
-			if err := f.backend.Move(opCtx, mv.Old, mv.New); err != nil {
-				return fmt.Errorf("failed to move %s to %s: %w", mv.Old, mv.New, err)
-			}
-		}
-		return nil
+		return f.moveFilesOnBackend(opCtx, fileMoves)
 	})
 	if err != nil {
 		return "", f.logger.WrapError("failed to delete folder", err)
@@ -308,15 +300,7 @@ func (f *FolderService) RestoreFolder(ctx context.Context, user_id, folder_id st
 		}
 		opCtx, cancel := f.backendCtx(ctx)
 		defer cancel()
-		for _, mv := range fileMoves {
-			if err := opCtx.Err(); err != nil {
-				return fmt.Errorf("backend op timed out: %w", err)
-			}
-			if err := f.backend.Move(opCtx, mv.Old, mv.New); err != nil {
-				return fmt.Errorf("failed to move %s to %s: %w", mv.Old, mv.New, err)
-			}
-		}
-		return nil
+		return f.moveFilesOnBackend(opCtx, fileMoves)
 	})
 	if err != nil {
 		return f.logger.WrapError("failed to restore folder", err)
@@ -381,8 +365,20 @@ func (f *FolderService) ScrubFolder(ctx context.Context, user_id, folder_id stri
 
 // backendCtx returns a context with backendOpTimeout applied (if positive).
 func (f *FolderService) backendCtx(parent context.Context) (context.Context, context.CancelFunc) {
-	if f.backendOpTimeout <= 0 {
-		return parent, func() {}
+	return withBackendTimeout(parent, f.backendOpTimeout)
+}
+
+// moveFilesOnBackend relays each recorded file move to the storage backend,
+// aborting if the (timeout-bounded) context expires. Shared by the delete and
+// restore folder flows.
+func (f *FolderService) moveFilesOnBackend(ctx context.Context, fileMoves []model.PathMove) error {
+	for _, mv := range fileMoves {
+		if err := ctx.Err(); err != nil {
+			return fmt.Errorf("backend op timed out: %w", err)
+		}
+		if err := f.backend.Move(ctx, mv.Old, mv.New); err != nil {
+			return fmt.Errorf("failed to move %s to %s: %w", mv.Old, mv.New, err)
+		}
 	}
-	return context.WithTimeout(parent, f.backendOpTimeout)
+	return nil
 }
