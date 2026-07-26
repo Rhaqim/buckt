@@ -1,37 +1,14 @@
 package buckt
 
 import (
-	"database/sql"
-	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-// newNestedTestClient builds a real Client in nested-namespace mode (so restore
-// exercises physical backend blob moves, not just DB path rewrites).
-func newNestedTestClient(t *testing.T) *Client {
-	t.Helper()
-	dir := t.TempDir()
-
-	sqlDB, err := sql.Open("sqlite3", filepath.Join(dir, "buckt.db"))
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = sqlDB.Close() })
-
-	client, err := New(Config{
-		DB:             DBConfig{Driver: SQLite, Database: sqlDB},
-		MediaDir:       filepath.Join(dir, "media"),
-		Log:            LogConfig{Silence: true},
-		FlatNameSpaces: false,
-	})
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = client.Close() })
-	return client
-}
-
 func TestRestoreFileReturnsToOrigin(t *testing.T) {
-	c := newNestedTestClient(t)
+	c := newTestClient(t, withNested())
 	const user = "u1"
 
 	// root/Docs/report.txt
@@ -70,7 +47,7 @@ func TestRestoreFileReturnsToOrigin(t *testing.T) {
 }
 
 func TestRestoreFileFallsBackToRootWhenOriginGone(t *testing.T) {
-	c := newNestedTestClient(t)
+	c := newTestClient(t, withNested())
 	const user = "u1"
 
 	docsID, err := c.NewFolder(user, "", "Docs", "")
@@ -95,7 +72,7 @@ func TestRestoreFileFallsBackToRootWhenOriginGone(t *testing.T) {
 }
 
 func TestRestoreFolderReturnsToOrigin(t *testing.T) {
-	c := newNestedTestClient(t)
+	c := newTestClient(t, withNested())
 	const user = "u1"
 
 	// root/Docs/Photos/pic.txt

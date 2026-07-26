@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"database/sql"
 	"io"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/Rhaqim/buckt/internal/backend"
@@ -11,14 +13,105 @@ import (
 	"github.com/Rhaqim/buckt/internal/domain"
 	"github.com/Rhaqim/buckt/internal/mocks"
 	"github.com/Rhaqim/buckt/internal/model"
+	"github.com/Rhaqim/buckt/pkg/metrics"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
-func UUIDFromString(name string) uuid.UUID {
-	namespace := uuid.NameSpaceDNS // You can change this to another namespace if needed
-	return uuid.NewSHA1(namespace, []byte(name))
+/* ------------------------------------------------------------------ */
+/* Shared real-DB test harness                                        */
+/*                                                                    */
+/* newTestClient builds a real Client (real services, not mocks) for  */
+/* the integration-style suites in the buckt_*_test.go files. It      */
+/* replaces the five near-identical per-file constructors these tests */
+/* used to carry. Defaults: SQLite (temp file), temp media dir,       */
+/* silent logs, flat namespaces, no size limit. Override via options. */
+/* ------------------------------------------------------------------ */
+
+type testClientConfig struct {
+	driver         DBDrivers
+	flatNameSpaces bool
+	maxFileSize    int64
+	metrics        metrics.Recorder
+}
+
+type testClientOption func(*testClientConfig)
+
+// withPostgres runs the Client against the Postgres in BUCKT_PG_DSN (the test
+// skips when it is unset). Nested + Postgres is the production configuration.
+func withPostgres() testClientOption { return func(c *testClientConfig) { c.driver = Postgres } }
+
+// withNested uses nested-namespace mode so trash/move/restore exercise physical
+// backend blob moves, not just DB path rewrites.
+func withNested() testClientOption { return func(c *testClientConfig) { c.flatNameSpaces = false } }
+
+// withMaxFileSize caps the upload size (used to trigger ErrFileTooLarge).
+func withMaxFileSize(n int64) testClientOption {
+	return func(c *testClientConfig) { c.maxFileSize = n }
+}
+
+// withMetrics attaches a metrics recorder so backend ops are collected.
+func withMetrics(m metrics.Recorder) testClientOption {
+	return func(c *testClientConfig) { c.metrics = m }
+}
+
+// pgDSN returns the Postgres DSN from BUCKT_PG_DSN or skips the test.
+func pgDSN(t *testing.T) string {
+	t.Helper()
+	dsn := os.Getenv("BUCKT_PG_DSN")
+	if dsn == "" {
+		t.Skip("BUCKT_PG_DSN not set; skipping Postgres integration test")
+	}
+	return dsn
+}
+
+// dropBucktTables clears any existing buckt schema so a Postgres test starts
+// from a fresh slate (and re-runs the migrations cleanly).
+func dropBucktTables(t *testing.T, sqlDB *sql.DB) {
+	t.Helper()
+	for _, tbl := range []string{"file_models", "folder_models", "buckt_schema_migrations", "buckt_migration_models"} {
+		_, err := sqlDB.Exec("DROP TABLE IF EXISTS " + tbl + " CASCADE")
+		require.NoError(t, err)
+	}
+}
+
+func newTestClient(t *testing.T, opts ...testClientOption) *Client {
+	t.Helper()
+
+	cfg := testClientConfig{driver: SQLite, flatNameSpaces: true}
+	for _, o := range opts {
+		o(&cfg)
+	}
+
+	dir := t.TempDir()
+
+	var sqlDB *sql.DB
+	var err error
+	switch cfg.driver {
+	case Postgres:
+		sqlDB, err = sql.Open("postgres", pgDSN(t))
+		require.NoError(t, err)
+		t.Cleanup(func() { _ = sqlDB.Close() })
+		dropBucktTables(t, sqlDB)
+	default:
+		sqlDB, err = sql.Open("sqlite3", filepath.Join(dir, "buckt.db"))
+		require.NoError(t, err)
+		t.Cleanup(func() { _ = sqlDB.Close() })
+	}
+
+	client, err := New(Config{
+		DB:             DBConfig{Driver: cfg.driver, Database: sqlDB},
+		MediaDir:       filepath.Join(dir, "media"),
+		Log:            LogConfig{Silence: true},
+		FlatNameSpaces: cfg.flatNameSpaces,
+		MaxFileSize:    cfg.maxFileSize,
+		Metrics:        cfg.metrics,
+	})
+	require.NoError(t, err) // also proves the migrations run cleanly on this driver
+	t.Cleanup(func() { _ = client.Close() })
+	return client
 }
 
 type MockBuckt struct {

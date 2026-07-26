@@ -2,8 +2,6 @@ package buckt
 
 import (
 	"context"
-	"database/sql"
-	"path/filepath"
 	"testing"
 
 	"github.com/Rhaqim/buckt/pkg/metrics"
@@ -11,28 +9,9 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func newMetricsTestClient(t *testing.T, m metrics.Recorder) *Client {
-	t.Helper()
-	dir := t.TempDir()
-	sqlDB, err := sql.Open("sqlite3", filepath.Join(dir, "buckt.db"))
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = sqlDB.Close() })
-
-	client, err := New(Config{
-		DB:             DBConfig{Driver: SQLite, Database: sqlDB},
-		MediaDir:       filepath.Join(dir, "media"),
-		Log:            LogConfig{Silence: true},
-		FlatNameSpaces: true,
-		Metrics:        m,
-	})
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = client.Close() })
-	return client
-}
-
 func TestMetrics_BackendOpsRecorded(t *testing.T) {
 	m := metrics.NewCollector()
-	c := newMetricsTestClient(t, m)
+	c := newTestClient(t, withMetrics(m))
 	const user = "u1"
 
 	// Upload → backend Put; Get → backend Get (or cache).
@@ -58,13 +37,13 @@ func TestMetrics_BackendOpsRecorded(t *testing.T) {
 
 func TestMetrics_NilRecorderIsNoOp(t *testing.T) {
 	// With no Metrics configured, uploads still work and nothing panics.
-	c := newMetricsTestClient(t, nil)
+	c := newTestClient(t)
 	_, err := c.UploadFile("u1", "", "a.txt", "text/plain", []byte("hello"))
 	require.NoError(t, err)
 }
 
 func TestClientStorageAndCacheStats(t *testing.T) {
-	c := newMetricsTestClient(t, nil)
+	c := newTestClient(t)
 	const user = "u1"
 
 	before, err := c.StorageBytes(context.Background())

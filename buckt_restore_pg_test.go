@@ -1,44 +1,16 @@
 package buckt
 
 import (
-	"database/sql"
-	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-// newPGClientNested builds a nested-namespace Client on the Postgres in
-// BUCKT_PG_DSN (fresh tables). Nested mode + Postgres is the production
-// configuration, so trash/restore path rewrites and backend blob moves are
-// verified against the real dialect.
-func newPGClientNested(t *testing.T) *Client {
-	t.Helper()
-	sqlDB, err := sql.Open("postgres", pgDSN(t))
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = sqlDB.Close() })
-
-	for _, tbl := range []string{"file_models", "folder_models", "buckt_schema_migrations", "buckt_migration_models"} {
-		_, err := sqlDB.Exec("DROP TABLE IF EXISTS " + tbl + " CASCADE")
-		require.NoError(t, err)
-	}
-
-	client, err := New(Config{
-		DB:             DBConfig{Driver: Postgres, Database: sqlDB},
-		MediaDir:       filepath.Join(t.TempDir(), "media"),
-		Log:            LogConfig{Silence: true},
-		FlatNameSpaces: false,
-	})
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = client.Close() })
-	return client
-}
-
 // TestRestoreReturnsToOrigin_Postgres mirrors the SQLite restore tests against
 // Postgres in nested mode — the production configuration.
 func TestRestoreReturnsToOrigin_Postgres(t *testing.T) {
-	c := newPGClientNested(t)
+	c := newTestClient(t, withPostgres(), withNested())
 	const user = "u1"
 
 	t.Run("file restores to origin folder", func(t *testing.T) {
