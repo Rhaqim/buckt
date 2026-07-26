@@ -41,6 +41,11 @@ metrics plus an S3-compatible-endpoint fix. No API removals; safe to adopt.
   with a toggle), a **responsive** mobile-friendly layout, a **grid/list** view
   toggle, a breadcrumb, and a **"Usage" panel** that renders the metrics (storage,
   cache hit rate, and per-op R2 A/B/free counts) right in the browser.
+- **Trash browsing in the bundled web UI.** A new **Trash** view (`GET /web/trash`)
+  lists items that were moved to trash, with **Restore** (moves the item back to
+  your root folder — `POST /web/restore-file/:id`, `POST /web/restore-folder/:id`)
+  and **Delete permanently** actions. Previously trashed items were only reachable
+  via the `Client.GetTrashFolder` API.
 
 ### 🐛 Fixed
 
@@ -54,6 +59,17 @@ metrics plus an S3-compatible-endpoint fix. No API removals; safe to adopt.
 - **GCP `Exists` correctly detects missing objects.** It compared the error with
   `==` against `storage.ErrObjectNotExist`, which fails when the error is wrapped
   (as GCS returns it). Now uses `errors.Is`.
+- **Bundled web UI: viewing a file no longer returns `401`.** v1.5.0 moved
+  `/serve` and `/stream` behind the header-based API guard, but browsers can't
+  attach the `buckt-User-ID` header to `<img>`, `<video>`, or download requests,
+  so the standalone UI (`WebModeUI`/`WebModeAll`) broke. These endpoints are now
+  scoped by mode: the single-tenant UI serves content as the default owner (like
+  the `/web` routes), standalone API mode still requires the header, and mount
+  mode still defers to the mounting app's auth.
+- **Usage panel distinguishes "metrics off" from "no ops yet."** `/metrics` now
+  reports `metrics_enabled` from whether `WithMetrics` was configured, not from
+  whether any backend op has been recorded, so a freshly started app with metrics
+  enabled no longer claims metrics are off. The mount example now enables metrics.
 
 ### 🧪 Tests
 

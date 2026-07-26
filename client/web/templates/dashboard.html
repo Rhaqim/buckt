@@ -6,16 +6,22 @@
 		<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l9-9 9 9M5 10v10a1 1 0 001 1h3v-6h6v6h3a1 1 0 001-1V10"/></svg>
 		<span class="hidden sm:inline">Home</span>
 	</a>
-	{{ if .ParentID }}
+	{{ if .IsTrash }}
 		<span class="text-slate-300 dark:text-slate-600">/</span>
-		<a href="/web/folder/{{ .ParentID }}" class="shrink-0 text-blue-600 dark:text-blue-400 hover:underline">Up</a>
+		<span class="font-medium">Trash</span>
+	{{ else }}
+		{{ if .ParentID }}
+			<span class="text-slate-300 dark:text-slate-600">/</span>
+			<a href="/web/folder/{{ .ParentID }}" class="shrink-0 text-blue-600 dark:text-blue-400 hover:underline">Up</a>
+		{{ end }}
+		<span class="text-slate-300 dark:text-slate-600">/</span>
+		<span class="font-medium truncate">{{ .Name }}</span>
 	{{ end }}
-	<span class="text-slate-300 dark:text-slate-600">/</span>
-	<span class="font-medium truncate">{{ .Name }}</span>
 </nav>
 {{ end }}
 
 {{ define "body" }}
+{{ if .IsTrash }}{{ template "trashcontent" . }}{{ else }}
 <div>
 	<!-- Actions row -->
 	<div class="flex items-center justify-between gap-3 mb-5">
@@ -231,4 +237,4 @@
 	}
 	function hiddenInput(name, value) { const i = document.createElement("input"); i.type = "hidden"; i.name = name; i.value = value; return i; }
 </script>
-{{ end }}
+{{ end }}{{ end }}

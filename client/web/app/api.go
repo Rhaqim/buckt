@@ -39,8 +39,13 @@ func (svc *APIService) Metrics(c *gin.Context) {
 		Bytes   int64  `json:"bytes"`
 		R2Class string `json:"r2_class,omitempty"`
 	}
+	// metricsOn reflects whether the app configured buckt.WithMetrics — not
+	// whether any ops have been recorded yet. A freshly started app has metrics
+	// enabled but an empty backends map until the first backend call, and the UI
+	// must distinguish "off" from "on but idle".
+	snap, metricsOn := svc.client.MetricsSnapshot()
 	backends := map[string]map[string]opStat{}
-	if snap, ok := svc.client.MetricsSnapshot(); ok {
+	if metricsOn {
 		for backend, ops := range snap {
 			m := make(map[string]opStat, len(ops))
 			for op, s := range ops {
@@ -54,7 +59,7 @@ func (svc *APIService) Metrics(c *gin.Context) {
 		"storage_bytes":   storage,
 		"cache":           gin.H{"hits": hits, "misses": misses},
 		"backends":        backends,
-		"metrics_enabled": len(backends) > 0,
+		"metrics_enabled": metricsOn,
 	})
 }
 

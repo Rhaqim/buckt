@@ -48,6 +48,89 @@ func (svc *WebService) ViewFolder(c *gin.Context) {
 	})
 }
 
+// ViewTrash renders the user's trash folder — the files and folders that were
+// moved to trash (soft-deleted) — with restore and permanent-delete actions.
+func (svc *WebService) ViewTrash(c *gin.Context) {
+	user_id := c.GetString("owner_id")
+
+	trash, err := svc.client.GetTrashFolder(user_id)
+	if err != nil {
+		c.AbortWithStatusJSON(500, response.WrapError("failed to get trash", err))
+		return
+	}
+
+	// Rendered by dashboard.html (IsTrash branch). A single page template owns
+	// the "body"/"toolbar" slots — a separate trash page defining them again
+	// would collide in the shared template set and hijack every page.
+	c.HTML(200, "dashboard.html", gin.H{
+		"Title":   "Trash",
+		"page":    "trash",
+		"IsTrash": true,
+		"ID":      trash.ID,
+		"Name":    trash.Name,
+		"Folders": trash.Folders,
+		"Files":   trash.Files,
+	})
+}
+
+// RestoreFile moves a trashed file back to the user's root folder.
+func (svc *WebService) RestoreFile(c *gin.Context) {
+	user_id := c.GetString("owner_id")
+
+	fileID := c.Param("file_id")
+	if fileID == "" {
+		c.AbortWithStatusJSON(400, response.Error("file_id is required", ""))
+		return
+	}
+
+	root, err := svc.client.GetFolderWithContent(user_id, "")
+	if err != nil {
+		c.AbortWithStatusJSON(500, response.WrapError("failed to resolve root folder", err))
+		return
+	}
+
+	if err := svc.client.MoveFile(fileID, root.ID.String()); err != nil {
+		c.AbortWithStatusJSON(500, response.WrapError("failed to restore file", err))
+		return
+	}
+
+	// HTMX requests: return empty body so hx-swap="outerHTML" removes the card.
+	if c.GetHeader("HX-Request") == "true" {
+		c.String(200, "")
+		return
+	}
+	c.Redirect(302, "/web/trash")
+}
+
+// RestoreFolder moves a trashed folder back to the user's root folder.
+func (svc *WebService) RestoreFolder(c *gin.Context) {
+	user_id := c.GetString("owner_id")
+
+	folderID := c.Param("folder_id")
+	if folderID == "" {
+		c.AbortWithStatusJSON(400, response.Error("folder_id is required", ""))
+		return
+	}
+
+	root, err := svc.client.GetFolderWithContent(user_id, "")
+	if err != nil {
+		c.AbortWithStatusJSON(500, response.WrapError("failed to resolve root folder", err))
+		return
+	}
+
+	if err := svc.client.MoveFolder(user_id, folderID, root.ID.String()); err != nil {
+		c.AbortWithStatusJSON(500, response.WrapError("failed to restore folder", err))
+		return
+	}
+
+	// HTMX requests: return empty body so hx-swap="outerHTML" removes the card.
+	if c.GetHeader("HX-Request") == "true" {
+		c.String(200, "")
+		return
+	}
+	c.Redirect(302, "/web/trash")
+}
+
 // NewFolder implements domain.WebService.
 func (svc *WebService) NewFolder(c *gin.Context) {
 	user_id := c.GetString("owner_id")

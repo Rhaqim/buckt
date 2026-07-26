@@ -1,0 +1,79 @@
+{{ define "trashcontent" }}
+<div>
+	<div class="flex items-center gap-2 mb-5 text-slate-500 dark:text-slate-400">
+		<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+		<p class="text-sm">Items here were moved to trash. Restore them, or delete them permanently.</p>
+	</div>
+
+	{{ if and (not .Folders) (not .Files) }}
+		<div class="text-center py-20 text-slate-400">
+			<svg class="w-16 h-16 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+			<p class="text-lg font-medium text-slate-500 dark:text-slate-400">Trash is empty</p>
+			<p class="text-sm mt-1">Deleted files and folders will appear here</p>
+		</div>
+	{{ else }}
+		{{ if .Folders }}
+		<section class="mb-7">
+			<h3 class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Folders</h3>
+			<div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+				{{ range .Folders }}
+				<div id="trash-folder-{{ .ID }}" class="card relative bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-3 flex items-center gap-3">
+					<svg class="w-9 h-9 shrink-0 text-amber-400" fill="currentColor" viewBox="0 0 24 24"><path d="M10 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/></svg>
+					<p class="name text-sm font-medium truncate flex-1" title="{{ .Name }}">{{ .Name }}</p>
+					<div class="flex items-center gap-1 shrink-0">
+						<button type="button" title="Restore"
+							hx-post="/web/restore-folder/{{ .ID }}" hx-target="#trash-folder-{{ .ID }}" hx-swap="outerHTML"
+							class="p-1.5 rounded-md text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/40">
+							<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v6h6M3 13a9 9 0 103-7.7L3 8"/></svg>
+						</button>
+						<button type="button" title="Delete permanently"
+							hx-delete="/web/scrub-folder/{{ .ID }}" hx-target="#trash-folder-{{ .ID }}" hx-swap="outerHTML"
+							hx-confirm="Permanently delete this folder and its contents? This cannot be undone."
+							class="p-1.5 rounded-md text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40">
+							<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+						</button>
+					</div>
+				</div>
+				{{ end }}
+			</div>
+		</section>
+		{{ end }}
+
+		{{ if .Files }}
+		<section>
+			<h3 class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Files</h3>
+			<div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+				{{ range .Files }}
+				<div id="trash-file-{{ .ID }}" class="card relative bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-3 flex items-center gap-3">
+					<div class="w-10 h-10 shrink-0 rounded-lg grid place-items-center bg-slate-100 dark:bg-slate-800 text-slate-400">
+						{{ if hasPrefix .ContentType "image/" }}
+							<img src="/serve/{{ .ID }}" class="w-full h-full object-cover rounded-lg" loading="lazy" alt="{{ .Name }}" />
+						{{ else }}
+							<svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
+						{{ end }}
+					</div>
+					<div class="min-w-0 flex-1">
+						<p class="name text-sm font-medium truncate" title="{{ .Name }}">{{ .Name }}</p>
+						<p class="text-xs text-slate-400">{{ formatSize .Size }}</p>
+					</div>
+					<div class="flex items-center gap-1 shrink-0">
+						<button type="button" title="Restore"
+							hx-post="/web/restore-file/{{ .ID }}" hx-target="#trash-file-{{ .ID }}" hx-swap="outerHTML"
+							class="p-1.5 rounded-md text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/40">
+							<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v6h6M3 13a9 9 0 103-7.7L3 8"/></svg>
+						</button>
+						<button type="button" title="Delete permanently"
+							hx-delete="/web/scrub/{{ .ID }}" hx-target="#trash-file-{{ .ID }}" hx-swap="outerHTML"
+							hx-confirm="Permanently delete this file? This cannot be undone."
+							class="p-1.5 rounded-md text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40">
+							<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+						</button>
+					</div>
+				</div>
+				{{ end }}
+			</div>
+		</section>
+		{{ end }}
+	{{ end }}
+</div>
+{{ end }}

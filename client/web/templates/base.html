@@ -62,6 +62,12 @@
 
 				<div class="flex-1 min-w-0">{{ template "toolbar" . }}</div>
 
+				<a href="/web/trash" title="Trash"
+					class="shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800">
+					<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+					<span class="hidden sm:inline">Trash</span>
+				</a>
+
 				<button type="button" onclick="openUsage()" title="Usage &amp; metrics"
 					class="shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800">
 					<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6m4 6V7m4 12v-9M5 19h14"/></svg>
@@ -128,7 +134,7 @@
 					html += tile("Storage used", fmtBytes(m.storage_bytes), "blue");
 					html += tile("Cache hit rate", rate + "%", "green", hits + " hits · " + miss + " misses");
 
-					if (m.metrics_enabled) {
+					if (m.metrics_enabled && Object.keys(m.backends).length) {
 						for (var be in m.backends) {
 							html += '<div><div class="text-xs font-semibold uppercase tracking-wide text-slate-400 mt-4 mb-2">' + be + ' backend</div>';
 							html += '<div class="rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden">';
@@ -146,6 +152,8 @@
 							}
 							html += '</tbody></table></div></div>';
 						}
+					} else if (m.metrics_enabled) {
+						html += '<p class="text-slate-500">No backend operations recorded yet. Upload or download a file to see per-operation counts here.</p>';
 					} else {
 						html += '<p class="text-slate-500">Backend operation metrics are off. Enable them with <code class="px-1 rounded bg-slate-100 dark:bg-slate-800">buckt.WithMetrics(metrics.NewCollector())</code>.</p>';
 					}
