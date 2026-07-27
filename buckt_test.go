@@ -38,6 +38,7 @@ type testClientConfig struct {
 	metrics        metrics.Recorder
 	eventHandlers  []events.Handler
 	dedup          bool
+	derivatives    []DerivativeSpec
 }
 
 type testClientOption func(*testClientConfig)
@@ -68,6 +69,11 @@ func withEventHandler(h events.Handler) testClientOption {
 // withDedup enables content deduplication on the test client.
 func withDedup() testClientOption {
 	return func(c *testClientConfig) { c.dedup = true }
+}
+
+// withImageDerivatives configures resized-image variants on the test client.
+func withImageDerivatives(specs ...DerivativeSpec) testClientOption {
+	return func(c *testClientConfig) { c.derivatives = append(c.derivatives, specs...) }
 }
 
 // pgDSN returns the Postgres DSN from BUCKT_PG_DSN or skips the test.
@@ -123,6 +129,7 @@ func newTestClient(t *testing.T, opts ...testClientOption) *Client {
 		Metrics:        cfg.metrics,
 		EventHandlers:  cfg.eventHandlers,
 		Dedup:          cfg.dedup,
+		Derivatives:    cfg.derivatives,
 	})
 	require.NoError(t, err) // also proves the migrations run cleanly on this driver
 	t.Cleanup(func() { _ = client.Close() })

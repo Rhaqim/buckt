@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"net/http"
 	"time"
 
 	"github.com/Rhaqim/buckt/internal/backend"
@@ -23,6 +24,7 @@ import (
 	"github.com/Rhaqim/buckt/internal/model"
 	"github.com/Rhaqim/buckt/internal/repository"
 	"github.com/Rhaqim/buckt/internal/service"
+	"github.com/Rhaqim/buckt/internal/utils"
 	"github.com/Rhaqim/buckt/pkg/events"
 	"github.com/Rhaqim/buckt/pkg/logger"
 	"github.com/Rhaqim/buckt/pkg/metrics"
@@ -40,6 +42,11 @@ type Client struct {
 	logger   domain.BucktLogger
 	lruCache domain.LRUCache
 	metrics  metrics.Recorder
+
+	// backend and derivatives support image-derivative generation/retrieval,
+	// which lives at the Client layer (it composes GetFile + backend writes).
+	backend     Backend
+	derivatives []DerivativeSpec
 
 	fileService   domain.FileService
 	folderService domain.FolderService
@@ -120,6 +127,8 @@ func New(conf Config, opts ...ConfigFunc) (*Client, error) {
 		logger:            bucktLog,
 		lruCache:          lruCache,
 		metrics:           conf.Metrics,
+		backend:           backend,
+		derivatives:       conf.Derivatives,
 		flatnameSpaces:    conf.FlatNameSpaces,
 		silence:           logConf.Silence,
 		maxFileSize:       maxFileSize,
@@ -765,7 +774,18 @@ func (b *Client) DeleteFileContext(ctx context.Context, file_id string) (string,
 // Returns:
 //   - error: An error if the file deletion fails, otherwise nil.
 func (b *Client) DeleteFilePermanentlyContext(ctx context.Context, file_id string) (string, error) {
-	return b.fileService.ScrubFile(ctx, file_id)
+	parentID, err := b.fileService.ScrubFile(ctx, file_id)
+	if err != nil {
+		return parentID, err
+	}
+	// Best-effort: remove any generated derivatives. They are keyed by file id
+	// and not tracked as files, so nothing else cleans them up.
+	if len(b.derivatives) > 0 {
+		if derr := b.backend.DeleteFolder(ctx, derivativeDir(file_id)); derr != nil {
+			b.logger.Warn("failed to delete derivatives for scrubbed file " + file_id + ": " + derr.Error())
+		}
+	}
+	return parentID, nil
 }
 
 // RestoreFileContext moves a trashed file back to the folder it was in before
@@ -810,6 +830,75 @@ func (b *Client) SetFileMetadataContext(ctx context.Context, file_id string, met
 // GetFileMetadataContext is GetFileMetadata with an explicit context.
 func (b *Client) GetFileMetadataContext(ctx context.Context, file_id string) (map[string]string, error) {
 	return b.fileService.GetMetadata(ctx, file_id)
+}
+
+/* Image derivatives */
+
+// isResizableImage reports whether the content type is one ResizeImage handles.
+func isResizableImage(contentType string) bool {
+	switch contentType {
+	case "image/jpeg", "image/jpg", "image/png":
+		return true
+	default:
+		return false
+	}
+}
+
+// derivativeDir is the backend key prefix holding a file's derivatives. Keying
+// by file id (not path) means moving or trashing the file never orphans them.
+func derivativeDir(file_id string) string { return ".buckt_derivatives/" + file_id }
+
+func derivativeKey(file_id, name string) string { return derivativeDir(file_id) + "/" + name }
+
+// GenerateDerivatives produces the configured resized variants (see
+// WithImageDerivatives) for a file and stores them. It's a no-op when no
+// variants are configured or the file isn't a supported image (JPEG/PNG), so it
+// is safe to call for every upload. Resizing is CPU-bound — call this from a
+// file.uploaded event handler (ideally a background worker) rather than in the
+// request path.
+func (b *Client) GenerateDerivatives(file_id string) error {
+	return b.GenerateDerivativesContext(context.Background(), file_id)
+}
+
+// GetDerivative returns the bytes and detected content type of a previously
+// generated variant, or ErrNotFound if it hasn't been generated.
+func (b *Client) GetDerivative(file_id, name string) ([]byte, string, error) {
+	return b.GetDerivativeContext(context.Background(), file_id, name)
+}
+
+// GenerateDerivativesContext is GenerateDerivatives with an explicit context.
+func (b *Client) GenerateDerivativesContext(ctx context.Context, file_id string) error {
+	if len(b.derivatives) == 0 {
+		return nil
+	}
+
+	file, err := b.fileService.GetFile(ctx, file_id)
+	if err != nil {
+		return err
+	}
+	if !isResizableImage(file.ContentType) {
+		return nil
+	}
+
+	for _, spec := range b.derivatives {
+		out, err := utils.ResizeImage(file.Data, spec.MaxWidth)
+		if err != nil {
+			return b.logger.WrapError("failed to resize derivative "+spec.Name, err)
+		}
+		if err := b.backend.Put(ctx, derivativeKey(file_id, spec.Name), out); err != nil {
+			return b.logger.WrapError("failed to store derivative "+spec.Name, err)
+		}
+	}
+	return nil
+}
+
+// GetDerivativeContext is GetDerivative with an explicit context.
+func (b *Client) GetDerivativeContext(ctx context.Context, file_id, name string) ([]byte, string, error) {
+	data, err := b.backend.Get(ctx, derivativeKey(file_id, name))
+	if err != nil {
+		return nil, "", fmt.Errorf("derivative %q not found: %w", name, ErrNotFound)
+	}
+	return data, http.DetectContentType(data), nil
 }
 
 /* Migration */

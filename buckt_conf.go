@@ -205,6 +205,19 @@ type Config struct {
 	// WithEventHandler. Handlers run synchronously post-operation — keep them
 	// fast (enqueue and return). Empty (the default) means zero overhead.
 	EventHandlers []events.Handler
+
+	// Derivatives defines the resized image variants GenerateDerivatives will
+	// produce. Empty (the default) disables the feature. Configure with
+	// WithImageDerivatives.
+	Derivatives []DerivativeSpec
+}
+
+// DerivativeSpec describes one resized image variant (e.g. a thumbnail). The
+// image is scaled to at most MaxWidth pixels wide, preserving aspect ratio and
+// never upscaling, and re-encoded in its source format (JPEG or PNG).
+type DerivativeSpec struct {
+	Name     string // variant name, e.g. "thumbnail" — used to fetch it back
+	MaxWidth uint   // maximum width in pixels
 }
 
 // ConfigFunc is a function type that takes a pointer to Config and modifies it.
@@ -334,6 +347,21 @@ func WithBackend(backend Backend) ConfigFunc {
 func WithMetrics(r metrics.Recorder) ConfigFunc {
 	return func(c *Config) {
 		c.Metrics = r
+	}
+}
+
+// WithImageDerivatives configures the resized image variants that
+// GenerateDerivatives produces (and GetDerivative fetches). Call
+// GenerateDerivatives from a file.uploaded event handler so the CPU-bound
+// resizing runs in your worker, off the upload path. Supports JPEG and PNG.
+//
+//	buckt.WithImageDerivatives(
+//	    buckt.DerivativeSpec{Name: "thumbnail", MaxWidth: 200},
+//	    buckt.DerivativeSpec{Name: "medium", MaxWidth: 800},
+//	)
+func WithImageDerivatives(specs ...DerivativeSpec) ConfigFunc {
+	return func(c *Config) {
+		c.Derivatives = append(c.Derivatives, specs...)
 	}
 }
 

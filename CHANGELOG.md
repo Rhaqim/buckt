@@ -36,6 +36,16 @@ additive; no API removals, safe to adopt.
   and bandwidth. It reuses the content hash buckt already records, needs no schema
   change, is scoped to the target folder so it composes with nested-namespace
   paths, and never resurrects a trashed duplicate. Off by default.
+- **Image derivatives** (`WithImageDerivatives`, `GenerateDerivatives`,
+  `GetDerivative`). Opt-in. Configure named resized variants (e.g. `thumbnail`
+  200px, `medium` 800px); `GenerateDerivatives(fileID)` produces and stores them
+  for JPEG/PNG uploads, and `GetDerivative(fileID, name)` fetches one — so the
+  dashboard serves a thumbnail instead of the full-size original. Resizing is
+  CPU-bound, so call `GenerateDerivatives` from a `file.uploaded` event handler
+  (your worker), keeping it off the upload path. Uses the pure-Go resizer buckt
+  already ships (no new dependency; no WebP, which would require cgo). Variants
+  are stored as backend objects keyed by file id — moving or trashing the file
+  never orphans them — never upscale, and are removed on permanent delete.
 
 ## [1.6.0]
 
