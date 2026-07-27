@@ -1,7 +1,6 @@
 package utils
 
 import (
-	"bytes"
 	"fmt"
 	"io"
 	"mime/multipart"
@@ -17,40 +16,6 @@ import (
 
 	"github.com/nfnt/resize"
 )
-
-// ResizeImage decodes an in-memory JPEG or PNG image, scales it to at most
-// maxWidth pixels wide (preserving aspect ratio and never upscaling), and
-// re-encodes it in its source format. Working on bytes rather than file paths
-// lets it run against any storage backend, not just the local filesystem.
-// Returns an error for image formats it can't decode/encode (only JPEG and PNG
-// are supported).
-func ResizeImage(data []byte, maxWidth uint) ([]byte, error) {
-	img, format, err := image.Decode(bytes.NewReader(data))
-	if err != nil {
-		return nil, err
-	}
-
-	// Never upscale: cap the target at the source width.
-	w := uint(img.Bounds().Dx())
-	if maxWidth == 0 || maxWidth > w {
-		maxWidth = w
-	}
-	resized := resize.Resize(maxWidth, 0, img, resize.Lanczos3)
-
-	var buf bytes.Buffer
-	switch format {
-	case "png":
-		err = png.Encode(&buf, resized)
-	case "jpeg":
-		err = jpeg.Encode(&buf, resized, nil)
-	default:
-		return nil, fmt.Errorf("unsupported image format %q for resizing", format)
-	}
-	if err != nil {
-		return nil, err
-	}
-	return buf.Bytes(), nil
-}
 
 func GenerateThumbnail(inputPath, outputPath string, width uint) error {
 	file, err := os.Open(inputPath)

@@ -24,8 +24,8 @@ import (
 	"github.com/Rhaqim/buckt/internal/model"
 	"github.com/Rhaqim/buckt/internal/repository"
 	"github.com/Rhaqim/buckt/internal/service"
-	"github.com/Rhaqim/buckt/internal/utils"
 	"github.com/Rhaqim/buckt/pkg/events"
+	"github.com/Rhaqim/buckt/pkg/imageproc"
 	"github.com/Rhaqim/buckt/pkg/logger"
 	"github.com/Rhaqim/buckt/pkg/metrics"
 )
@@ -43,10 +43,12 @@ type Client struct {
 	lruCache domain.LRUCache
 	metrics  metrics.Recorder
 
-	// backend and derivatives support image-derivative generation/retrieval,
-	// which lives at the Client layer (it composes GetFile + backend writes).
-	backend     Backend
-	derivatives []DerivativeSpec
+	// backend, derivatives and imageProcessor support image-derivative
+	// generation/retrieval, which lives at the Client layer (it composes GetFile
+	// + backend writes). imageProcessor is never nil (defaults to the built-in).
+	backend        Backend
+	derivatives    []DerivativeSpec
+	imageProcessor imageproc.Processor
 
 	fileService   domain.FileService
 	folderService domain.FolderService
@@ -107,6 +109,12 @@ func New(conf Config, opts ...ConfigFunc) (*Client, error) {
 		backendTimeout = DefaultBackendOpTimeout
 	}
 
+	// Image processor for derivatives: default to the built-in pure-Go one.
+	imageProcessor := conf.ImageProcessor
+	if imageProcessor == nil {
+		imageProcessor = imageproc.Default()
+	}
+
 	// Initialize the app services
 	folderService, fileService := newAppServices(
 		conf.FlatNameSpaces,
@@ -129,6 +137,7 @@ func New(conf Config, opts ...ConfigFunc) (*Client, error) {
 		metrics:           conf.Metrics,
 		backend:           backend,
 		derivatives:       conf.Derivatives,
+		imageProcessor:    imageProcessor,
 		flatnameSpaces:    conf.FlatNameSpaces,
 		silence:           logConf.Silence,
 		maxFileSize:       maxFileSize,
@@ -214,8 +223,11 @@ func (b *Client) MetricsSnapshot() (map[string]map[string]metrics.Stat, bool) {
 // storage. Pass a per-request context to bound the query.
 func (b *Client) StorageBytes(ctx context.Context) (int64, error) {
 	var total int64
+	// Include derivatives_bytes: generated image derivatives occupy backend
+	// storage but are not tracked as files, so summing file sizes alone would
+	// undercount.
 	if err := b.db.WithContext(ctx).Model(&model.FileModel{}).
-		Select("COALESCE(SUM(size), 0)").Scan(&total).Error; err != nil {
+		Select("COALESCE(SUM(size), 0) + COALESCE(SUM(derivatives_bytes), 0)").Scan(&total).Error; err != nil {
 		return 0, b.logger.WrapError("failed to compute storage bytes", err)
 	}
 	return total, nil
@@ -834,14 +846,12 @@ func (b *Client) GetFileMetadataContext(ctx context.Context, file_id string) (ma
 
 /* Image derivatives */
 
-// isResizableImage reports whether the content type is one ResizeImage handles.
-func isResizableImage(contentType string) bool {
-	switch contentType {
-	case "image/jpeg", "image/jpg", "image/png":
-		return true
-	default:
-		return false
-	}
+// isImage reports whether the content type is an image, so derivative
+// generation is attempted (the configured processor decides which encodings it
+// actually supports). Non-images are skipped, making GenerateDerivatives safe
+// to call for every upload.
+func isImage(contentType string) bool {
+	return len(contentType) >= 6 && contentType[:6] == "image/"
 }
 
 // derivativeDir is the backend key prefix holding a file's derivatives. Keying
@@ -876,18 +886,27 @@ func (b *Client) GenerateDerivativesContext(ctx context.Context, file_id string)
 	if err != nil {
 		return err
 	}
-	if !isResizableImage(file.ContentType) {
+	if !isImage(file.ContentType) {
 		return nil
 	}
 
+	var totalBytes int64
 	for _, spec := range b.derivatives {
-		out, err := utils.ResizeImage(file.Data, spec.MaxWidth)
+		out, _, err := b.imageProcessor.Resize(file.Data, spec.MaxWidth, spec.Format)
 		if err != nil {
 			return b.logger.WrapError("failed to resize derivative "+spec.Name, err)
 		}
 		if err := b.backend.Put(ctx, derivativeKey(file_id, spec.Name), out); err != nil {
 			return b.logger.WrapError("failed to store derivative "+spec.Name, err)
 		}
+		totalBytes += int64(len(out))
+	}
+
+	// Record the total derivative size so StorageBytes accounts for it. This
+	// replaces any previous value (regenerating overwrites the variants).
+	if err := b.db.WithContext(ctx).Model(&model.FileModel{}).
+		Where("id = ?", file.ID).Update("derivatives_bytes", totalBytes).Error; err != nil {
+		return b.logger.WrapError("failed to record derivative size", err)
 	}
 	return nil
 }

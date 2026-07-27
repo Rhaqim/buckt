@@ -39,13 +39,22 @@ additive; no API removals, safe to adopt.
 - **Image derivatives** (`WithImageDerivatives`, `GenerateDerivatives`,
   `GetDerivative`). Opt-in. Configure named resized variants (e.g. `thumbnail`
   200px, `medium` 800px); `GenerateDerivatives(fileID)` produces and stores them
-  for JPEG/PNG uploads, and `GetDerivative(fileID, name)` fetches one — so the
+  for image uploads, and `GetDerivative(fileID, name)` fetches one — so the
   dashboard serves a thumbnail instead of the full-size original. Resizing is
   CPU-bound, so call `GenerateDerivatives` from a `file.uploaded` event handler
-  (your worker), keeping it off the upload path. Uses the pure-Go resizer buckt
-  already ships (no new dependency; no WebP, which would require cgo). Variants
-  are stored as backend objects keyed by file id — moving or trashing the file
-  never orphans them — never upscale, and are removed on permanent delete.
+  (your worker), keeping it off the upload path. The built-in resizer is pure-Go
+  JPEG/PNG (no new core dependency). Variants are stored as backend objects keyed
+  by file id — moving or trashing the file never orphans them — never upscale,
+  are removed on permanent delete, and their bytes are counted in
+  `Client.StorageBytes` (new `derivatives_bytes` column, migration `v5`).
+- **Pluggable image processor** (`WithImageProcessor`, new `pkg/imageproc`).
+  Derivative encoding goes through an `imageproc.Processor` interface, so you can
+  add formats like **WebP** by supplying a processor from a module that imports
+  the encoder — buckt's core stays free of it (the same one-way rule the cloud
+  backends follow; a processor implements a stdlib-only signature and never
+  imports buckt). Ships with a ready-made **pure-Go WebP** processor in the new
+  `github.com/Rhaqim/buckt/imageproc/webp` module (`webp.New()`, no cgo); set a
+  `DerivativeSpec.Format` of `"webp"` to use it.
 
 ## [1.6.0]
 

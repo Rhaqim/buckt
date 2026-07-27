@@ -6,4 +6,5 @@ use (
 	./cloud/aws
 	./cloud/azure
 	./cloud/gcp
+	./imageproc/webp
 )

@@ -14,6 +14,7 @@ import (
 	"github.com/Rhaqim/buckt/internal/mocks"
 	"github.com/Rhaqim/buckt/internal/model"
 	"github.com/Rhaqim/buckt/pkg/events"
+	"github.com/Rhaqim/buckt/pkg/imageproc"
 	"github.com/Rhaqim/buckt/pkg/metrics"
 
 	"github.com/google/uuid"
@@ -39,6 +40,7 @@ type testClientConfig struct {
 	eventHandlers  []events.Handler
 	dedup          bool
 	derivatives    []DerivativeSpec
+	imageProcessor imageproc.Processor
 }
 
 type testClientOption func(*testClientConfig)
@@ -74,6 +76,11 @@ func withDedup() testClientOption {
 // withImageDerivatives configures resized-image variants on the test client.
 func withImageDerivatives(specs ...DerivativeSpec) testClientOption {
 	return func(c *testClientConfig) { c.derivatives = append(c.derivatives, specs...) }
+}
+
+// withImageProcessor sets a custom image processor on the test client.
+func withImageProcessor(p imageproc.Processor) testClientOption {
+	return func(c *testClientConfig) { c.imageProcessor = p }
 }
 
 // pgDSN returns the Postgres DSN from BUCKT_PG_DSN or skips the test.
@@ -130,6 +137,7 @@ func newTestClient(t *testing.T, opts ...testClientOption) *Client {
 		EventHandlers:  cfg.eventHandlers,
 		Dedup:          cfg.dedup,
 		Derivatives:    cfg.derivatives,
+		ImageProcessor: cfg.imageProcessor,
 	})
 	require.NoError(t, err) // also proves the migrations run cleanly on this driver
 	t.Cleanup(func() { _ = client.Close() })

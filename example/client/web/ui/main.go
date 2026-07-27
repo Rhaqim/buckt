@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"flag"
 	"fmt"
@@ -9,6 +10,7 @@ import (
 
 	"github.com/Rhaqim/buckt"
 	"github.com/Rhaqim/buckt/client/web"
+	"github.com/Rhaqim/buckt/pkg/events"
 	"github.com/Rhaqim/buckt/pkg/metrics"
 )
 
@@ -38,8 +40,40 @@ func main() {
 		config = buckt.WithDB(buckt.Postgres, db)
 	}
 
-	// Enable built-in backend metrics so the /metrics endpoint has data to show.
-	client, err := buckt.Default(buckt.FlatNameSpaces(flatNamespaces), config, buckt.WithMetrics(metrics.NewCollector()))
+	// client is referenced by the upload handler below, so declare it first and
+	// assign with '=' (not ':=') to keep the closure bound to this variable.
+	var client *buckt.Client
+
+	// onUpload fires after every successful upload. Here we generate image
+	// derivatives and tag the file. Events run synchronously after the upload,
+	// so in production you'd typically enqueue this to a worker instead of
+	// resizing inline; for the demo, doing it here keeps things simple.
+	onUpload := func(_ context.Context, e events.Event) {
+		if e.Type != events.FileUploaded {
+			return
+		}
+		if err := client.GenerateDerivatives(e.FileID); err != nil {
+			log.Printf("derivative generation failed for %s: %v", e.FileID, err)
+		}
+		if err := client.SetFileMetadata(e.FileID, map[string]string{"source": "web-ui"}); err != nil {
+			log.Printf("setting metadata failed for %s: %v", e.FileID, err)
+		}
+	}
+
+	// Enable, in order: backend metrics (/metrics endpoint), content dedup,
+	// image derivatives (thumbnail/medium), and the upload handler above.
+	var err error
+	client, err = buckt.Default(
+		buckt.FlatNameSpaces(flatNamespaces),
+		config,
+		buckt.WithMetrics(metrics.NewCollector()),
+		buckt.WithDedup(),
+		buckt.WithImageDerivatives(
+			buckt.DerivativeSpec{Name: "thumbnail", MaxWidth: 200},
+			buckt.DerivativeSpec{Name: "medium", MaxWidth: 800},
+		),
+		buckt.WithEventHandler(onUpload),
+	)
 	if err != nil {
 		log.Fatalf("Failed to initialize Buckt: %v", err)
 	}

@@ -8,6 +8,7 @@ import (
 	"github.com/Rhaqim/buckt/internal/domain"
 	"github.com/Rhaqim/buckt/internal/model"
 	"github.com/Rhaqim/buckt/pkg/events"
+	"github.com/Rhaqim/buckt/pkg/imageproc"
 	"github.com/Rhaqim/buckt/pkg/metrics"
 )
 
@@ -210,14 +211,23 @@ type Config struct {
 	// produce. Empty (the default) disables the feature. Configure with
 	// WithImageDerivatives.
 	Derivatives []DerivativeSpec
+
+	// ImageProcessor resizes/encodes images for GenerateDerivatives. Nil (the
+	// default) uses the built-in pure-Go JPEG/PNG processor. Set it (via
+	// WithImageProcessor) to add formats like WebP.
+	ImageProcessor imageproc.Processor
 }
 
 // DerivativeSpec describes one resized image variant (e.g. a thumbnail). The
 // image is scaled to at most MaxWidth pixels wide, preserving aspect ratio and
-// never upscaling, and re-encoded in its source format (JPEG or PNG).
+// never upscaling.
 type DerivativeSpec struct {
 	Name     string // variant name, e.g. "thumbnail" — used to fetch it back
 	MaxWidth uint   // maximum width in pixels
+	// Format is the output encoding: "" keeps the source format; "jpeg" and
+	// "png" are handled by the built-in processor; other values (e.g. "webp")
+	// require a matching ImageProcessor.
+	Format string
 }
 
 // ConfigFunc is a function type that takes a pointer to Config and modifies it.
@@ -362,6 +372,16 @@ func WithMetrics(r metrics.Recorder) ConfigFunc {
 func WithImageDerivatives(specs ...DerivativeSpec) ConfigFunc {
 	return func(c *Config) {
 		c.Derivatives = append(c.Derivatives, specs...)
+	}
+}
+
+// WithImageProcessor sets the image processor used by GenerateDerivatives,
+// replacing the built-in JPEG/PNG one. Use it to add formats such as WebP by
+// supplying a processor from a module that imports the encoder — buckt's core
+// stays free of that dependency.
+func WithImageProcessor(p imageproc.Processor) ConfigFunc {
+	return func(c *Config) {
+		c.ImageProcessor = p
 	}
 }
 

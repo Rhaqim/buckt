@@ -2,6 +2,7 @@ package buckt
 
 import (
 	"bytes"
+	"context"
 	"image"
 	"image/color"
 	"image/png"
@@ -86,6 +87,56 @@ func TestDerivatives_PurgeCleansUp(t *testing.T) {
 
 	_, _, err = c.GetDerivative(id, "thumbnail")
 	assert.ErrorIs(t, err, ErrNotFound, "derivatives cleaned up on permanent delete")
+}
+
+func TestDerivatives_CountedInStorageBytes(t *testing.T) {
+	c := newTestClient(t, withNested(), withImageDerivatives(
+		DerivativeSpec{Name: "thumbnail", MaxWidth: 50},
+	))
+	const user = "u1"
+
+	original := makePNG(t, 300, 300)
+	id, err := c.UploadFile(user, "", "photo.png", "image/png", original)
+	require.NoError(t, err)
+
+	before, err := c.StorageBytes(context.Background())
+	require.NoError(t, err)
+	assert.Equal(t, int64(len(original)), before, "before generating, only the original counts")
+
+	require.NoError(t, c.GenerateDerivatives(id))
+
+	after, err := c.StorageBytes(context.Background())
+	require.NoError(t, err)
+	assert.Greater(t, after, before, "derivative bytes are now included in storage")
+
+	// Fetch the derivative and confirm the delta equals its byte size.
+	thumb, _, err := c.GetDerivative(id, "thumbnail")
+	require.NoError(t, err)
+	assert.Equal(t, before+int64(len(thumb)), after)
+}
+
+// fakeProcessor proves the WithImageProcessor plug-in path without pulling a
+// real encoder into core: it echoes the requested format so the test can assert
+// the processor was invoked and its output stored/retrieved.
+type fakeProcessor struct{}
+
+func (fakeProcessor) Resize(data []byte, maxWidth uint, format string) ([]byte, string, error) {
+	return []byte("PROCESSED:" + format), "application/x-test", nil
+}
+
+func TestDerivatives_CustomProcessorPluggedIn(t *testing.T) {
+	c := newTestClient(t, withNested(),
+		withImageProcessor(fakeProcessor{}),
+		withImageDerivatives(DerivativeSpec{Name: "thumb", MaxWidth: 100, Format: "webp"}),
+	)
+
+	id, err := c.UploadFile("u1", "", "photo.png", "image/png", makePNG(t, 200, 200))
+	require.NoError(t, err)
+	require.NoError(t, c.GenerateDerivatives(id))
+
+	out, _, err := c.GetDerivative(id, "thumb")
+	require.NoError(t, err)
+	assert.Equal(t, "PROCESSED:webp", string(out), "custom processor is invoked with the spec's Format and its output is stored")
 }
 
 func TestDerivatives_NotConfiguredIsNoOp(t *testing.T) {
