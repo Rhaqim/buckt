@@ -7,6 +7,7 @@ import (
 
 	"github.com/Rhaqim/buckt/internal/domain"
 	"github.com/Rhaqim/buckt/internal/model"
+	"github.com/Rhaqim/buckt/pkg/events"
 	"github.com/Rhaqim/buckt/pkg/metrics"
 )
 
@@ -192,6 +193,12 @@ type Config struct {
 	// built-in in-memory sink. Nil (the default) disables metrics with zero
 	// overhead.
 	Metrics metrics.Recorder
+
+	// EventHandlers receive a lifecycle events.Event after each successful file
+	// operation (upload/trash/restore/purge). Register them with
+	// WithEventHandler. Handlers run synchronously post-operation — keep them
+	// fast (enqueue and return). Empty (the default) means zero overhead.
+	EventHandlers []events.Handler
 }
 
 // ConfigFunc is a function type that takes a pointer to Config and modifies it.
@@ -321,6 +328,20 @@ func WithBackend(backend Backend) ConfigFunc {
 func WithMetrics(r metrics.Recorder) ConfigFunc {
 	return func(c *Config) {
 		c.Metrics = r
+	}
+}
+
+// WithEventHandler registers a handler that receives a lifecycle events.Event
+// after each successful file operation. It may be called multiple times to
+// attach several handlers. Handlers run synchronously after the operation
+// completes (outside the DB transaction); keep them fast — the intended use is
+// to enqueue work (AI processing, derivative generation, …) and return. A
+// panicking handler is recovered and never fails the originating call.
+func WithEventHandler(h events.Handler) ConfigFunc {
+	return func(c *Config) {
+		if h != nil {
+			c.EventHandlers = append(c.EventHandlers, h)
+		}
 	}
 }
 

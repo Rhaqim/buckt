@@ -45,7 +45,22 @@ func migrations() []Migration {
 			Name:    "trash-origin-parent",
 			Up:      migrateTrashOriginParent,
 		},
+		{
+			Version: 4,
+			Name:    "file-metadata",
+			Up:      migrateFileMetadata,
+		},
 	}
+}
+
+// migrateFileMetadata adds the nullable metadata column (JSON) to the file
+// table. Additive and non-destructive: AutoMigrate only ADDs the column,
+// existing rows get NULL, and on a fresh database V1 already created it.
+func migrateFileMetadata(ctx context.Context, tx *gorm.DB, prefix string, d Dialect) error {
+	if err := tx.AutoMigrate(&model.FileModel{}); err != nil {
+		return fmt.Errorf("file metadata column: %w", err)
+	}
+	return nil
 }
 
 // migrateTrashOriginParent adds the nullable origin_parent_id column to both

@@ -23,6 +23,7 @@ import (
 	"github.com/Rhaqim/buckt/internal/model"
 	"github.com/Rhaqim/buckt/internal/repository"
 	"github.com/Rhaqim/buckt/internal/service"
+	"github.com/Rhaqim/buckt/pkg/events"
 	"github.com/Rhaqim/buckt/pkg/logger"
 	"github.com/Rhaqim/buckt/pkg/metrics"
 )
@@ -109,6 +110,7 @@ func New(conf Config, opts ...ConfigFunc) (*Client, error) {
 		bucktLog,
 		cacheManager,
 		backend,
+		newEmitter(conf.EventHandlers, bucktLog),
 	)
 
 	// Initialize the Buckt instance
@@ -780,6 +782,35 @@ func (b *Client) RestoreFileContext(ctx context.Context, user_id, file_id string
 	return b.fileService.RestoreFile(ctx, user_id, file_id)
 }
 
+// SetFileMetadata replaces the arbitrary key/value metadata stored on a file.
+// buckt does not interpret it — use it for resource links (e.g. order IDs),
+// AI-extracted tags, OCR text, etc. Passing nil or an empty map clears it.
+//
+// Parameters:
+//   - file_id: The ID of the file.
+//   - metadata: The key/value map to store (replaces any existing metadata).
+//
+// Returns:
+//   - error: An error if the file is not found or the update fails.
+func (b *Client) SetFileMetadata(file_id string, metadata map[string]string) error {
+	return b.SetFileMetadataContext(context.Background(), file_id, metadata)
+}
+
+// GetFileMetadata returns the metadata stored on a file (nil when none is set).
+func (b *Client) GetFileMetadata(file_id string) (map[string]string, error) {
+	return b.GetFileMetadataContext(context.Background(), file_id)
+}
+
+// SetFileMetadataContext is SetFileMetadata with an explicit context.
+func (b *Client) SetFileMetadataContext(ctx context.Context, file_id string, metadata map[string]string) error {
+	return b.fileService.SetMetadata(ctx, file_id, metadata)
+}
+
+// GetFileMetadataContext is GetFileMetadata with an explicit context.
+func (b *Client) GetFileMetadataContext(ctx context.Context, file_id string) (map[string]string, error) {
+	return b.fileService.GetMetadata(ctx, file_id)
+}
+
 /* Migration */
 
 /* Helper Methods */
@@ -805,6 +836,32 @@ func initializeCache(conf CacheConfig, bucktLog domain.BucktLogger) (domain.Cach
 	return mocks.NewNoopCache(), lruCache
 }
 
+// newEmitter returns a single events.Handler that fans an event out to every
+// registered handler, isolating each behind panic recovery so a misbehaving
+// handler can neither crash nor fail the originating operation. With no handlers
+// it returns a no-op, so the service can always call emit unconditionally.
+func newEmitter(handlers []events.Handler, log domain.BucktLogger) events.Handler {
+	if len(handlers) == 0 {
+		return func(context.Context, events.Event) {}
+	}
+	hs := make([]events.Handler, len(handlers))
+	copy(hs, handlers)
+	return func(ctx context.Context, e events.Event) {
+		for _, h := range hs {
+			dispatchEvent(ctx, h, e, log)
+		}
+	}
+}
+
+func dispatchEvent(ctx context.Context, h events.Handler, e events.Event, log domain.BucktLogger) {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Warn(fmt.Sprintf("buckt: event handler for %s panicked: %v", e.Type, r))
+		}
+	}()
+	h(ctx, e)
+}
+
 func newAppServices(
 	flatNameSpaces bool,
 	maxFileSize int64,
@@ -814,6 +871,7 @@ func newAppServices(
 	logger domain.BucktLogger,
 	cacheManager domain.CacheManager,
 	activeBackend domain.FileBackend,
+	emit events.Handler,
 ) (domain.FolderService, domain.FileService) {
 	// Initialize the stores
 	folderRepository := repository.NewFolderRepository(db)
@@ -821,7 +879,7 @@ func newAppServices(
 
 	// initialize the services
 	folderService := service.NewFolderService(logger, cacheManager, folderRepository, activeBackend, flatNameSpaces, maxTrashBatch, backendOpTimeout)
-	fileService := service.NewFileService(logger, cacheManager, fileRepository, folderService, activeBackend, flatNameSpaces, maxFileSize, backendOpTimeout)
+	fileService := service.NewFileService(logger, cacheManager, fileRepository, folderService, activeBackend, flatNameSpaces, maxFileSize, backendOpTimeout, emit)
 
 	logger.Info("✅ Initialized app services")
 

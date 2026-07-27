@@ -32,4 +32,5 @@ type FileRepository interface {
 	DeleteFile(ctx context.Context, id uuid.UUID, beforeCommit func(oldPath, newPath string) error) (oldPath, newPath string, err error)
 	RestoreFile(ctx context.Context, id, target uuid.UUID, beforeCommit func(oldPath, newPath string) error) (oldPath, newPath string, err error)
 	ScrubFile(ctx context.Context, id uuid.UUID) error
+	SetMetadata(ctx context.Context, id uuid.UUID, metadata map[string]string) error
 }

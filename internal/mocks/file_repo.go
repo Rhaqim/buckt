@@ -94,6 +94,11 @@ func (m *FileRepository) RestoreFile(ctx context.Context, id, target uuid.UUID, 
 	return oldPath, newPath, nil
 }
 
+func (m *FileRepository) SetMetadata(ctx context.Context, id uuid.UUID, metadata map[string]string) error {
+	args := m.Called(id, metadata)
+	return args.Error(0)
+}
+
 func (m *FileRepository) ScrubFile(ctx context.Context, fileID uuid.UUID) error {
 	args := m.Called(fileID)
 	return args.Error(0)

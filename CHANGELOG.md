@@ -15,6 +15,23 @@ metrics plus an S3-compatible-endpoint fix. No API removals; safe to adopt.
 
 ### ✨ Added
 
+- **File lifecycle events** (`WithEventHandler`, new `pkg/events`). Opt-in,
+  dependency-free. Register one or more handlers and buckt calls them after each
+  successful file operation with an `events.Event` (`file.uploaded`,
+  `file.trashed`, `file.restored`, `file.purged`) carrying storage-level facts
+  (user, file id, name, path, content type, size, content hash). buckt performs
+  no processing itself — this is the seam for enqueuing uploads to an AI/OCR
+  worker, generating derivatives, cache warming, etc., keeping the dependency
+  one-way (your worker imports buckt, never the reverse). Handlers run
+  synchronously after the operation (outside the DB transaction) and are isolated
+  by panic recovery, so a slow or panicking handler can't corrupt or fail the
+  originating call. No handlers = zero overhead.
+- **Arbitrary file metadata** (`SetFileMetadata` / `GetFileMetadata`). Attach a
+  `map[string]string` of application data to any file — resource links (e.g. an
+  order id, so an app can model attachments without buckt knowing about orders),
+  AI-extracted tags, OCR text, etc. Stored as JSON on the file row via GORM's
+  built-in serializer (no new dependency), added by migration `v4` (additive,
+  non-destructive), and returned on `GetFile`. buckt never interprets it.
 - **Built-in backend metrics** (`WithMetrics`, new `pkg/metrics`). Opt-in,
   dependency-free (stdlib only). A metering decorator wraps every backend (local,
   S3, Azure, GCP, and the migration source/target) and records one operation per

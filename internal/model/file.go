@@ -21,10 +21,15 @@ type FileModel struct {
 	// root. Nil when not in trash (or for items trashed before this was tracked —
 	// those restore to root). Plain nullable column, no FK.
 	OriginParentID *uuid.UUID `gorm:"type:uuid" json:"origin_parent_id,omitempty"`
-	Hash           string     `gorm:"not null;index" json:"hash"` // Hash of the file for integrity checks and uniqueness
-	Data           []byte     `gorm:"-" json:"data"`              // File data
-	CreatedAt      time.Time  `json:"created_at"`
-	UpdatedAt      time.Time  `json:"updated_at"`
+	// Metadata is arbitrary application key/value data attached to the file
+	// (e.g. resource links, AI-extracted tags, OCR text). Stored as JSON via
+	// GORM's built-in serializer, so there's no extra dependency and no schema
+	// churn as keys change. buckt never interprets it.
+	Metadata  map[string]string `gorm:"serializer:json" json:"metadata,omitempty"`
+	Hash      string            `gorm:"not null;index" json:"hash"` // Hash of the file for integrity checks and uniqueness
+	Data      []byte            `gorm:"-" json:"data"`              // File data
+	CreatedAt time.Time         `json:"created_at"`
+	UpdatedAt time.Time         `json:"updated_at"`
 
 	// Deprecated: soft-delete was replaced by the __trash__ folder. Retained only
 	// for source compatibility with pre-trash releases — fully ignored by the
