@@ -157,6 +157,7 @@ func (r *Router) registerWebRoutes() {
 			web.DELETE("/scrub-folder/:folder_id", r.WebService.DeleteFolderPermanently)
 
 			web.POST("/upload", r.WebService.UploadFile)
+			web.POST("/regenerate-derivatives/:file_id", r.WebService.RegenerateDerivatives)
 			web.GET("/file/:file_id", r.WebService.DownloadFile)
 			web.POST("/move-file/:file_id", r.WebService.MoveFile)
 			web.DELETE("/file/:file_id", r.WebService.DeleteFile)

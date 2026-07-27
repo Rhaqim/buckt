@@ -48,8 +48,11 @@ additive; no API removals, safe to adopt.
   are removed on permanent delete, and their bytes are counted in
   `Client.StorageBytes` (new `derivatives_bytes` column, migration `v5`). The
   bundled web UI serves them via `GET /serve/:file_id/derivative/:name` (falling
-  back to the original when a variant is absent) and its file grid now shows the
-  `thumbnail` variant instead of the full-size image.
+  back to the original when a variant is absent): the file grid shows the
+  `thumbnail` variant, clicking an image opens a preview using the larger
+  `medium` variant with a link to the full-size original, and a "Regenerate
+  previews" action (`POST /web/regenerate-derivatives/:file_id`) rebuilds them
+  on demand.
 - **Pluggable image processor** (`WithImageProcessor`, new `pkg/imageproc`).
   Derivative encoding goes through an `imageproc.Processor` interface, so you can
   add formats like **WebP** by supplying a processor from a module that imports

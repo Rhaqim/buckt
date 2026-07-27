@@ -3,7 +3,7 @@ module example
 go 1.26.0
 
 require (
-	github.com/Rhaqim/buckt v1.5.0
+	github.com/Rhaqim/buckt v1.6.0
 	github.com/Rhaqim/buckt/client/web v0.0.0-20250903130508-4ac5aaccc8ae
 	github.com/Rhaqim/buckt/cloud/aws v0.0.0-20250903130508-4ac5aaccc8ae
 	github.com/Rhaqim/buckt/cloud/azure v0.0.0-20250903130508-4ac5aaccc8ae
