@@ -346,6 +346,38 @@ func (svc *APIService) ServeFile(c *gin.Context) {
 	c.Data(200, file.ContentType, file.Data)
 }
 
+// ServeDerivative serves a generated image variant (e.g. "thumbnail"). If the
+// variant doesn't exist — not generated, not an image, or derivatives aren't
+// configured — it falls back to the original file, so an <img> tag pointing
+// here always resolves.
+func (svc *APIService) ServeDerivative(c *gin.Context) {
+	fileID, ok := requireParam(c, "file_id")
+	if !ok {
+		return
+	}
+	name, ok := requireParam(c, "name")
+	if !ok {
+		return
+	}
+
+	data, contentType, err := svc.client.GetDerivative(fileID, name)
+	if err != nil {
+		file, ferr := svc.client.GetFile(fileID)
+		if ferr != nil {
+			abort500(c, "failed to get file", ferr)
+			return
+		}
+		data, contentType = file.Data, file.ContentType
+	}
+
+	// Variants are images, so serve inline (DispositionFor forces a download for
+	// anything script-executable, mirroring ServeFile's XSS hardening).
+	c.Header("Cache-Control", "public, max-age=86400")
+	writeFileHeaders(c, name, contentType, int64(len(data)), fileutil.DispositionFor(contentType))
+	c.Header("Content-Security-Policy", "default-src 'none'; sandbox; img-src 'self'; media-src 'self'")
+	c.Data(200, contentType, data)
+}
+
 func (svc *APIService) StreamFile(c *gin.Context) {
 	// get the file_id from the request
 	fileID, ok := requireParam(c, "file_id")

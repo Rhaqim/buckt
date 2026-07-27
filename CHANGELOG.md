@@ -46,7 +46,10 @@ additive; no API removals, safe to adopt.
   JPEG/PNG (no new core dependency). Variants are stored as backend objects keyed
   by file id — moving or trashing the file never orphans them — never upscale,
   are removed on permanent delete, and their bytes are counted in
-  `Client.StorageBytes` (new `derivatives_bytes` column, migration `v5`).
+  `Client.StorageBytes` (new `derivatives_bytes` column, migration `v5`). The
+  bundled web UI serves them via `GET /serve/:file_id/derivative/:name` (falling
+  back to the original when a variant is absent) and its file grid now shows the
+  `thumbnail` variant instead of the full-size image.
 - **Pluggable image processor** (`WithImageProcessor`, new `pkg/imageproc`).
   Derivative encoding goes through an `imageproc.Processor` interface, so you can
   add formats like **WebP** by supplying a processor from a module that imports

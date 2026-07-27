@@ -103,6 +103,7 @@ func (r *Router) registerBaseRoutes(mode model.WebMode) {
 	}
 	{
 		serve.GET("serve/:file_id", r.APIService.ServeFile)
+		serve.GET("serve/:file_id/derivative/:name", r.APIService.ServeDerivative)
 		serve.GET("stream/:file_id", r.APIService.StreamFile)
 	}
 
