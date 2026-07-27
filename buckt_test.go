@@ -37,6 +37,7 @@ type testClientConfig struct {
 	maxFileSize    int64
 	metrics        metrics.Recorder
 	eventHandlers  []events.Handler
+	dedup          bool
 }
 
 type testClientOption func(*testClientConfig)
@@ -62,6 +63,11 @@ func withMetrics(m metrics.Recorder) testClientOption {
 // withEventHandler registers a lifecycle event handler on the test client.
 func withEventHandler(h events.Handler) testClientOption {
 	return func(c *testClientConfig) { c.eventHandlers = append(c.eventHandlers, h) }
+}
+
+// withDedup enables content deduplication on the test client.
+func withDedup() testClientOption {
+	return func(c *testClientConfig) { c.dedup = true }
 }
 
 // pgDSN returns the Postgres DSN from BUCKT_PG_DSN or skips the test.
@@ -116,6 +122,7 @@ func newTestClient(t *testing.T, opts ...testClientOption) *Client {
 		MaxFileSize:    cfg.maxFileSize,
 		Metrics:        cfg.metrics,
 		EventHandlers:  cfg.eventHandlers,
+		Dedup:          cfg.dedup,
 	})
 	require.NoError(t, err) // also proves the migrations run cleanly on this driver
 	t.Cleanup(func() { _ = client.Close() })
@@ -699,6 +706,7 @@ func TestNewAppServices(t *testing.T) {
 			mockCacheManager,
 			mockBackend,
 			nil,
+			false,
 		)
 		assert.NotNil(t, folderService)
 		assert.NotNil(t, fileService)
@@ -715,6 +723,7 @@ func TestNewAppServices(t *testing.T) {
 			mockCacheManager,
 			mockBackend,
 			nil,
+			false,
 		)
 		assert.NotNil(t, folderService)
 		assert.NotNil(t, fileService)

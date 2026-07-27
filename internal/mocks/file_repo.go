@@ -94,6 +94,12 @@ func (m *FileRepository) RestoreFile(ctx context.Context, id, target uuid.UUID, 
 	return oldPath, newPath, nil
 }
 
+func (m *FileRepository) FindByHash(ctx context.Context, user_id string, parent_id uuid.UUID, hash string) (*model.FileModel, error) {
+	args := m.Called(user_id, parent_id, hash)
+	f, _ := args.Get(0).(*model.FileModel)
+	return f, args.Error(1)
+}
+
 func (m *FileRepository) SetMetadata(ctx context.Context, id uuid.UUID, metadata map[string]string) error {
 	args := m.Called(id, metadata)
 	return args.Error(0)

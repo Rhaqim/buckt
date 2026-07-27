@@ -3,15 +3,12 @@
 All notable changes to buckt are documented here. This project follows
 [Semantic Versioning](https://semver.org/).
 
-## [1.6.0] — unreleased
+## [1.7.0] — unreleased
 
-A backward-compatible **minor** release on top of v1.5.0: built-in backend
-metrics plus an S3-compatible-endpoint fix. No API removals; safe to adopt.
-
-> **If you use the Azure or GCP backend, upgrade.** v1.5.0's `Exists` is broken
-> on both — the Azure backend **panics** on any blob-properties error (including
-> the routine "not found" case), and the GCP backend can misreport a missing
-> object. Both are fixed here (see **Fixed**).
+A backward-compatible **minor** release on top of v1.6.0 that adds three opt-in
+primitives making buckt a better fit for event-driven and media-heavy apps —
+file lifecycle events, arbitrary file metadata, and content deduplication. All
+additive; no API removals, safe to adopt.
 
 ### ✨ Added
 
@@ -32,6 +29,27 @@ metrics plus an S3-compatible-endpoint fix. No API removals; safe to adopt.
   AI-extracted tags, OCR text, etc. Stored as JSON on the file row via GORM's
   built-in serializer (no new dependency), added by migration `v4` (additive,
   non-destructive), and returned on `GetFile`. buckt never interprets it.
+- **Content deduplication** (`WithDedup`). Opt-in. When enabled, an upload whose
+  bytes hash-match a file already in the same target folder (for the same owner)
+  returns that existing file's ID and skips writing the blob again — collapsing
+  the "same photo sent four times" case into one stored object and saving storage
+  and bandwidth. It reuses the content hash buckt already records, needs no schema
+  change, is scoped to the target folder so it composes with nested-namespace
+  paths, and never resurrects a trashed duplicate. Off by default.
+
+## [1.6.0]
+
+A backward-compatible **minor** release on top of v1.5.0: built-in backend
+metrics, a bundled web UI refresh (dark mode, trash browsing, restore), plus
+S3/Azure/GCP fixes. No API removals; safe to adopt.
+
+> **If you use the Azure or GCP backend, upgrade.** v1.5.0's `Exists` is broken
+> on both — the Azure backend **panics** on any blob-properties error (including
+> the routine "not found" case), and the GCP backend can misreport a missing
+> object. Both are fixed here (see **Fixed**).
+
+### ✨ Added
+
 - **Built-in backend metrics** (`WithMetrics`, new `pkg/metrics`). Opt-in,
   dependency-free (stdlib only). A metering decorator wraps every backend (local,
   S3, Azure, GCP, and the migration source/target) and records one operation per

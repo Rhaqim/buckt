@@ -111,6 +111,7 @@ func New(conf Config, opts ...ConfigFunc) (*Client, error) {
 		cacheManager,
 		backend,
 		newEmitter(conf.EventHandlers, bucktLog),
+		conf.Dedup,
 	)
 
 	// Initialize the Buckt instance
@@ -872,6 +873,7 @@ func newAppServices(
 	cacheManager domain.CacheManager,
 	activeBackend domain.FileBackend,
 	emit events.Handler,
+	dedup bool,
 ) (domain.FolderService, domain.FileService) {
 	// Initialize the stores
 	folderRepository := repository.NewFolderRepository(db)
@@ -879,7 +881,7 @@ func newAppServices(
 
 	// initialize the services
 	folderService := service.NewFolderService(logger, cacheManager, folderRepository, activeBackend, flatNameSpaces, maxTrashBatch, backendOpTimeout)
-	fileService := service.NewFileService(logger, cacheManager, fileRepository, folderService, activeBackend, flatNameSpaces, maxFileSize, backendOpTimeout, emit)
+	fileService := service.NewFileService(logger, cacheManager, fileRepository, folderService, activeBackend, flatNameSpaces, maxFileSize, backendOpTimeout, emit, dedup)
 
 	logger.Info("✅ Initialized app services")
 

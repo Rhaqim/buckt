@@ -174,6 +174,12 @@ type Config struct {
 	FlatNameSpaces bool
 	MaxFileSize    int64
 
+	// Dedup, when true, collapses identical uploads within the same folder:
+	// if a file with the same content hash already exists under the target
+	// folder for the owner, UploadFile returns that existing file's ID instead
+	// of storing the bytes again. Off by default. See WithDedup.
+	Dedup bool
+
 	// MaxTrashBatchSize caps the number of descendant files in a single
 	// folder delete. Defaults to DefaultMaxTrashBatchSize when zero.
 	MaxTrashBatchSize int
@@ -328,6 +334,18 @@ func WithBackend(backend Backend) ConfigFunc {
 func WithMetrics(r metrics.Recorder) ConfigFunc {
 	return func(c *Config) {
 		c.Metrics = r
+	}
+}
+
+// WithDedup enables content deduplication: an upload whose bytes hash-match a
+// file already present in the same target folder (for the same owner) returns
+// that existing file's ID and skips re-writing the blob — turning the WhatsApp
+// "same photo sent four times" case into a single stored object. Scoped to the
+// target folder so it composes with nested-namespace mode (where a blob's path
+// reflects its folder) and never resurrects a trashed file. Off by default.
+func WithDedup() ConfigFunc {
+	return func(c *Config) {
+		c.Dedup = true
 	}
 }
 

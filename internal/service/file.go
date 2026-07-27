@@ -36,6 +36,10 @@ type FileService struct {
 	// (a no-op is installed when no handlers are registered), so callers can
 	// invoke it unconditionally.
 	emit events.Handler
+
+	// dedup, when true, makes CreateFile return an existing same-content file in
+	// the target folder instead of storing a duplicate blob.
+	dedup bool
 }
 
 func NewFileService(
@@ -52,6 +56,7 @@ func NewFileService(
 	backendOpTimeout time.Duration,
 
 	emit events.Handler,
+	dedup bool,
 ) domain.FileService {
 	bucktLogger.Info("🚀 Initialising file services")
 	if emit == nil {
@@ -71,7 +76,8 @@ func NewFileService(
 		maxFileSize:      maxFileSize,
 		backendOpTimeout: backendOpTimeout,
 
-		emit: emit,
+		emit:  emit,
+		dedup: dedup,
 	}
 }
 
@@ -120,6 +126,16 @@ func (f *FileService) CreateFile(ctx context.Context, user_id, parent_id, file_n
 	h := sha256.New()
 	h.Write(file_data)
 	hash := fmt.Sprintf("%x", h.Sum(nil))
+
+	// Content dedup (opt-in): if an identical file already lives in this folder
+	// for this owner, return it instead of storing the bytes again. Scoped to the
+	// target folder, so it never resurrects a trashed duplicate. No new blob is
+	// written and no upload event fires — nothing new was stored.
+	if f.dedup {
+		if existing, _ := f.repo.FindByHash(ctx, user_id, parentFolder.ID, hash); existing != nil {
+			return existing.ID.String(), nil
+		}
+	}
 
 	// Size of the file
 	fileSize := int64(len(file_data))
