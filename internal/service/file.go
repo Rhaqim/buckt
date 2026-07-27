@@ -15,6 +15,7 @@ import (
 	"github.com/Rhaqim/buckt/internal/model"
 	"github.com/Rhaqim/buckt/internal/utils"
 	"github.com/Rhaqim/buckt/pkg/buckterr"
+	"github.com/Rhaqim/buckt/pkg/events"
 	"github.com/google/uuid"
 )
 
@@ -30,6 +31,15 @@ type FileService struct {
 
 	folderService domain.FolderService
 	fileBackend   domain.FileBackend
+
+	// emit publishes a lifecycle event after a successful operation. Never nil
+	// (a no-op is installed when no handlers are registered), so callers can
+	// invoke it unconditionally.
+	emit events.Handler
+
+	// dedup, when true, makes CreateFile return an existing same-content file in
+	// the target folder instead of storing a duplicate blob.
+	dedup bool
 }
 
 func NewFileService(
@@ -44,8 +54,14 @@ func NewFileService(
 	flatNameSpaces bool,
 	maxFileSize int64,
 	backendOpTimeout time.Duration,
+
+	emit events.Handler,
+	dedup bool,
 ) domain.FileService {
 	bucktLogger.Info("🚀 Initialising file services")
+	if emit == nil {
+		emit = func(context.Context, events.Event) {}
+	}
 	return &FileService{
 		logger: bucktLogger,
 
@@ -59,6 +75,9 @@ func NewFileService(
 		flatNameSpaces:   flatNameSpaces,
 		maxFileSize:      maxFileSize,
 		backendOpTimeout: backendOpTimeout,
+
+		emit:  emit,
+		dedup: dedup,
 	}
 }
 
@@ -108,6 +127,16 @@ func (f *FileService) CreateFile(ctx context.Context, user_id, parent_id, file_n
 	h.Write(file_data)
 	hash := fmt.Sprintf("%x", h.Sum(nil))
 
+	// Content dedup (opt-in): if an identical file already lives in this folder
+	// for this owner, return it instead of storing the bytes again. Scoped to the
+	// target folder, so it never resurrects a trashed duplicate. No new blob is
+	// written and no upload event fires — nothing new was stored.
+	if f.dedup {
+		if existing, _ := f.repo.FindByHash(ctx, user_id, parentFolder.ID, hash); existing != nil {
+			return existing.ID.String(), nil
+		}
+	}
+
 	// Size of the file
 	fileSize := int64(len(file_data))
 
@@ -143,6 +172,8 @@ func (f *FileService) CreateFile(ctx context.Context, user_id, parent_id, file_n
 		}
 		return "", fmt.Errorf("failed to write file to backend: %w", err)
 	}
+
+	f.emitFile(ctx, events.FileUploaded, file)
 
 	return file.ID.String(), nil
 }
@@ -388,6 +419,8 @@ func (f *FileService) RestoreFile(ctx context.Context, user_id, file_id string) 
 		return f.logger.WrapError("failed to restore file", err)
 	}
 
+	f.emitFile(ctx, events.FileRestored, file)
+
 	return nil
 }
 
@@ -537,6 +570,8 @@ func (f *FileService) DeleteFile(ctx context.Context, file_id string) (string, e
 		return parentID, f.logger.WrapError("failed to delete file", err)
 	}
 
+	f.emitFile(ctx, events.FileTrashed, file)
+
 	return file.ParentID.String(), nil
 }
 
@@ -568,6 +603,8 @@ func (f *FileService) ScrubFile(ctx context.Context, file_id string) (string, er
 	if err := f.repo.ScrubFile(ctx, fileID); err != nil {
 		return parentID, f.logger.WrapError("failed to delete file", err)
 	}
+
+	f.emitFile(ctx, events.FilePurged, file)
 
 	return file.ParentID.String(), nil
 }
@@ -602,4 +639,55 @@ func (f *FileService) cachedFileAndInvalidate(ctx context.Context, file_id strin
 		return nil
 	}
 	return &m
+}
+
+// emitFile publishes a lifecycle event describing file. Best-effort: the emitter
+// contains any handler panic, so this never affects the calling operation.
+func (f *FileService) emitFile(ctx context.Context, t events.Type, file *model.FileModel) {
+	f.emit(ctx, events.Event{
+		Type:        t,
+		UserID:      file.UserID,
+		FileID:      file.ID.String(),
+		ParentID:    file.ParentID.String(),
+		Name:        file.Name,
+		Path:        file.Path,
+		ContentType: file.ContentType,
+		Size:        file.Size,
+		Hash:        file.Hash,
+		Time:        time.Now(),
+	})
+}
+
+// SetMetadata replaces the arbitrary key/value metadata stored on a file. buckt
+// does not interpret it — use it for resource links, AI-extracted tags, OCR
+// text, etc. Passing nil or an empty map clears the metadata.
+func (f *FileService) SetMetadata(ctx context.Context, file_id string, metadata map[string]string) error {
+	fileID, err := uuid.Parse(file_id)
+	if err != nil {
+		return fmt.Errorf("invalid id: %w", buckterr.ErrInvalidID)
+	}
+
+	if err := f.repo.SetMetadata(ctx, fileID, metadata); err != nil {
+		return f.logger.WrapError("failed to set file metadata", err)
+	}
+
+	// The cached copy (if any) now has stale metadata — drop it.
+	if f.cache != nil {
+		_ = f.cache.DeleteBucktValue(ctx, file_id)
+	}
+	return nil
+}
+
+// GetMetadata returns the metadata stored on a file (nil when none is set).
+func (f *FileService) GetMetadata(ctx context.Context, file_id string) (map[string]string, error) {
+	fileID, err := uuid.Parse(file_id)
+	if err != nil {
+		return nil, fmt.Errorf("invalid id: %w", buckterr.ErrInvalidID)
+	}
+
+	file, err := f.repo.GetFile(ctx, fileID)
+	if err != nil {
+		return nil, f.logger.WrapError("failed to get file", err)
+	}
+	return file.Metadata, nil
 }

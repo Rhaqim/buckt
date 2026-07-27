@@ -24,6 +24,9 @@ type FolderRepository interface {
 type FileRepository interface {
 	Create(ctx context.Context, file *model.FileModel) error
 	GetFile(ctx context.Context, id uuid.UUID) (*model.FileModel, error)
+	// FindByHash returns an existing file with the given content hash under the
+	// same owner and parent folder, or ErrNotFound. Used for content dedup.
+	FindByHash(ctx context.Context, user_id string, parent_id uuid.UUID, hash string) (*model.FileModel, error)
 	GetFiles(ctx context.Context, parent_id uuid.UUID) ([]*model.FileModel, error)
 	GetFilesPaginated(ctx context.Context, parent_id uuid.UUID, page model.Pagination) ([]*model.FileModel, error)
 	MoveFile(ctx context.Context, file_id, new_parent_id uuid.UUID) (string, string, error)
@@ -32,4 +35,5 @@ type FileRepository interface {
 	DeleteFile(ctx context.Context, id uuid.UUID, beforeCommit func(oldPath, newPath string) error) (oldPath, newPath string, err error)
 	RestoreFile(ctx context.Context, id, target uuid.UUID, beforeCommit func(oldPath, newPath string) error) (oldPath, newPath string, err error)
 	ScrubFile(ctx context.Context, id uuid.UUID) error
+	SetMetadata(ctx context.Context, id uuid.UUID, metadata map[string]string) error
 }

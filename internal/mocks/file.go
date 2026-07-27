@@ -83,6 +83,19 @@ func (m *FileService) RestoreFile(ctx context.Context, user_id, file_id string) 
 	return args.Error(0)
 }
 
+// SetMetadata implements domain.FileService.
+func (m *FileService) SetMetadata(ctx context.Context, file_id string, metadata map[string]string) error {
+	args := m.Called(file_id, metadata)
+	return args.Error(0)
+}
+
+// GetMetadata implements domain.FileService.
+func (m *FileService) GetMetadata(ctx context.Context, file_id string) (map[string]string, error) {
+	args := m.Called(file_id)
+	meta, _ := args.Get(0).(map[string]string)
+	return meta, args.Error(1)
+}
+
 // ScrubFile implements domain.FileService.
 func (m *FileService) ScrubFile(ctx context.Context, file_id string) (string, error) {
 	args := m.Called(file_id)

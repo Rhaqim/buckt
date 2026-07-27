@@ -1,6 +1,6 @@
 {{ define "files" }}{{ range . }}
 <div
-	class="file-card card relative group bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden"
+	class="file-card card relative group bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl"
 	id="file-{{ .ID }}"
 	data-id="{{ .ID }}"
 	data-name="{{ .Name }}"
@@ -9,9 +9,14 @@
 	ondragstart="dragStart(event)"
 	ondragend="dragEnd(event)"
 >
-	<div class="thumb bg-slate-100 dark:bg-slate-800" style="height:140px;overflow:hidden;">
+	<div class="thumb bg-slate-100 dark:bg-slate-800 rounded-t-xl" style="height:140px;overflow:hidden;">
 		{{ if hasPrefix .ContentType "image/" }}
-			<img src="/serve/{{ .ID }}" class="w-full h-full object-cover" loading="lazy" alt="{{ .Name }}" />
+			<img src="/serve/{{ .ID }}/derivative/thumbnail" class="w-full h-full object-cover cursor-zoom-in"
+				loading="lazy" alt="{{ .Name }}" draggable="false"
+				data-name="{{ .Name }}"
+				data-preview="/serve/{{ .ID }}/derivative/medium"
+				data-full="/serve/{{ .ID }}"
+				onclick="openPreview(this)" />
 		{{ else if hasPrefix .ContentType "audio/" }}
 			<div class="w-full h-full flex flex-col items-center justify-center bg-purple-50 dark:bg-purple-900/20">
 				<svg class="w-9 h-9 text-purple-400 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2z"/></svg>
@@ -40,6 +45,9 @@
 		<div id="file-menu-{{ .ID }}" class="context-menu hidden absolute right-0 top-8 w-40 py-1 rounded-lg shadow-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700" style="z-index:40;">
 			<a href="/web/file/{{ .ID }}" class="block px-3 py-2 text-sm hover:bg-slate-50 dark:hover:bg-slate-700">Download</a>
 			<button type="button" class="action-move w-full text-left px-3 py-2 text-sm hover:bg-slate-50 dark:hover:bg-slate-700" data-type="file" data-id="{{ .ID }}">Move</button>
+			{{ if hasPrefix .ContentType "image/" }}
+			<button type="button" class="action-regenerate w-full text-left px-3 py-2 text-sm hover:bg-slate-50 dark:hover:bg-slate-700" data-id="{{ .ID }}">Regenerate previews</button>
+			{{ end }}
 			<hr class="my-1 border-slate-200 dark:border-slate-700">
 			<button type="button" hx-delete="/web/file/{{ .ID }}" hx-target="#file-{{ .ID }}" hx-swap="outerHTML" hx-confirm="Move this file to trash?" class="w-full text-left px-3 py-2 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40">Move to Trash</button>
 			<button type="button" hx-delete="/web/scrub/{{ .ID }}" hx-target="#file-{{ .ID }}" hx-swap="outerHTML" hx-confirm="Permanently delete this file? This cannot be undone." class="w-full text-left px-3 py-2 text-sm font-semibold text-red-700 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40">Delete Permanently</button>

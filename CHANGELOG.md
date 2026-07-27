@@ -3,10 +3,70 @@
 All notable changes to buckt are documented here. This project follows
 [Semantic Versioning](https://semver.org/).
 
-## [1.6.0] — unreleased
+## [1.7.0] — unreleased
+
+A backward-compatible **minor** release on top of v1.6.0 that adds three opt-in
+primitives making buckt a better fit for event-driven and media-heavy apps —
+file lifecycle events, arbitrary file metadata, and content deduplication. All
+additive; no API removals, safe to adopt.
+
+### ✨ Added
+
+- **File lifecycle events** (`WithEventHandler`, new `pkg/events`). Opt-in,
+  dependency-free. Register one or more handlers and buckt calls them after each
+  successful file operation with an `events.Event` (`file.uploaded`,
+  `file.trashed`, `file.restored`, `file.purged`) carrying storage-level facts
+  (user, file id, name, path, content type, size, content hash). buckt performs
+  no processing itself — this is the seam for enqueuing uploads to an AI/OCR
+  worker, generating derivatives, cache warming, etc., keeping the dependency
+  one-way (your worker imports buckt, never the reverse). Handlers run
+  synchronously after the operation (outside the DB transaction) and are isolated
+  by panic recovery, so a slow or panicking handler can't corrupt or fail the
+  originating call. No handlers = zero overhead.
+- **Arbitrary file metadata** (`SetFileMetadata` / `GetFileMetadata`). Attach a
+  `map[string]string` of application data to any file — resource links (e.g. an
+  order id, so an app can model attachments without buckt knowing about orders),
+  AI-extracted tags, OCR text, etc. Stored as JSON on the file row via GORM's
+  built-in serializer (no new dependency), added by migration `v4` (additive,
+  non-destructive), and returned on `GetFile`. buckt never interprets it.
+- **Content deduplication** (`WithDedup`). Opt-in. When enabled, an upload whose
+  bytes hash-match a file already in the same target folder (for the same owner)
+  returns that existing file's ID and skips writing the blob again — collapsing
+  the "same photo sent four times" case into one stored object and saving storage
+  and bandwidth. It reuses the content hash buckt already records, needs no schema
+  change, is scoped to the target folder so it composes with nested-namespace
+  paths, and never resurrects a trashed duplicate. Off by default.
+- **Image derivatives** (`WithImageDerivatives`, `GenerateDerivatives`,
+  `GetDerivative`). Opt-in. Configure named resized variants (e.g. `thumbnail`
+  200px, `medium` 800px); `GenerateDerivatives(fileID)` produces and stores them
+  for image uploads, and `GetDerivative(fileID, name)` fetches one — so the
+  dashboard serves a thumbnail instead of the full-size original. Resizing is
+  CPU-bound, so call `GenerateDerivatives` from a `file.uploaded` event handler
+  (your worker), keeping it off the upload path. The built-in resizer is pure-Go
+  JPEG/PNG (no new core dependency). Variants are stored as backend objects keyed
+  by file id — moving or trashing the file never orphans them — never upscale,
+  are removed on permanent delete, and their bytes are counted in
+  `Client.StorageBytes` (new `derivatives_bytes` column, migration `v5`). The
+  bundled web UI serves them via `GET /serve/:file_id/derivative/:name` (falling
+  back to the original when a variant is absent): the file grid shows the
+  `thumbnail` variant, clicking an image opens a preview using the larger
+  `medium` variant with a link to the full-size original, and a "Regenerate
+  previews" action (`POST /web/regenerate-derivatives/:file_id`) rebuilds them
+  on demand.
+- **Pluggable image processor** (`WithImageProcessor`, new `pkg/imageproc`).
+  Derivative encoding goes through an `imageproc.Processor` interface, so you can
+  add formats like **WebP** by supplying a processor from a module that imports
+  the encoder — buckt's core stays free of it (the same one-way rule the cloud
+  backends follow; a processor implements a stdlib-only signature and never
+  imports buckt). Ships with a ready-made **pure-Go WebP** processor in the new
+  `github.com/Rhaqim/buckt/imageproc/webp` module (`webp.New()`, no cgo); set a
+  `DerivativeSpec.Format` of `"webp"` to use it.
+
+## [1.6.0]
 
 A backward-compatible **minor** release on top of v1.5.0: built-in backend
-metrics plus an S3-compatible-endpoint fix. No API removals; safe to adopt.
+metrics, a bundled web UI refresh (dark mode, trash browsing, restore), plus
+S3/Azure/GCP fixes. No API removals; safe to adopt.
 
 > **If you use the Azure or GCP backend, upgrade.** v1.5.0's `Exists` is broken
 > on both — the Azure backend **panics** on any blob-properties error (including

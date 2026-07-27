@@ -42,8 +42,11 @@
 				align-items: center; justify-content: center; background: rgba(59,130,246,.12);
 				border-radius: .75rem; font-weight: 600; color: #3b82f6; pointer-events: none;
 			}
-			.file-card .thumb img, .file-card .thumb video, .file-card .thumb div { pointer-events: none; }
-			.file-card a, .file-card button, .file-card audio { pointer-events: auto; }
+			.file-card .thumb video, .file-card .thumb div { pointer-events: none; }
+			.file-card a, .file-card button, .file-card audio, .file-card .thumb img { pointer-events: auto; }
+			/* A card whose action menu is open sits above its neighbours so the
+			   menu (which overflows the card) isn't covered or clipped. */
+			.card.menu-open { z-index: 50; }
 			/* List view: turn the responsive grid into stacked rows. */
 			.view-list .grid { display: block !important; }
 			.view-list .card { display: flex; align-items: center; gap: .75rem; margin-bottom: .5rem; }

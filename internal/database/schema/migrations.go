@@ -45,7 +45,38 @@ func migrations() []Migration {
 			Name:    "trash-origin-parent",
 			Up:      migrateTrashOriginParent,
 		},
+		{
+			Version: 4,
+			Name:    "file-metadata",
+			Up:      migrateFileMetadata,
+		},
+		{
+			Version: 5,
+			Name:    "file-derivatives-bytes",
+			Up:      migrateFileDerivativesBytes,
+		},
 	}
+}
+
+// migrateFileDerivativesBytes adds the derivatives_bytes column (total size of a
+// file's generated image derivatives) so storage totals can include them.
+// Additive and non-destructive: AutoMigrate only ADDs the column with a 0
+// default; on a fresh database V1 already created it.
+func migrateFileDerivativesBytes(ctx context.Context, tx *gorm.DB, prefix string, d Dialect) error {
+	if err := tx.AutoMigrate(&model.FileModel{}); err != nil {
+		return fmt.Errorf("file derivatives_bytes column: %w", err)
+	}
+	return nil
+}
+
+// migrateFileMetadata adds the nullable metadata column (JSON) to the file
+// table. Additive and non-destructive: AutoMigrate only ADDs the column,
+// existing rows get NULL, and on a fresh database V1 already created it.
+func migrateFileMetadata(ctx context.Context, tx *gorm.DB, prefix string, d Dialect) error {
+	if err := tx.AutoMigrate(&model.FileModel{}); err != nil {
+		return fmt.Errorf("file metadata column: %w", err)
+	}
+	return nil
 }
 
 // migrateTrashOriginParent adds the nullable origin_parent_id column to both

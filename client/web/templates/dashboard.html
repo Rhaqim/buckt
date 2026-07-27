@@ -73,6 +73,20 @@
 	<div id="modal" class="fixed inset-0 bg-black/40 hidden items-center justify-center z-50 backdrop-blur-sm p-4" onclick="if(event.target===this)closeModal()">
 		<div class="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 rounded-xl shadow-xl w-full max-w-md" id="modal-content" onclick="event.stopPropagation()"></div>
 	</div>
+
+	<!-- Image preview: shows the larger 'medium' derivative, with a link to the full original. -->
+	<div id="preview" class="fixed inset-0 bg-black/80 hidden items-center justify-center z-[60] p-4" onclick="if(event.target===this)closePreview()">
+		<figure class="flex flex-col items-center gap-3 max-w-full max-h-full">
+			<img id="preview-img" src="" alt="" class="max-w-full max-h-[80vh] object-contain rounded-lg shadow-2xl" />
+			<figcaption class="flex items-center gap-4 text-sm text-slate-200">
+				<span id="preview-name" class="truncate max-w-[60vw]"></span>
+				<a id="preview-full" href="#" target="_blank" rel="noopener" class="text-blue-300 hover:underline">View full size</a>
+			</figcaption>
+		</figure>
+	</div>
+
+	<!-- Transient status toast -->
+	<div id="toast" class="fixed bottom-4 left-1/2 -translate-x-1/2 hidden px-4 py-2 rounded-lg bg-slate-900 text-white text-sm shadow-lg z-[70]"></div>
 </div>
 
 <script>
@@ -182,28 +196,76 @@
 
 	function showModal() { const m = document.getElementById("modal"); m.classList.remove("hidden"); m.classList.add("flex"); }
 	function closeModal() { const m = document.getElementById("modal"); m.classList.add("hidden"); m.classList.remove("flex"); }
-	document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeModal(); });
+	document.addEventListener("keydown", (e) => { if (e.key === "Escape") { closeModal(); closePreview(); } });
+
+	/* Image preview — grid shows the small 'thumbnail' derivative, this pane the
+	   larger 'medium' one, and the caption links to the full-size original. */
+	function openPreview(el) {
+		document.getElementById("preview-img").src = el.dataset.preview;
+		document.getElementById("preview-img").alt = el.dataset.name || "";
+		document.getElementById("preview-name").textContent = el.dataset.name || "";
+		document.getElementById("preview-full").href = el.dataset.full;
+		const p = document.getElementById("preview");
+		p.classList.remove("hidden"); p.classList.add("flex");
+	}
+	function closePreview() { const p = document.getElementById("preview"); p.classList.add("hidden"); p.classList.remove("flex"); }
+
+	let toastTimer;
+	function toast(msg) {
+		const t = document.getElementById("toast");
+		t.textContent = msg;
+		t.classList.remove("hidden");
+		clearTimeout(toastTimer);
+		toastTimer = setTimeout(() => t.classList.add("hidden"), 2500);
+	}
 
 	/* Context menus */
+	function closeAllMenus() {
+		document.querySelectorAll(".context-menu").forEach((el) => el.classList.add("hidden"));
+		document.querySelectorAll(".card.menu-open").forEach((el) => el.classList.remove("menu-open"));
+	}
 	document.addEventListener("click", function (e) {
 		const trigger = e.target.closest(".menu-trigger");
 		if (trigger) {
 			e.preventDefault(); e.stopPropagation();
 			const menu = document.getElementById(trigger.dataset.menu);
 			const wasHidden = menu.classList.contains("hidden");
-			document.querySelectorAll(".context-menu").forEach((el) => el.classList.add("hidden"));
-			if (wasHidden) menu.classList.remove("hidden");
+			closeAllMenus();
+			if (wasHidden) {
+				menu.classList.remove("hidden");
+				// Raise the card so the (overflowing) menu isn't covered/clipped.
+				const card = trigger.closest(".card");
+				if (card) card.classList.add("menu-open");
+			}
 			return;
 		}
 		if (e.target.closest(".context-menu")) return;
-		document.querySelectorAll(".context-menu").forEach((el) => el.classList.add("hidden"));
+		closeAllMenus();
 	});
 	document.addEventListener("click", function (e) {
 		const r = e.target.closest(".action-rename");
 		if (r) { const c = document.getElementById((r.dataset.type === "folder" ? "folder-" : "file-") + r.dataset.id); openRenameModal(r.dataset.type, r.dataset.id, c ? c.dataset.name : ""); return; }
 		const mv = e.target.closest(".action-move");
 		if (mv) { const c = document.getElementById((mv.dataset.type === "folder" ? "folder-" : "file-") + mv.dataset.id); openMoveModal(mv.dataset.type, mv.dataset.id, c ? c.dataset.name : ""); return; }
+		const rg = e.target.closest(".action-regenerate");
+		if (rg) { regenerateDerivatives(rg.dataset.id, rg); return; }
 	});
+
+	/* Regenerate an image's derivatives, then cache-bust its thumbnail so the
+	   refreshed variant shows without a full reload. */
+	function regenerateDerivatives(id, btn) {
+		document.querySelectorAll(".context-menu").forEach((el) => el.classList.add("hidden"));
+		if (btn) btn.disabled = true;
+		fetch("/web/regenerate-derivatives/" + encodeURIComponent(id), { method: "POST" })
+			.then((r) => { if (!r.ok) throw new Error("HTTP " + r.status); })
+			.then(() => {
+				const img = document.querySelector("#file-" + CSS.escape(id) + " img");
+				if (img) img.src = img.src.split("?")[0] + "?v=" + Date.now();
+				toast("Previews regenerated");
+			})
+			.catch((err) => toast("Regenerate failed: " + err.message))
+			.finally(() => { if (btn) btn.disabled = false; });
+	}
 
 	/* Drag & drop to move */
 	function allowDrop(e) { e.preventDefault(); }

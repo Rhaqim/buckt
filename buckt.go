@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"net/http"
 	"time"
 
 	"github.com/Rhaqim/buckt/internal/backend"
@@ -23,6 +24,8 @@ import (
 	"github.com/Rhaqim/buckt/internal/model"
 	"github.com/Rhaqim/buckt/internal/repository"
 	"github.com/Rhaqim/buckt/internal/service"
+	"github.com/Rhaqim/buckt/pkg/events"
+	"github.com/Rhaqim/buckt/pkg/imageproc"
 	"github.com/Rhaqim/buckt/pkg/logger"
 	"github.com/Rhaqim/buckt/pkg/metrics"
 )
@@ -39,6 +42,13 @@ type Client struct {
 	logger   domain.BucktLogger
 	lruCache domain.LRUCache
 	metrics  metrics.Recorder
+
+	// backend, derivatives and imageProcessor support image-derivative
+	// generation/retrieval, which lives at the Client layer (it composes GetFile
+	// + backend writes). imageProcessor is never nil (defaults to the built-in).
+	backend        Backend
+	derivatives    []DerivativeSpec
+	imageProcessor imageproc.Processor
 
 	fileService   domain.FileService
 	folderService domain.FolderService
@@ -99,6 +109,12 @@ func New(conf Config, opts ...ConfigFunc) (*Client, error) {
 		backendTimeout = DefaultBackendOpTimeout
 	}
 
+	// Image processor for derivatives: default to the built-in pure-Go one.
+	imageProcessor := conf.ImageProcessor
+	if imageProcessor == nil {
+		imageProcessor = imageproc.Default()
+	}
+
 	// Initialize the app services
 	folderService, fileService := newAppServices(
 		conf.FlatNameSpaces,
@@ -109,6 +125,8 @@ func New(conf Config, opts ...ConfigFunc) (*Client, error) {
 		bucktLog,
 		cacheManager,
 		backend,
+		newEmitter(conf.EventHandlers, bucktLog),
+		conf.Dedup,
 	)
 
 	// Initialize the Buckt instance
@@ -117,6 +135,9 @@ func New(conf Config, opts ...ConfigFunc) (*Client, error) {
 		logger:            bucktLog,
 		lruCache:          lruCache,
 		metrics:           conf.Metrics,
+		backend:           backend,
+		derivatives:       conf.Derivatives,
+		imageProcessor:    imageProcessor,
 		flatnameSpaces:    conf.FlatNameSpaces,
 		silence:           logConf.Silence,
 		maxFileSize:       maxFileSize,
@@ -202,8 +223,11 @@ func (b *Client) MetricsSnapshot() (map[string]map[string]metrics.Stat, bool) {
 // storage. Pass a per-request context to bound the query.
 func (b *Client) StorageBytes(ctx context.Context) (int64, error) {
 	var total int64
+	// Include derivatives_bytes: generated image derivatives occupy backend
+	// storage but are not tracked as files, so summing file sizes alone would
+	// undercount.
 	if err := b.db.WithContext(ctx).Model(&model.FileModel{}).
-		Select("COALESCE(SUM(size), 0)").Scan(&total).Error; err != nil {
+		Select("COALESCE(SUM(size), 0) + COALESCE(SUM(derivatives_bytes), 0)").Scan(&total).Error; err != nil {
 		return 0, b.logger.WrapError("failed to compute storage bytes", err)
 	}
 	return total, nil
@@ -762,7 +786,18 @@ func (b *Client) DeleteFileContext(ctx context.Context, file_id string) (string,
 // Returns:
 //   - error: An error if the file deletion fails, otherwise nil.
 func (b *Client) DeleteFilePermanentlyContext(ctx context.Context, file_id string) (string, error) {
-	return b.fileService.ScrubFile(ctx, file_id)
+	parentID, err := b.fileService.ScrubFile(ctx, file_id)
+	if err != nil {
+		return parentID, err
+	}
+	// Best-effort: remove any generated derivatives. They are keyed by file id
+	// and not tracked as files, so nothing else cleans them up.
+	if len(b.derivatives) > 0 {
+		if derr := b.backend.DeleteFolder(ctx, derivativeDir(file_id)); derr != nil {
+			b.logger.Warn("failed to delete derivatives for scrubbed file " + file_id + ": " + derr.Error())
+		}
+	}
+	return parentID, nil
 }
 
 // RestoreFileContext moves a trashed file back to the folder it was in before
@@ -778,6 +813,111 @@ func (b *Client) DeleteFilePermanentlyContext(ctx context.Context, file_id strin
 //   - error: An error if the restore fails, otherwise nil.
 func (b *Client) RestoreFileContext(ctx context.Context, user_id, file_id string) error {
 	return b.fileService.RestoreFile(ctx, user_id, file_id)
+}
+
+// SetFileMetadata replaces the arbitrary key/value metadata stored on a file.
+// buckt does not interpret it — use it for resource links (e.g. order IDs),
+// AI-extracted tags, OCR text, etc. Passing nil or an empty map clears it.
+//
+// Parameters:
+//   - file_id: The ID of the file.
+//   - metadata: The key/value map to store (replaces any existing metadata).
+//
+// Returns:
+//   - error: An error if the file is not found or the update fails.
+func (b *Client) SetFileMetadata(file_id string, metadata map[string]string) error {
+	return b.SetFileMetadataContext(context.Background(), file_id, metadata)
+}
+
+// GetFileMetadata returns the metadata stored on a file (nil when none is set).
+func (b *Client) GetFileMetadata(file_id string) (map[string]string, error) {
+	return b.GetFileMetadataContext(context.Background(), file_id)
+}
+
+// SetFileMetadataContext is SetFileMetadata with an explicit context.
+func (b *Client) SetFileMetadataContext(ctx context.Context, file_id string, metadata map[string]string) error {
+	return b.fileService.SetMetadata(ctx, file_id, metadata)
+}
+
+// GetFileMetadataContext is GetFileMetadata with an explicit context.
+func (b *Client) GetFileMetadataContext(ctx context.Context, file_id string) (map[string]string, error) {
+	return b.fileService.GetMetadata(ctx, file_id)
+}
+
+/* Image derivatives */
+
+// isImage reports whether the content type is an image, so derivative
+// generation is attempted (the configured processor decides which encodings it
+// actually supports). Non-images are skipped, making GenerateDerivatives safe
+// to call for every upload.
+func isImage(contentType string) bool {
+	return len(contentType) >= 6 && contentType[:6] == "image/"
+}
+
+// derivativeDir is the backend key prefix holding a file's derivatives. Keying
+// by file id (not path) means moving or trashing the file never orphans them.
+func derivativeDir(file_id string) string { return ".buckt_derivatives/" + file_id }
+
+func derivativeKey(file_id, name string) string { return derivativeDir(file_id) + "/" + name }
+
+// GenerateDerivatives produces the configured resized variants (see
+// WithImageDerivatives) for a file and stores them. It's a no-op when no
+// variants are configured or the file isn't a supported image (JPEG/PNG), so it
+// is safe to call for every upload. Resizing is CPU-bound — call this from a
+// file.uploaded event handler (ideally a background worker) rather than in the
+// request path.
+func (b *Client) GenerateDerivatives(file_id string) error {
+	return b.GenerateDerivativesContext(context.Background(), file_id)
+}
+
+// GetDerivative returns the bytes and detected content type of a previously
+// generated variant, or ErrNotFound if it hasn't been generated.
+func (b *Client) GetDerivative(file_id, name string) ([]byte, string, error) {
+	return b.GetDerivativeContext(context.Background(), file_id, name)
+}
+
+// GenerateDerivativesContext is GenerateDerivatives with an explicit context.
+func (b *Client) GenerateDerivativesContext(ctx context.Context, file_id string) error {
+	if len(b.derivatives) == 0 {
+		return nil
+	}
+
+	file, err := b.fileService.GetFile(ctx, file_id)
+	if err != nil {
+		return err
+	}
+	if !isImage(file.ContentType) {
+		return nil
+	}
+
+	var totalBytes int64
+	for _, spec := range b.derivatives {
+		out, _, err := b.imageProcessor.Resize(file.Data, spec.MaxWidth, spec.Format)
+		if err != nil {
+			return b.logger.WrapError("failed to resize derivative "+spec.Name, err)
+		}
+		if err := b.backend.Put(ctx, derivativeKey(file_id, spec.Name), out); err != nil {
+			return b.logger.WrapError("failed to store derivative "+spec.Name, err)
+		}
+		totalBytes += int64(len(out))
+	}
+
+	// Record the total derivative size so StorageBytes accounts for it. This
+	// replaces any previous value (regenerating overwrites the variants).
+	if err := b.db.WithContext(ctx).Model(&model.FileModel{}).
+		Where("id = ?", file.ID).Update("derivatives_bytes", totalBytes).Error; err != nil {
+		return b.logger.WrapError("failed to record derivative size", err)
+	}
+	return nil
+}
+
+// GetDerivativeContext is GetDerivative with an explicit context.
+func (b *Client) GetDerivativeContext(ctx context.Context, file_id, name string) ([]byte, string, error) {
+	data, err := b.backend.Get(ctx, derivativeKey(file_id, name))
+	if err != nil {
+		return nil, "", fmt.Errorf("derivative %q not found: %w", name, ErrNotFound)
+	}
+	return data, http.DetectContentType(data), nil
 }
 
 /* Migration */
@@ -805,6 +945,32 @@ func initializeCache(conf CacheConfig, bucktLog domain.BucktLogger) (domain.Cach
 	return mocks.NewNoopCache(), lruCache
 }
 
+// newEmitter returns a single events.Handler that fans an event out to every
+// registered handler, isolating each behind panic recovery so a misbehaving
+// handler can neither crash nor fail the originating operation. With no handlers
+// it returns a no-op, so the service can always call emit unconditionally.
+func newEmitter(handlers []events.Handler, log domain.BucktLogger) events.Handler {
+	if len(handlers) == 0 {
+		return func(context.Context, events.Event) {}
+	}
+	hs := make([]events.Handler, len(handlers))
+	copy(hs, handlers)
+	return func(ctx context.Context, e events.Event) {
+		for _, h := range hs {
+			dispatchEvent(ctx, h, e, log)
+		}
+	}
+}
+
+func dispatchEvent(ctx context.Context, h events.Handler, e events.Event, log domain.BucktLogger) {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Warn(fmt.Sprintf("buckt: event handler for %s panicked: %v", e.Type, r))
+		}
+	}()
+	h(ctx, e)
+}
+
 func newAppServices(
 	flatNameSpaces bool,
 	maxFileSize int64,
@@ -814,6 +980,8 @@ func newAppServices(
 	logger domain.BucktLogger,
 	cacheManager domain.CacheManager,
 	activeBackend domain.FileBackend,
+	emit events.Handler,
+	dedup bool,
 ) (domain.FolderService, domain.FileService) {
 	// Initialize the stores
 	folderRepository := repository.NewFolderRepository(db)
@@ -821,7 +989,7 @@ func newAppServices(
 
 	// initialize the services
 	folderService := service.NewFolderService(logger, cacheManager, folderRepository, activeBackend, flatNameSpaces, maxTrashBatch, backendOpTimeout)
-	fileService := service.NewFileService(logger, cacheManager, fileRepository, folderService, activeBackend, flatNameSpaces, maxFileSize, backendOpTimeout)
+	fileService := service.NewFileService(logger, cacheManager, fileRepository, folderService, activeBackend, flatNameSpaces, maxFileSize, backendOpTimeout, emit, dedup)
 
 	logger.Info("✅ Initialized app services")
 

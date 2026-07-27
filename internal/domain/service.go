@@ -32,4 +32,6 @@ type FileService interface {
 	DeleteFile(ctx context.Context, file_id string) (string, error)
 	RestoreFile(ctx context.Context, user_id, file_id string) error
 	ScrubFile(ctx context.Context, file_id string) (string, error)
+	SetMetadata(ctx context.Context, file_id string, metadata map[string]string) error
+	GetMetadata(ctx context.Context, file_id string) (map[string]string, error)
 }

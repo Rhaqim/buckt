@@ -103,6 +103,7 @@ func (r *Router) registerBaseRoutes(mode model.WebMode) {
 	}
 	{
 		serve.GET("serve/:file_id", r.APIService.ServeFile)
+		serve.GET("serve/:file_id/derivative/:name", r.APIService.ServeDerivative)
 		serve.GET("stream/:file_id", r.APIService.StreamFile)
 	}
 
@@ -156,6 +157,7 @@ func (r *Router) registerWebRoutes() {
 			web.DELETE("/scrub-folder/:folder_id", r.WebService.DeleteFolderPermanently)
 
 			web.POST("/upload", r.WebService.UploadFile)
+			web.POST("/regenerate-derivatives/:file_id", r.WebService.RegenerateDerivatives)
 			web.GET("/file/:file_id", r.WebService.DownloadFile)
 			web.POST("/move-file/:file_id", r.WebService.MoveFile)
 			web.DELETE("/file/:file_id", r.WebService.DeleteFile)

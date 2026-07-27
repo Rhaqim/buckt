@@ -7,6 +7,8 @@ import (
 
 	"github.com/Rhaqim/buckt/internal/domain"
 	"github.com/Rhaqim/buckt/internal/model"
+	"github.com/Rhaqim/buckt/pkg/events"
+	"github.com/Rhaqim/buckt/pkg/imageproc"
 	"github.com/Rhaqim/buckt/pkg/metrics"
 )
 
@@ -173,6 +175,12 @@ type Config struct {
 	FlatNameSpaces bool
 	MaxFileSize    int64
 
+	// Dedup, when true, collapses identical uploads within the same folder:
+	// if a file with the same content hash already exists under the target
+	// folder for the owner, UploadFile returns that existing file's ID instead
+	// of storing the bytes again. Off by default. See WithDedup.
+	Dedup bool
+
 	// MaxTrashBatchSize caps the number of descendant files in a single
 	// folder delete. Defaults to DefaultMaxTrashBatchSize when zero.
 	MaxTrashBatchSize int
@@ -192,6 +200,34 @@ type Config struct {
 	// built-in in-memory sink. Nil (the default) disables metrics with zero
 	// overhead.
 	Metrics metrics.Recorder
+
+	// EventHandlers receive a lifecycle events.Event after each successful file
+	// operation (upload/trash/restore/purge). Register them with
+	// WithEventHandler. Handlers run synchronously post-operation — keep them
+	// fast (enqueue and return). Empty (the default) means zero overhead.
+	EventHandlers []events.Handler
+
+	// Derivatives defines the resized image variants GenerateDerivatives will
+	// produce. Empty (the default) disables the feature. Configure with
+	// WithImageDerivatives.
+	Derivatives []DerivativeSpec
+
+	// ImageProcessor resizes/encodes images for GenerateDerivatives. Nil (the
+	// default) uses the built-in pure-Go JPEG/PNG processor. Set it (via
+	// WithImageProcessor) to add formats like WebP.
+	ImageProcessor imageproc.Processor
+}
+
+// DerivativeSpec describes one resized image variant (e.g. a thumbnail). The
+// image is scaled to at most MaxWidth pixels wide, preserving aspect ratio and
+// never upscaling.
+type DerivativeSpec struct {
+	Name     string // variant name, e.g. "thumbnail" — used to fetch it back
+	MaxWidth uint   // maximum width in pixels
+	// Format is the output encoding: "" keeps the source format; "jpeg" and
+	// "png" are handled by the built-in processor; other values (e.g. "webp")
+	// require a matching ImageProcessor.
+	Format string
 }
 
 // ConfigFunc is a function type that takes a pointer to Config and modifies it.
@@ -321,6 +357,57 @@ func WithBackend(backend Backend) ConfigFunc {
 func WithMetrics(r metrics.Recorder) ConfigFunc {
 	return func(c *Config) {
 		c.Metrics = r
+	}
+}
+
+// WithImageDerivatives configures the resized image variants that
+// GenerateDerivatives produces (and GetDerivative fetches). Call
+// GenerateDerivatives from a file.uploaded event handler so the CPU-bound
+// resizing runs in your worker, off the upload path. Supports JPEG and PNG.
+//
+//	buckt.WithImageDerivatives(
+//	    buckt.DerivativeSpec{Name: "thumbnail", MaxWidth: 200},
+//	    buckt.DerivativeSpec{Name: "medium", MaxWidth: 800},
+//	)
+func WithImageDerivatives(specs ...DerivativeSpec) ConfigFunc {
+	return func(c *Config) {
+		c.Derivatives = append(c.Derivatives, specs...)
+	}
+}
+
+// WithImageProcessor sets the image processor used by GenerateDerivatives,
+// replacing the built-in JPEG/PNG one. Use it to add formats such as WebP by
+// supplying a processor from a module that imports the encoder — buckt's core
+// stays free of that dependency.
+func WithImageProcessor(p imageproc.Processor) ConfigFunc {
+	return func(c *Config) {
+		c.ImageProcessor = p
+	}
+}
+
+// WithDedup enables content deduplication: an upload whose bytes hash-match a
+// file already present in the same target folder (for the same owner) returns
+// that existing file's ID and skips re-writing the blob — turning the WhatsApp
+// "same photo sent four times" case into a single stored object. Scoped to the
+// target folder so it composes with nested-namespace mode (where a blob's path
+// reflects its folder) and never resurrects a trashed file. Off by default.
+func WithDedup() ConfigFunc {
+	return func(c *Config) {
+		c.Dedup = true
+	}
+}
+
+// WithEventHandler registers a handler that receives a lifecycle events.Event
+// after each successful file operation. It may be called multiple times to
+// attach several handlers. Handlers run synchronously after the operation
+// completes (outside the DB transaction); keep them fast — the intended use is
+// to enqueue work (AI processing, derivative generation, …) and return. A
+// panicking handler is recovered and never fails the originating call.
+func WithEventHandler(h events.Handler) ConfigFunc {
+	return func(c *Config) {
+		if h != nil {
+			c.EventHandlers = append(c.EventHandlers, h)
+		}
 	}
 }
 

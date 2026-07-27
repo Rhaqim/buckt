@@ -291,6 +291,36 @@ func (f *FileRepository) RestoreFile(
 	return
 }
 
+// FindByHash returns a file with the given content hash under the same owner
+// and parent folder, or ErrNotFound. Scoped to the parent so a match is always
+// a live file in the upload target (never a trashed one, which lives under the
+// __trash__ folder).
+func (f *FileRepository) FindByHash(ctx context.Context, user_id string, parent_id uuid.UUID, hash string) (*model.FileModel, error) {
+	var file model.FileModel
+	err := f.db.DB.WithContext(ctx).
+		Where("user_id = ? AND parent_id = ? AND hash = ?", user_id, parent_id, hash).
+		First(&file).Error
+	if err != nil {
+		return nil, asNotFound(err, "no duplicate file")
+	}
+	return &file, nil
+}
+
+// SetMetadata replaces the file's arbitrary key/value metadata. The map is
+// stored as JSON via the model's field serializer. We load the row, then use
+// Select(...).Updates(struct) — a field-aware update — so GORM applies the
+// serializer (a bare Update("metadata", map) would try to bind the map straight
+// to the driver and fail). Select forces the column to be written even when the
+// map is nil, so passing nil clears the metadata.
+func (f *FileRepository) SetMetadata(ctx context.Context, id uuid.UUID, metadata map[string]string) error {
+	var file model.FileModel
+	if err := f.db.DB.WithContext(ctx).First(&file, id).Error; err != nil {
+		return asNotFound(err, "file not found")
+	}
+	file.Metadata = metadata
+	return f.db.DB.WithContext(ctx).Model(&file).Select("Metadata").Updates(file).Error
+}
+
 // ScrubFile permanently deletes a file regardless of its location.
 func (f *FileRepository) ScrubFile(ctx context.Context, id uuid.UUID) error {
 	return f.db.DB.WithContext(ctx).Delete(&model.FileModel{}, id).Error

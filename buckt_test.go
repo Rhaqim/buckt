@@ -13,6 +13,8 @@ import (
 	"github.com/Rhaqim/buckt/internal/domain"
 	"github.com/Rhaqim/buckt/internal/mocks"
 	"github.com/Rhaqim/buckt/internal/model"
+	"github.com/Rhaqim/buckt/pkg/events"
+	"github.com/Rhaqim/buckt/pkg/imageproc"
 	"github.com/Rhaqim/buckt/pkg/metrics"
 
 	"github.com/google/uuid"
@@ -35,6 +37,10 @@ type testClientConfig struct {
 	flatNameSpaces bool
 	maxFileSize    int64
 	metrics        metrics.Recorder
+	eventHandlers  []events.Handler
+	dedup          bool
+	derivatives    []DerivativeSpec
+	imageProcessor imageproc.Processor
 }
 
 type testClientOption func(*testClientConfig)
@@ -55,6 +61,26 @@ func withMaxFileSize(n int64) testClientOption {
 // withMetrics attaches a metrics recorder so backend ops are collected.
 func withMetrics(m metrics.Recorder) testClientOption {
 	return func(c *testClientConfig) { c.metrics = m }
+}
+
+// withEventHandler registers a lifecycle event handler on the test client.
+func withEventHandler(h events.Handler) testClientOption {
+	return func(c *testClientConfig) { c.eventHandlers = append(c.eventHandlers, h) }
+}
+
+// withDedup enables content deduplication on the test client.
+func withDedup() testClientOption {
+	return func(c *testClientConfig) { c.dedup = true }
+}
+
+// withImageDerivatives configures resized-image variants on the test client.
+func withImageDerivatives(specs ...DerivativeSpec) testClientOption {
+	return func(c *testClientConfig) { c.derivatives = append(c.derivatives, specs...) }
+}
+
+// withImageProcessor sets a custom image processor on the test client.
+func withImageProcessor(p imageproc.Processor) testClientOption {
+	return func(c *testClientConfig) { c.imageProcessor = p }
 }
 
 // pgDSN returns the Postgres DSN from BUCKT_PG_DSN or skips the test.
@@ -108,6 +134,10 @@ func newTestClient(t *testing.T, opts ...testClientOption) *Client {
 		FlatNameSpaces: cfg.flatNameSpaces,
 		MaxFileSize:    cfg.maxFileSize,
 		Metrics:        cfg.metrics,
+		EventHandlers:  cfg.eventHandlers,
+		Dedup:          cfg.dedup,
+		Derivatives:    cfg.derivatives,
+		ImageProcessor: cfg.imageProcessor,
 	})
 	require.NoError(t, err) // also proves the migrations run cleanly on this driver
 	t.Cleanup(func() { _ = client.Close() })
@@ -690,6 +720,8 @@ func TestNewAppServices(t *testing.T) {
 			mockLogger,
 			mockCacheManager,
 			mockBackend,
+			nil,
+			false,
 		)
 		assert.NotNil(t, folderService)
 		assert.NotNil(t, fileService)
@@ -705,6 +737,8 @@ func TestNewAppServices(t *testing.T) {
 			mockLogger,
 			mockCacheManager,
 			mockBackend,
+			nil,
+			false,
 		)
 		assert.NotNil(t, folderService)
 		assert.NotNil(t, fileService)

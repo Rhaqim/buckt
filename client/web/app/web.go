@@ -263,6 +263,22 @@ func (svc *WebService) DownloadFile(c *gin.Context) {
 	c.Data(200, file.ContentType, file.Data)
 }
 
+// RegenerateDerivatives rebuilds the configured image variants for a file. It's
+// a no-op if derivatives aren't configured or the file isn't an image.
+func (svc *WebService) RegenerateDerivatives(c *gin.Context) {
+	fileID, ok := requireParam(c, "file_id")
+	if !ok {
+		return
+	}
+
+	if err := svc.client.GenerateDerivatives(fileID); err != nil {
+		abort500(c, "failed to regenerate derivatives", err)
+		return
+	}
+
+	c.JSON(200, response.Success("derivatives regenerated"))
+}
+
 // MoveFile implements domain.WebService.
 func (svc *WebService) MoveFile(c *gin.Context) {
 	fileID, ok := requireParam(c, "file_id")
