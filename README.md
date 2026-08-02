@@ -6,7 +6,39 @@
 [![GoDoc](https://godoc.org/github.com/Rhaqim/buckt?status.svg)](https://pkg.go.dev/github.com/Rhaqim/buckt)
 [![License](https://img.shields.io/github/license/Rhaqim/buckt)](LICENCE)
 
-Buckt is a media storage package for Go applications that need to upload, organize, and serve files without rewriting storage logic for every project. It works out of the box with the local filesystem and SQLite, and scales up to S3, GCS, Azure Blob, and Cloudflare R2 with a single line of config.
+Buckt is a media management library for Go applications that need to upload, organize, and manage files without reinventing media handling for every project.
+
+Unlike object storage servers such as MinIO, Buckt focuses on the application layer. It provides a consistent API for managing media, folders, metadata, and storage backends, allowing your application to remain independent of where files are ultimately stored.
+
+Out of the box, Buckt supports local filesystem storage with SQLite for development, and can seamlessly switch to Amazon S3, Google Cloud Storage, Azure Blob Storage, Cloudflare R2, or other backends with minimal configuration. Your application code remains unchanged while Buckt handles storage orchestration and media management.
+
+Use Buckt when your application needs more than just object storage—when you need to organize media, manage file metadata, build folder hierarchies, and keep storage concerns separate from your business logic.
+
+Why Buckt instead of MinIO?
+
+Buckt and MinIO solve different problems.
+
+MinIO is an object storage server. It stores and retrieves objects using the S3 API.
+
+Buckt is a media management library. It sits inside your Go application and manages media workflows while using a storage backend such as the local filesystem, Amazon S3, Cloudflare R2, Azure Blob Storage or even MinIO itself.
+
+Think of it this way:
+
+* MinIO answers: “Where should the bytes be stored?”
+* Buckt answers: “How should my application manage media?”
+
+Buckt handles concerns such as:
+
+* Uploading and serving files
+* Folder organization
+* File metadata
+* Storage abstraction
+* Backend portability
+* Media lifecycle management
+
+while delegating the actual storage of file data to your chosen backend.
+
+In fact, Buckt can use MinIO as its storage backend, allowing you to combine MinIO’s object storage capabilities with Buckt’s higher-level media management features.
 
 ```sh
 ┌─────────────────────────────────────────────────────────────┐
