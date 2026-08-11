@@ -385,7 +385,25 @@ Migration is **always forward** (primary → secondary). The primary is treated 
     }
     time.Sleep(time.Second)
   }
+
+  // completed counts every processed file, so the loop above always terminates
+  // even if some files can't be copied. Check how many were left behind:
+  if failed, _ := client.MigrationFailures(ctx); failed > 0 {
+    log.Printf("%d file(s) failed after retries — fix the cause and re-run MigrateAll", failed)
+  }
 ```
+
+`MigrateAll` copies files **concurrently** with a bounded worker pool. Tune it for a high-latency target with `Concurrency` (default 8):
+
+```go
+  client, _ := buckt.Default(buckt.WithMigration(buckt.MigrationConfig{
+    From:        buckt.LocalBackend(),
+    To:          s3,
+    Concurrency: 16, // more parallelism → faster, but more memory + API pressure
+  }))
+```
+
+Each in-flight file is buffered in full, so higher concurrency trades memory and provider rate-limit headroom for throughput.
 
 `client.BackendName()` reports the active backend (`"local"`, `"s3"`, or `"local->s3"` mid-migration) — handy for a status badge. When you're done migrating, swap to the target alone:
 
@@ -397,7 +415,8 @@ Migration is **always forward** (primary → secondary). The primary is treated 
 | Method | Description |
 |---|---|
 | `MigrateAll(ctx)` | Schedule a background copy of all pre-existing objects to the target (idempotent) |
-| `MigrationStatus(ctx)` | Report `completed`/`total` copied and whether migration is enabled |
+| `MigrationStatus(ctx)` | Report `completed`/`total` processed and whether migration is enabled (`completed == total` when done) |
+| `MigrationFailures(ctx)` | How many objects permanently failed after retries (re-run `MigrateAll` to retry them) |
 | `BackendName()` | Name of the active backend (`local`, `s3`, or `local->s3`) |
 
 ---
@@ -756,6 +775,7 @@ GetDerivative(fileID, name string) (data []byte, contentType string, err error)
 // Migration (only when built WithMigration)
 MigrateAll(ctx context.Context) error
 MigrationStatus(ctx context.Context) (completed, total int64, ok bool)
+MigrationFailures(ctx context.Context) (failed int64, ok bool)
 BackendName() string
 ```
 

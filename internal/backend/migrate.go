@@ -4,8 +4,10 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"strings"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/Rhaqim/buckt/internal/domain"
 )
@@ -16,22 +18,35 @@ type MigrationBackendService struct {
 	primaryBackend   domain.FileBackend
 	secondaryBackend domain.FileBackend
 
+	// concurrency is how many files MigrateAll copies in parallel (>= 1).
+	concurrency int
+
 	migrating atomic.Bool
 	stats     migrationStats
 }
 
 type migrationStats struct {
 	mu        sync.Mutex
-	completed int64
+	completed int64 // files copied or already present in the secondary
+	failed    int64 // files that permanently failed after retries
 	total     int64
 }
 
-func NewMigrationBackend(bucktLogger domain.BucktLogger, primary domain.FileBackend, secondary domain.FileBackend) domain.MigratableBackend {
+// defaultMigrationConcurrency mirrors buckt.DefaultMigrationConcurrency. It is
+// duplicated here (rather than imported) because the root package imports this
+// one, not the other way around.
+const defaultMigrationConcurrency = 8
+
+func NewMigrationBackend(bucktLogger domain.BucktLogger, primary domain.FileBackend, secondary domain.FileBackend, concurrency int) domain.MigratableBackend {
+	if concurrency <= 0 {
+		concurrency = defaultMigrationConcurrency
+	}
 	bucktLogger.Info("🚀 Initialising migration backend: " + primary.Name() + " -> " + secondary.Name())
 	return &MigrationBackendService{
 		logger:           bucktLogger,
 		primaryBackend:   primary,
 		secondaryBackend: secondary,
+		concurrency:      concurrency,
 	}
 }
 
@@ -177,25 +192,56 @@ func (d *MigrationBackendService) DeleteFolder(ctx context.Context, prefix strin
 	return nil
 }
 
-// MigrateFile copies a single file from primary to secondary.
+const (
+	// migrateMaxAttempts bounds how many times MigrateFile tries a single file
+	// before giving up, so a transient primary/secondary hiccup doesn't drop the
+	// file from the migration.
+	migrateMaxAttempts = 3
+	// migrateRetryBackoff is the base delay between attempts, scaled by the
+	// attempt number (linear backoff).
+	migrateRetryBackoff = 500 * time.Millisecond
+)
+
+// MigrateFile copies a single file from primary to secondary, retrying transient
+// read/write failures with a linear backoff. On success it increments the
+// completed counter exactly once; on exhaustion it returns the last error.
 func (d *MigrationBackendService) MigrateFile(ctx context.Context, path string) error {
-	data, err := d.primaryBackend.Get(ctx, path)
-	if err != nil {
-		return fmt.Errorf("failed to read %s from primary: %w", path, err)
+	var lastErr error
+	for attempt := 1; attempt <= migrateMaxAttempts; attempt++ {
+		if attempt > 1 {
+			// Wait before retrying, but bail immediately if cancelled.
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(migrateRetryBackoff * time.Duration(attempt-1)):
+			}
+		}
+
+		data, err := d.primaryBackend.Get(ctx, path)
+		if err != nil {
+			lastErr = fmt.Errorf("failed to read %s from primary: %w", path, err)
+			continue
+		}
+
+		if err := d.secondaryBackend.Put(ctx, path, data); err != nil {
+			lastErr = fmt.Errorf("failed to write %s to secondary: %w", path, err)
+			continue
+		}
+
+		d.stats.mu.Lock()
+		d.stats.completed++
+		d.stats.mu.Unlock()
+
+		return nil
 	}
 
-	if err := d.secondaryBackend.Put(ctx, path, data); err != nil {
-		return fmt.Errorf("failed to write %s to secondary: %w", path, err)
-	}
-
-	d.stats.mu.Lock()
-	d.stats.completed++
-	d.stats.mu.Unlock()
-
-	return nil
+	return fmt.Errorf("migrate %s failed after %d attempts: %w", path, migrateMaxAttempts, lastErr)
 }
 
-// MigrateAll copies all files from primary to secondary in the background.
+// MigrateAll copies all files from primary to secondary in the background,
+// using a bounded pool of d.concurrency workers. It is idempotent: objects
+// already present in the secondary are skipped, so it is safe to re-run after
+// an interruption.
 func (d *MigrationBackendService) MigrateAll(ctx context.Context) error {
 	// Atomic check-and-set so two concurrent callers can't both start a
 	// migration. CompareAndSwap returns false if the value was already true.
@@ -215,42 +261,123 @@ func (d *MigrationBackendService) MigrateAll(ctx context.Context) error {
 	d.stats.completed = 0
 	d.stats.mu.Unlock()
 
-	// Run migration in a goroutine
+	// Build a skip-set from a single List of the secondary, instead of one
+	// Exists round-trip per file (halving the request count on large buckets).
+	// Keys are normalised with normaliseKey so both the leading-slash and
+	// slash-stripped forms of a key match — see the cloud backends' altKey.
+	skip, haveSkipSet := d.secondarySkipSet(ctx)
+
+	// alreadyInSecondary reports whether the secondary already holds path. It
+	// uses the pre-listed skip-set when available, and otherwise falls back to a
+	// per-file Exists check (e.g. when the secondary's List failed).
+	alreadyInSecondary := func(path string) bool {
+		if haveSkipSet {
+			_, ok := skip[normaliseKey(path)]
+			return ok
+		}
+		exists, err := d.secondaryBackend.Exists(ctx, path)
+		return err == nil && exists
+	}
+
+	workers := d.concurrency
+	if workers <= 0 {
+		workers = defaultMigrationConcurrency
+	}
+	if workers > len(files) {
+		workers = len(files)
+	}
+
+	// Run migration in the background.
 	go func() {
 		defer d.migrating.Store(false)
 
+		if len(files) == 0 {
+			d.logger.Info("✅ Migration complete (nothing to copy)")
+			return
+		}
+
+		paths := make(chan string)
+
+		var wg sync.WaitGroup
+		wg.Add(workers)
+		for i := 0; i < workers; i++ {
+			go func() {
+				defer wg.Done()
+				for path := range paths {
+					if ctx.Err() != nil {
+						return // cancelled — drain quietly
+					}
+					if alreadyInSecondary(path) {
+						d.stats.mu.Lock()
+						d.stats.completed++
+						d.stats.mu.Unlock()
+						continue
+					}
+					if err := d.MigrateFile(ctx, path); err != nil {
+						d.logger.Errorf("Failed to migrate %s: %v", path, err)
+						// Count it as processed-but-failed so progress still
+						// reaches total (the badge completes) and callers get a
+						// failure count. Continue with other files.
+						d.stats.mu.Lock()
+						d.stats.failed++
+						d.stats.mu.Unlock()
+					}
+				}
+			}()
+		}
+
+		// Feed paths to the workers, stopping early if the context is cancelled.
+		cancelled := false
+	feed:
 		for _, path := range files {
 			select {
 			case <-ctx.Done():
-				d.logger.Errorf("Migration cancelled: %v", ctx.Err())
-				return
-			default:
-			}
-
-			// Skip if already exists in secondary
-			exists, err := d.secondaryBackend.Exists(ctx, path)
-			if err == nil && exists {
-				d.stats.mu.Lock()
-				d.stats.completed++
-				d.stats.mu.Unlock()
-				continue
-			}
-
-			if err := d.MigrateFile(ctx, path); err != nil {
-				d.logger.Errorf("Failed to migrate %s: %v", path, err)
-				// Continue with other files
+				cancelled = true
+				break feed
+			case paths <- path:
 			}
 		}
+		close(paths)
+		wg.Wait()
 
+		if cancelled || ctx.Err() != nil {
+			d.logger.Errorf("Migration cancelled: %v", ctx.Err())
+			return
+		}
 		d.logger.Info("✅ Migration complete")
 	}()
 
 	return nil
 }
 
-// MigrationStatus returns the current migration progress.
-func (d *MigrationBackendService) MigrationStatus(ctx context.Context) (completed int64, total int64) {
+// secondarySkipSet lists the secondary once and returns the set of normalised
+// keys it already holds. The bool is false when the listing failed, signalling
+// callers to fall back to per-file Exists checks.
+func (d *MigrationBackendService) secondarySkipSet(ctx context.Context) (map[string]struct{}, bool) {
+	keys, err := d.secondaryBackend.List(ctx, "")
+	if err != nil {
+		d.logger.Errorf("Could not list secondary for skip-set (falling back to per-file checks): %v", err)
+		return nil, false
+	}
+	set := make(map[string]struct{}, len(keys))
+	for _, k := range keys {
+		set[normaliseKey(k)] = struct{}{}
+	}
+	return set, true
+}
+
+// normaliseKey strips a single leading slash so the two key forms buckt can
+// produce ("/user/…" from nested-mode writes and "user/…" from a local List)
+// compare equal.
+func normaliseKey(key string) string {
+	return strings.TrimPrefix(key, "/")
+}
+
+// MigrationStatus returns the current migration progress: files copied (or
+// already present), files that permanently failed after retries, and the total
+// scheduled. completed+failed == total once the run finishes.
+func (d *MigrationBackendService) MigrationStatus(ctx context.Context) (completed int64, failed int64, total int64) {
 	d.stats.mu.Lock()
 	defer d.stats.mu.Unlock()
-	return d.stats.completed, d.stats.total
+	return d.stats.completed, d.stats.failed, d.stats.total
 }

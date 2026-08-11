@@ -46,8 +46,10 @@ type MigratableBackend interface {
 	// Migrate a specific file (used for lazy migration on access)
 	MigrateFile(ctx context.Context, path string) error
 
-	// Progress info for observability
-	MigrationStatus(ctx context.Context) (completed int64, total int64)
+	// Progress info for observability. completed counts files copied (or already
+	// present); failed counts files that permanently failed after retries;
+	// total is the number scheduled. completed+failed == total when done.
+	MigrationStatus(ctx context.Context) (completed int64, failed int64, total int64)
 }
 
 type PlaceholderBackend struct {
