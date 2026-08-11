@@ -25,6 +25,36 @@ Additive; no API removals.
   (`.pre-commit-config.yaml` + `.gitleaks.toml`) and a `secret-scan` GitHub
   Actions workflow catch hardcoded credentials before they reach history.
 
+### ⚡ Changed
+
+- **`MigrateAll` now copies files concurrently** with a bounded worker pool
+  instead of one at a time, and checks the target with a single `List` up front
+  rather than an `Exists` round-trip per file. On a high-latency target (S3/R2)
+  this is dramatically faster for large buckets. Concurrency is configurable via
+  `MigrationConfig.Concurrency` (default `DefaultMigrationConcurrency` = 8);
+  higher values trade memory (each in-flight file is buffered) and provider
+  rate-limit headroom for throughput. Still idempotent and safe to re-run after
+  an interruption. Individual file copies now retry transient failures with a
+  linear backoff, so a flaky target no longer silently drops files.
+- **`MigrationStatus` progress now always reaches `total`.** A file that
+  permanently fails after retries is counted as processed (not dropped), so
+  `completed` reaches `total` when the run finishes and a progress badge no
+  longer hangs. The new `Client.MigrationFailures(ctx)` reports how many objects
+  could not be copied (re-run `MigrateAll` to retry them); the web `/backend`
+  endpoint gained a `failed` field.
+- **`MigrateAll` is now resumable.** Each copied object is recorded in the
+  database (`buckt_migration_models`), so a migration interrupted by a
+  restart/crash resumes from where it left off — already-copied files are skipped
+  straight from the persisted state without re-scanning the target, and progress
+  no longer restarts from zero. Persistence is best-effort (a recording failure
+  never fails an idempotent copy) and keyed by the target backend's name.
+
+### 🧹 Removed
+
+- Deleted the unused `internal/migration` package (a second, never-wired
+  migration service). Its worthwhile piece — per-file retry with backoff — was
+  folded into the live migration path above.
+
 ## [1.8.0] — 2026-08-11
 
 A backward-compatible **minor** release on top of v1.7.0 adding controls to

@@ -75,6 +75,6 @@ func (m *MigrationBackend) MigrateFile(ctx context.Context, path string) error {
 }
 
 // MigrationStatus implements domain.MigratableBackend.
-func (m *MigrationBackend) MigrationStatus(ctx context.Context) (completed int64, total int64) {
-	return 0, 0
+func (m *MigrationBackend) MigrationStatus(ctx context.Context) (completed int64, failed int64, total int64) {
+	return 0, 0, 0
 }

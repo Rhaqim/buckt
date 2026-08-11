@@ -130,6 +130,10 @@ type BackendConfig struct {
 
 	// MigrationEnabled enables dual-write migration mode.
 	MigrationEnabled bool
+
+	// MigrationConcurrency sets how many files MigrateAll copies in parallel.
+	// 0 uses DefaultMigrationConcurrency.
+	MigrationConcurrency int
 }
 
 // LocalBackend is a placeholder and is replaced with the actual local backend implementation.
@@ -170,6 +174,12 @@ const DefaultMaxTrashBatchSize = 5000
 // may spend on backend I/O. The DB transaction is held open for the duration,
 // so this also bounds the worst-case lock-contention window.
 const DefaultBackendOpTimeout = 5 * time.Minute
+
+// DefaultMigrationConcurrency is how many files MigrateAll copies in parallel
+// when MigrationConfig.Concurrency is left at 0. Chosen to overlap network
+// latency to a cloud target without hammering it or buffering too many files
+// in memory at once.
+const DefaultMigrationConcurrency = 8
 
 type Config struct {
 	MediaDir       string
@@ -333,6 +343,12 @@ type MigrationConfig struct {
 
 	// To is the destination backend that From is being migrated to.
 	To Backend
+
+	// Concurrency sets how many files MigrateAll copies in parallel. 0 uses a
+	// sensible default (DefaultMigrationConcurrency). Higher values speed up bulk
+	// migration to a high-latency target (S3/R2) but use more memory — each
+	// in-flight file is buffered in full — and can trip provider rate limits.
+	Concurrency int
 }
 
 // WithBackend configures a single storage backend.
@@ -462,6 +478,7 @@ func WithMigration(mc MigrationConfig) ConfigFunc {
 		c.Backend.Source = mc.From
 		c.Backend.Target = mc.To
 		c.Backend.MigrationEnabled = true
+		c.Backend.MigrationConcurrency = mc.Concurrency
 	}
 }
 

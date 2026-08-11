@@ -92,8 +92,14 @@ func New(conf Config, opts ...ConfigFunc) (*Client, error) {
 	// Initialize cache
 	cacheManager, lruCache := initializeCache(conf.Cache, bucktLog)
 
-	// Initialise Backend
-	backend := resolveBackend(conf.MediaDir, conf.Backend, bucktLog, lruCache, conf.Metrics)
+	// Initialise Backend. In migration mode, back the resumable bulk copy with a
+	// DB-persisted state store (the MigrationModel table, created by db.Migrate
+	// above) so an interrupted MigrateAll resumes without re-scanning the target.
+	var migrationStore domain.MigrationStateStore
+	if conf.Backend.MigrationEnabled {
+		migrationStore = repository.NewMigrationStateStore(db.DB)
+	}
+	backend := resolveBackend(conf.MediaDir, conf.Backend, bucktLog, lruCache, conf.Metrics, migrationStore)
 
 	// Max file size: 0 means no limit (backward compatible)
 	maxFileSize := conf.MaxFileSize
@@ -947,17 +953,34 @@ func (b *Client) MigrateAll(ctx context.Context) error {
 	return m.MigrateAll(ctx)
 }
 
-// MigrationStatus reports how many objects have been copied to the target so far
-// and the total scheduled by the most recent MigrateAll. ok is false when the
-// Client was not created with WithMigration. When a migration finishes,
-// completed == total.
+// MigrationStatus reports how many objects have been processed by the most
+// recent MigrateAll and the total scheduled. ok is false when the Client was not
+// created with WithMigration. When a migration finishes, completed == total —
+// completed counts every processed object, whether it was copied, already
+// present, or permanently failed after retries. Use MigrationFailures to find
+// out how many of those permanently failed (successfully copied == completed -
+// failed).
 func (b *Client) MigrationStatus(ctx context.Context) (completed, total int64, ok bool) {
 	m, isMigratable := b.backend.(domain.MigratableBackend)
 	if !isMigratable {
 		return 0, 0, false
 	}
-	completed, total = m.MigrationStatus(ctx)
-	return completed, total, true
+	copied, failed, tot := m.MigrationStatus(ctx)
+	return copied + failed, tot, true
+}
+
+// MigrationFailures reports how many objects the most recent MigrateAll could
+// not copy after retries. ok is false when the Client was not created with
+// WithMigration. A non-zero count means the migration finished (completed ==
+// total) but some objects were left behind — inspect the logs for which, and
+// re-run MigrateAll to retry them once the underlying issue is fixed.
+func (b *Client) MigrationFailures(ctx context.Context) (failed int64, ok bool) {
+	m, isMigratable := b.backend.(domain.MigratableBackend)
+	if !isMigratable {
+		return 0, false
+	}
+	_, failed, _ = m.MigrationStatus(ctx)
+	return failed, true
 }
 
 /* Helper Methods */
@@ -1035,7 +1058,14 @@ func newAppServices(
 	return folderService, fileService
 }
 
-func resolveBackend(mediaDir string, bc BackendConfig, log domain.BucktLogger, lru domain.LRUCache, rec metrics.Recorder) Backend {
+func resolveBackend(
+	mediaDir string,
+	bc BackendConfig,
+	log domain.BucktLogger,
+	lru domain.LRUCache,
+	rec metrics.Recorder,
+	migrationStore domain.MigrationStateStore,
+) Backend {
 	// meter wraps a leaf backend so every operation is recorded. It is a no-op
 	// when rec is nil. In migration mode the leaves (source/target) are metered
 	// individually — never the composite — so per-backend counts stay distinct
@@ -1083,7 +1113,7 @@ func resolveBackend(mediaDir string, bc BackendConfig, log domain.BucktLogger, l
 		}
 
 		log.Infof("🔄 Migration mode: %s → %s", source.Name(), target.Name())
-		return backend.NewMigrationBackend(log, meter(source), meter(target))
+		return backend.NewMigrationBackend(log, meter(source), meter(target), bc.MigrationConcurrency, migrationStore)
 	}
 
 	// Non-migration modes

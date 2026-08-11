@@ -140,9 +140,13 @@ func bulkMigrate(client *buckt.Client) {
 			log.Println("migration: no pre-existing files to copy")
 			return
 		}
-		log.Printf("migration: %d/%d objects copied", done, total)
+		log.Printf("migration: %d/%d objects processed", done, total)
 		if done >= total {
-			log.Println("✅ migration complete — you can now restart with -mode=r2")
+			if failed, _ := client.MigrationFailures(ctx); failed > 0 {
+				log.Printf("⚠️ migration finished with %d failure(s) — check the logs and re-run to retry them", failed)
+			} else {
+				log.Println("✅ migration complete — you can now restart with -mode=r2")
+			}
 			return
 		}
 		time.Sleep(time.Second)

@@ -68,12 +68,14 @@ func (svc *APIService) Metrics(c *gin.Context) {
 // use (and both backends during a migration) plus live status.
 func (svc *APIService) Backend(c *gin.Context) {
 	completed, total, enabled := svc.client.MigrationStatus(c.Request.Context())
+	failed, _ := svc.client.MigrationFailures(c.Request.Context())
 	c.JSON(200, gin.H{
 		"name": svc.client.BackendName(),
 		"migration": gin.H{
 			"enabled":   enabled,
 			"running":   enabled && total > 0 && completed < total,
 			"completed": completed,
+			"failed":    failed,
 			"total":     total,
 		},
 	})
