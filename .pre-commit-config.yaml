@@ -1,0 +1,21 @@
+# Pre-commit hooks for buckt. Install once with:
+#
+#   pip install pre-commit   # or: brew install pre-commit
+#   pre-commit install
+#
+# Thereafter every `git commit` runs these hooks. The gitleaks hook blocks the
+# commit if a secret (API key, token, private key) appears in the staged diff —
+# the cheapest place to stop a credential leak, before it ever reaches history.
+repos:
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.21.2
+    hooks:
+      - id: gitleaks
+
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+      - id: check-merge-conflict
+      - id: detect-private-key

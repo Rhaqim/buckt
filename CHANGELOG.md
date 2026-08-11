@@ -3,7 +3,29 @@
 All notable changes to buckt are documented here. This project follows
 [Semantic Versioning](https://semver.org/).
 
-## [1.8.0] — unreleased
+## [1.9.0] — unreleased
+
+A backward-compatible **minor** release adding a pluggable upload-scanning hook.
+Additive; no API removals.
+
+### ✨ Added
+
+- **Pluggable upload scanning** (`WithUploadScanner`, `pkg/scan`,
+  `ErrUploadRejected`). Register a `scan.Scanner` and buckt runs it on every
+  upload's bytes at the single write chokepoint, before anything is committed —
+  return an error to reject the file (malware, disallowed type) and nothing is
+  stored, no `file.uploaded` event fires, and the caller gets `ErrUploadRejected`
+  wrapping the scanner's reason (branch with `errors.Is`). buckt ships no
+  scanning engine by design (no AV dependencies in a storage library); the
+  application supplies one — a ClamAV client, a VirusTotal lookup, a
+  content-type allowlist, etc. Unlike event handlers (which fire *after* commit),
+  the scanner runs *before* it, so it can actually block. Nil by default — zero
+  overhead when unused.
+- **Repo secret-scanning** — a gitleaks pre-commit hook
+  (`.pre-commit-config.yaml` + `.gitleaks.toml`) and a `secret-scan` GitHub
+  Actions workflow catch hardcoded credentials before they reach history.
+
+## [1.8.0] — 2026-08-11
 
 A backward-compatible **minor** release on top of v1.7.0 adding controls to
 drive and observe a local → cloud storage migration. Additive; no API removals.

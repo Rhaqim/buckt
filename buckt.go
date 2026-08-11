@@ -28,6 +28,7 @@ import (
 	"github.com/Rhaqim/buckt/pkg/imageproc"
 	"github.com/Rhaqim/buckt/pkg/logger"
 	"github.com/Rhaqim/buckt/pkg/metrics"
+	"github.com/Rhaqim/buckt/pkg/scan"
 )
 
 type Client struct {
@@ -127,6 +128,7 @@ func New(conf Config, opts ...ConfigFunc) (*Client, error) {
 		backend,
 		newEmitter(conf.EventHandlers, bucktLog),
 		conf.Dedup,
+		conf.Scanner,
 	)
 
 	// Initialize the Buckt instance
@@ -1018,6 +1020,7 @@ func newAppServices(
 	activeBackend domain.FileBackend,
 	emit events.Handler,
 	dedup bool,
+	scanner scan.Scanner,
 ) (domain.FolderService, domain.FileService) {
 	// Initialize the stores
 	folderRepository := repository.NewFolderRepository(db)
@@ -1025,7 +1028,7 @@ func newAppServices(
 
 	// initialize the services
 	folderService := service.NewFolderService(logger, cacheManager, folderRepository, activeBackend, flatNameSpaces, maxTrashBatch, backendOpTimeout)
-	fileService := service.NewFileService(logger, cacheManager, fileRepository, folderService, activeBackend, flatNameSpaces, maxFileSize, backendOpTimeout, emit, dedup)
+	fileService := service.NewFileService(logger, cacheManager, fileRepository, folderService, activeBackend, flatNameSpaces, maxFileSize, backendOpTimeout, emit, dedup, scanner)
 
 	logger.Info("✅ Initialized app services")
 

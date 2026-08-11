@@ -1,0 +1,26 @@
+name: release-drafter
+
+on:
+  push:
+    branches: [main]
+  # pull_request lets the autolabeler tag PRs from forks as they open/update.
+  # pull_request_target would be needed to label fork PRs, but it runs with write
+  # scope on untrusted code — avoid it unless you need fork autolabeling.
+  pull_request:
+    types: [opened, reopened, synchronize]
+
+permissions:
+  contents: read
+
+jobs:
+  update_release_draft:
+    permissions:
+      contents: write # create/update the release draft
+      pull-requests: write # apply autolabels
+    runs-on: ubuntu-latest
+    steps:
+      - uses: release-drafter/release-drafter@v6
+        with:
+          config-name: release-drafter.yml
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

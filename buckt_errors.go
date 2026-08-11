@@ -20,4 +20,5 @@ var (
 	ErrPathTraversal      = buckterr.ErrPathTraversal
 	ErrTrashBatchExceeded = buckterr.ErrTrashBatchExceeded
 	ErrBackendUnavailable = buckterr.ErrBackendUnavailable
+	ErrUploadRejected     = buckterr.ErrUploadRejected
 )

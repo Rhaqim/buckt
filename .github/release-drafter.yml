@@ -1,0 +1,55 @@
+# release-drafter configuration.
+#
+# On every push to main this keeps a DRAFT GitHub Release up to date, with notes
+# grouped from the PRs merged since the last published release. Nothing is
+# published automatically — a maintainer reviews the draft and clicks
+# "Publish", which creates the git tag. Your hand-written CHANGELOG.md stays the
+# canonical, prose changelog; this draft is the GitHub Releases companion.
+#
+# The next version is inferred from the labels on merged PRs (see
+# version-resolver): a `feature` PR bumps the minor, a `fix`/`chore` PR the
+# patch. Label PRs accordingly (the autolabeler below applies some from titles).
+name-template: 'v$RESOLVED_VERSION'
+tag-template: 'v$RESOLVED_VERSION'
+
+categories:
+  - title: '✨ Added'
+    labels: ['feature', 'enhancement']
+  - title: '🐛 Fixed'
+    labels: ['fix', 'bug']
+  - title: '🔒 Security'
+    labels: ['security']
+  - title: '🧹 Maintenance'
+    labels: ['chore', 'docs', 'refactor', 'dependencies']
+
+change-template: '- $TITLE (#$NUMBER) @$AUTHOR'
+change-title-escapes: '\<*_&'
+
+version-resolver:
+  minor:
+    labels: ['feature', 'enhancement']
+  patch:
+    labels: ['fix', 'bug', 'chore', 'docs', 'refactor', 'dependencies']
+  default: patch
+
+# Best-effort labels applied to PRs from their branch/title, so the draft and
+# version bump are usable even when a PR is unlabeled.
+autolabeler:
+  - label: 'feature'
+    branch: ['/^feat(ure)?[/-].+/i']
+    title: ['/^feat/i']
+  - label: 'fix'
+    branch: ['/^(bug)?fix[/-].+/i']
+    title: ['/^fix/i']
+  - label: 'chore'
+    branch: ['/^chore[/-].+/i']
+    title: ['/^chore/i']
+  - label: 'docs'
+    title: ['/^docs/i']
+
+template: |
+  ## Changes
+
+  $CHANGES
+
+  **Full diff**: https://github.com/$OWNER/$REPOSITORY/compare/$PREVIOUS_TAG...v$RESOLVED_VERSION

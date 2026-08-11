@@ -1,0 +1,28 @@
+# gitleaks configuration for buckt.
+#
+# gitleaks scans commits, staged changes, and history for hardcoded secrets
+# (API keys, tokens, private keys). It backs both the pre-commit hook
+# (.pre-commit-config.yaml) and the CI job (.github/workflows/secret-scan.yml).
+#
+# Run locally:
+#   gitleaks detect --source . --redact        # scan committed history
+#   gitleaks protect --staged --redact         # scan what you're about to commit
+#
+# This file starts from gitleaks' maintained default ruleset and layers a small
+# allowlist on top so example placeholders don't trip the scan.
+title = "buckt"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Non-secret example values and env-var placeholders."
+# Paths that only ever contain placeholders or env lookups, never real secrets.
+paths = [
+  '''example/.*''',
+]
+# Obvious placeholder tokens used in docs/examples.
+regexes = [
+  '''(?i)(your|example|placeholder|changeme|xxx+)[-_]?(key|secret|token)''',
+  '''R2_(ACCESS_KEY|SECRET_KEY|BUCKET|ENDPOINT|REGION)''',
+]
