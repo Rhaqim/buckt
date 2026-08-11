@@ -722,6 +722,7 @@ func TestNewAppServices(t *testing.T) {
 			mockBackend,
 			nil,
 			false,
+			nil,
 		)
 		assert.NotNil(t, folderService)
 		assert.NotNil(t, fileService)
@@ -739,6 +740,7 @@ func TestNewAppServices(t *testing.T) {
 			mockBackend,
 			nil,
 			false,
+			nil,
 		)
 		assert.NotNil(t, folderService)
 		assert.NotNil(t, fileService)

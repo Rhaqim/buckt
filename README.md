@@ -1,6 +1,6 @@
 # Buckt
 
-> A flexible Go media storage library with pluggable cloud backends, built-in trash, dual-write migration, and an optional web UI.
+> A flexible Go media storage library with pluggable cloud backends, image derivatives, lifecycle events, content dedup, upload scanning, built-in trash, dual-write migration, and an optional web UI.
 
 [![Go Report Card](https://goreportcard.com/badge/github.com/Rhaqim/buckt)](https://goreportcard.com/report/github.com/Rhaqim/buckt)
 [![GoDoc](https://godoc.org/github.com/Rhaqim/buckt?status.svg)](https://pkg.go.dev/github.com/Rhaqim/buckt)
@@ -85,6 +85,12 @@ In fact, Buckt can use MinIO as its storage backend, allowing you to combine Min
     - [Google Cloud Storage](#google-cloud-storage)
     - [Azure Blob Storage](#azure-blob-storage)
   - [Migration Between Backends](#migration-between-backends)
+  - [Image Derivatives](#image-derivatives)
+  - [File Metadata](#file-metadata)
+  - [Deduplication](#deduplication)
+  - [Lifecycle Events](#lifecycle-events)
+  - [Upload Scanning](#upload-scanning)
+  - [Metrics](#metrics)
   - [Trash \& Deletion](#trash--deletion)
   - [Web Client](#web-client)
     - [Modes](#modes)
@@ -97,6 +103,7 @@ In fact, Buckt can use MinIO as its storage backend, allowing you to combine Min
     - [Folder Operations](#folder-operations)
     - [File Operations](#file-operations)
   - [Examples](#examples)
+  - [Development](#development)
   - [License](#license)
 
 ---
@@ -107,13 +114,19 @@ In fact, Buckt can use MinIO as its storage backend, allowing you to combine Min
 |---|---|
 | 📁 **Folder Hierarchy** | Logical folder tree with rename, move, and recursive operations |
 | ☁️ **Pluggable Backends** | Local FS, S3, GCS, Azure Blob, Cloudflare R2 — all behind one interface |
-| 🔄 **Live Migration** | Dual-write between two backends with lazy forward migration on read |
+| 🔄 **Live Migration** | Dual-write between two backends with lazy forward migration on read + bulk copy |
+| 🖼️ **Image Derivatives** | Generate thumbnails/resized variants on upload; pluggable, WebP-capable processor |
+| 🪝 **Lifecycle Events** | Hook into `file.uploaded` / `trashed` / `restored` / `purged` for async work |
+| 🛡️ **Upload Scanning** | Pluggable pre-write hook to reject malware/disallowed files before they're stored |
+| 🧬 **Content Dedup** | Collapse identical uploads in a folder to a single stored blob |
+| 🏷️ **File Metadata** | Attach arbitrary key/value metadata to any file |
+| 📊 **Metrics** | Per-backend operation counters (count, errors, bytes, latency) via a pluggable recorder |
 | 🗑️ **Trash & Restore** | Soft-delete moves items to a per-user trash folder, hard-delete is one click away |
 | 🌐 **Web UI** | Optional Gin-based dashboard with drag-and-drop, breadcrumbs, and previews |
 | 🔌 **HTTP API** | RESTful endpoints for upload, download, stream, list, move, delete |
 | 🗄️ **BYO Database** | SQLite by default, plug in any `*sql.DB` (Postgres tested) |
 | ⚡ **In-Memory Cache** | LRU file cache + pluggable cache manager interface |
-| 🛡️ **Security First** | Path traversal protection, content-type validation, file size limits, RFC 6266 headers |
+| 🔒 **Security First** | Path traversal protection, content-type validation, file size limits, RFC 6266 headers |
 | 📦 **Flat or Nested** | Choose flat-namespace storage (UUID filenames) or hierarchical (folder paths) |
 
 ---
@@ -207,10 +220,19 @@ Or with options:
 |---|---|
 | `WithLog(LogConfig)` | Configure terminal/file logging or pass a custom `*log.Logger` |
 | `WithDB(driver, *sql.DB)` | Bring your own database connection (Postgres or SQLite) |
+| `WithTablePrefix(string)` | Prefix buckt's table names to share a database with other apps |
 | `WithCache(CacheConfig)` | Plug in a custom cache manager + tune the LRU file cache |
 | `WithBackend(Backend)` | Set a single storage backend |
 | `WithMigration(MigrationConfig)` | Dual-write migration between two backends |
+| `WithImageDerivatives(...DerivativeSpec)` | Define resized image variants (thumbnails, etc.) — see [Image Derivatives](#image-derivatives) |
+| `WithImageProcessor(imageproc.Processor)` | Swap the image processor (e.g. add WebP) |
+| `WithEventHandler(events.Handler)` | Register a post-operation lifecycle hook — see [Lifecycle Events](#lifecycle-events) |
+| `WithUploadScanner(scan.Scanner)` | Reject uploads before they're stored — see [Upload Scanning](#upload-scanning) |
+| `WithDedup()` | Collapse identical uploads in a folder to one blob — see [Deduplication](#deduplication) |
+| `WithMetrics(metrics.Recorder)` | Record per-backend operation metrics — see [Metrics](#metrics) |
 | `WithMaxFileSize(int64)` | Reject uploads larger than the limit (0 = no limit) |
+| `WithMaxTrashBatchSize(int)` | Cap descendant files moved in a single folder delete |
+| `WithBackendOpTimeout(time.Duration)` | Bound backend I/O time during a delete (negative = disable) |
 | `MediaDir(string)` | Local filesystem media directory |
 | `FlatNameSpaces(bool)` | Store files by UUID at the root vs. by logical path |
 
@@ -343,12 +365,200 @@ Need to move from local storage to S3 without downtime? Or from S3 to R2 to save
 | `Delete` | Deletes from both backends. |
 | `Move` | Moves in both backends. |
 
-Migration is **always forward** (primary → secondary). The primary is treated as the source of truth and is never overwritten by secondary content. When you're done migrating, swap the backends:
+Migration is **always forward** (primary → secondary). The primary is treated as the source of truth and is never overwritten by secondary content.
+
+**Bulk-copying pre-existing files.** Dual-write only mirrors *new* activity; files that predate the cutover are copied on demand as they're read. To migrate everything up front, call `MigrateAll` and poll `MigrationStatus`:
+
+```go
+  // Kick off a background copy of every stored object to the target.
+  if err := client.MigrateAll(ctx); err != nil {
+    log.Fatal(err) // ErrBackendUnavailable if the client wasn't built WithMigration
+  }
+
+  // Poll progress (completed == total when done). Idempotent: objects already
+  // present in the target are skipped, so it's safe to re-run after a restart.
+  for {
+    done, total, _ := client.MigrationStatus(ctx)
+    log.Printf("migrated %d/%d", done, total)
+    if total > 0 && done >= total {
+      break
+    }
+    time.Sleep(time.Second)
+  }
+```
+
+`client.BackendName()` reports the active backend (`"local"`, `"s3"`, or `"local->s3"` mid-migration) — handy for a status badge. When you're done migrating, swap to the target alone:
 
 ```go
   // After migration completes
   client, _ := buckt.Default(buckt.WithBackend(s3)) // primary only
 ```
+
+| Method | Description |
+|---|---|
+| `MigrateAll(ctx)` | Schedule a background copy of all pre-existing objects to the target (idempotent) |
+| `MigrationStatus(ctx)` | Report `completed`/`total` copied and whether migration is enabled |
+| `BackendName()` | Name of the active backend (`local`, `s3`, or `local->s3`) |
+
+---
+
+## Image Derivatives
+
+Generate resized image variants (thumbnails, medium sizes, …) from uploads. Define the variants once; the built-in pure-Go processor handles JPEG and PNG with no external dependencies.
+
+```go
+  client, _ := buckt.Default(
+    buckt.WithImageDerivatives(
+      buckt.DerivativeSpec{Name: "thumbnail", MaxWidth: 200},
+      buckt.DerivativeSpec{Name: "medium", MaxWidth: 800},
+    ),
+  )
+
+  // Generate the variants for a file (typically triggered from an upload event —
+  // see Lifecycle Events to automate this).
+  _ = client.GenerateDerivatives(fileID)
+
+  // Fetch a variant back. Returns ErrNotFound if it hasn't been generated.
+  data, contentType, err := client.GetDerivative(fileID, "thumbnail")
+```
+
+`DerivativeSpec` fields:
+
+| Field | Description |
+|---|---|
+| `Name` | Variant name used to fetch it back (e.g. `"thumbnail"`) |
+| `MaxWidth` | Max width in pixels; aspect ratio preserved, never upscaled |
+| `Format` | Output encoding: `""` keeps the source format; `"jpeg"`/`"png"` built in; `"webp"` needs a matching processor |
+
+**WebP** support lives in a separate module so the core stays dependency-free:
+
+```bash
+go get github.com/Rhaqim/buckt/imageproc/webp
+```
+
+```go
+  import "github.com/Rhaqim/buckt/imageproc/webp"
+
+  client, _ := buckt.Default(
+    buckt.WithImageProcessor(webp.New()),
+    buckt.WithImageDerivatives(
+      buckt.DerivativeSpec{Name: "thumbnail", MaxWidth: 200, Format: "webp"},
+    ),
+  )
+```
+
+> Resizing runs inline with `GenerateDerivatives`. For heavy workloads, call it from an event handler that enqueues to a worker rather than blocking the upload.
+
+---
+
+## File Metadata
+
+Attach arbitrary string key/value pairs to any file (stored as JSON on the file record):
+
+```go
+  _ = client.SetFileMetadata(fileID, map[string]string{
+    "source": "web-ui",
+    "album":  "vacation-2026",
+  })
+
+  meta, _ := client.GetFileMetadata(fileID) // map[string]string
+```
+
+---
+
+## Deduplication
+
+With `WithDedup()`, an upload whose bytes hash-match a file already present in the **same target folder** (for the same owner) returns that existing file's ID instead of writing the blob again — turning the "same photo sent four times" case into a single stored object.
+
+```go
+  client, _ := buckt.Default(buckt.WithDedup())
+```
+
+Scoped to the target folder, so it composes with nested-namespace mode and never resurrects a trashed duplicate. Off by default.
+
+---
+
+## Lifecycle Events
+
+Register handlers to react to file operations. Handlers run **synchronously after** the operation commits — keep them fast (the intended pattern is to enqueue work and return). A panicking handler is recovered and never fails the originating call.
+
+```go
+  import "github.com/Rhaqim/buckt/pkg/events"
+
+  onEvent := func(ctx context.Context, e events.Event) {
+    if e.Type == events.FileUploaded {
+      _ = client.GenerateDerivatives(e.FileID) // e.g. build thumbnails
+    }
+  }
+
+  client, _ := buckt.Default(buckt.WithEventHandler(onEvent))
+```
+
+| Event Type | Fires when |
+|---|---|
+| `events.FileUploaded` | A new file's bytes are committed |
+| `events.FileTrashed` | A file is moved to trash |
+| `events.FileRestored` | A trashed file is restored |
+| `events.FilePurged` | A file is hard-deleted |
+
+The `events.Event` carries `Type`, `UserID`, `FileID`, `ParentID`, `Name`, `Path`, `ContentType`, `Size`, `Hash`, and `Time`.
+
+> Events fire **after** the write, so they can't block an upload. To reject a file before it's stored, use [Upload Scanning](#upload-scanning).
+
+---
+
+## Upload Scanning
+
+Register a scanner to inspect every upload's bytes **before** they're committed to the backend. Returning an error rejects the file — nothing is stored, no `file.uploaded` event fires, and the caller gets `ErrUploadRejected` wrapping your error.
+
+buckt ships **no** scanning engine by design (keeping antivirus dependencies out of a storage library). You supply one — a ClamAV client, a VirusTotal lookup, a content-type allowlist, etc.
+
+```go
+  import "github.com/Rhaqim/buckt/pkg/scan"
+
+  scanner := scan.ScannerFunc(func(ctx context.Context, name string, data []byte) error {
+    if err := clamav.Scan(ctx, data); err != nil {
+      return err // non-nil rejects the upload
+    }
+    return nil
+  })
+
+  client, _ := buckt.Default(buckt.WithUploadScanner(scanner))
+```
+
+Handle a rejection with `errors.Is` (map it to HTTP 422, for example):
+
+```go
+  _, err := client.UploadFile(userID, "", "invoice.pdf", "application/pdf", data)
+  if errors.Is(err, buckt.ErrUploadRejected) {
+    // rejected by the scanner — err also wraps the scanner's own reason
+  }
+```
+
+The scanner runs at buckt's single upload chokepoint, so **every** upload path is covered — a caller can't forget to wire it in per call site.
+
+---
+
+## Metrics
+
+Record per-backend operation metrics (count, errors, bytes, latency) with a pluggable recorder. The built-in in-memory collector has no dependencies:
+
+```go
+  import "github.com/Rhaqim/buckt/pkg/metrics"
+
+  collector := metrics.NewCollector()
+  client, _ := buckt.Default(buckt.WithMetrics(collector))
+
+  // ... after some activity ...
+  snap := collector.Snapshot() // map[backend]map[operation]metrics.Stat
+  for backend, ops := range snap {
+    for op, stat := range ops {
+      fmt.Printf("%s.%s: %d ops, %d errors, %d bytes\n", backend, op, stat.Count, stat.Errors, stat.Bytes)
+    }
+  }
+```
+
+Each `metrics.Stat` holds `Count`, `Errors`, `Bytes`, and `TotalDur` (divide by `Count` for the mean latency). Implement the one-method `metrics.Recorder` interface to forward metrics to Prometheus, StatsD, or your own sink. Nil by default — zero overhead when unused.
 
 ---
 
@@ -534,9 +744,37 @@ ListFilesMetadata(folderID string) ([]FileModel, error)
 MoveFile(fileID, newParentID string) error
 DeleteFile(fileID string) (string, error)              // → trash
 DeleteFilePermanently(fileID string) (string, error)   // → hard delete
+
+// Metadata
+SetFileMetadata(fileID string, metadata map[string]string) error
+GetFileMetadata(fileID string) (map[string]string, error)
+
+// Image derivatives
+GenerateDerivatives(fileID string) error
+GetDerivative(fileID, name string) (data []byte, contentType string, err error)
+
+// Migration (only when built WithMigration)
+MigrateAll(ctx context.Context) error
+MigrationStatus(ctx context.Context) (completed, total int64, ok bool)
+BackendName() string
 ```
 
 Every method has a `*Context` variant that takes an explicit `context.Context` for cancellation and timeouts.
+
+### Errors
+
+Branch on failures with `errors.Is` using the re-exported sentinels (also available from `pkg/buckterr`):
+
+| Sentinel | Meaning | Suggested HTTP status |
+|---|---|---|
+| `buckt.ErrNotFound` | File/folder (or derivative) doesn't exist | 404 |
+| `buckt.ErrInvalidID` | ID is not a valid UUID | 400 |
+| `buckt.ErrInvalidName` | Empty/unsafe file or folder name | 400 |
+| `buckt.ErrAlreadyExists` | Name collision on create/move/rename | 409 |
+| `buckt.ErrFileTooLarge` | Upload exceeds `WithMaxFileSize` | 413 |
+| `buckt.ErrUploadRejected` | Rejected by an upload scanner | 422 |
+| `buckt.ErrTrashBatchExceeded` | Folder delete exceeds the trash batch cap | 409 |
+| `buckt.ErrBackendUnavailable` | Backend unreachable / feature not enabled | 503 |
 
 ---
 
@@ -552,7 +790,28 @@ Every method has a `*Context` variant that takes an explicit `context.Context` f
 | [Cloudflare R2 backend](example/cloud/cloudflare/main.go) | R2 with auto-detection |
 | [Google Cloud Storage](example/cloud/gcp/main.go) | GCS configuration |
 | [Azure Blob Storage](example/cloud/azure/main.go) | Azure setup |
-| [Migration: local → S3](example/cloud/migration/main.go) | Dual-write migration mode |
+| [Full-featured UI](example/client/web/ui/main.go) | Metrics, dedup, derivatives, and upload events across `local`/`migrate`/`r2` modes |
+| [Headless migration](example/migration/headless/main.go) | Bulk `MigrateAll` + progress polling without the UI |
+
+---
+
+## Development
+
+The repo ships secret-scanning so credentials never land in git. Install the [pre-commit](https://pre-commit.com) hooks once:
+
+```bash
+pip install pre-commit   # or: brew install pre-commit
+pre-commit install
+```
+
+Thereafter every commit runs [gitleaks](https://github.com/gitleaks/gitleaks) against the staged diff (config in `.gitleaks.toml`). The same scan runs in CI (`.github/workflows/secret-scan.yml`) as a server-side backstop. To scan on demand:
+
+```bash
+gitleaks git --redact             # scan committed history
+gitleaks git --staged --redact    # scan what you're about to commit
+```
+
+Merges to `main` update a draft GitHub Release via [release-drafter](https://github.com/release-drafter/release-drafter); a maintainer reviews and publishes it to cut the tag.
 
 ---
 

@@ -54,4 +54,11 @@ var (
 	// ErrBackendUnavailable is returned when the storage backend cannot be
 	// reached (as opposed to the object simply not existing).
 	ErrBackendUnavailable = errors.New("backend unavailable")
+
+	// ErrUploadRejected is returned when a configured upload scanner rejects a
+	// file (e.g. malware detected, disallowed type). The scanner's own error is
+	// wrapped alongside it, so errors.Is(err, ErrUploadRejected) matches while the
+	// underlying reason remains inspectable. Map it to 4xx (e.g. 422). See
+	// WithUploadScanner.
+	ErrUploadRejected = errors.New("upload rejected")
 )

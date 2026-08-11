@@ -16,6 +16,7 @@ import (
 	"github.com/Rhaqim/buckt/internal/utils"
 	"github.com/Rhaqim/buckt/pkg/buckterr"
 	"github.com/Rhaqim/buckt/pkg/events"
+	"github.com/Rhaqim/buckt/pkg/scan"
 	"github.com/google/uuid"
 )
 
@@ -40,6 +41,10 @@ type FileService struct {
 	// dedup, when true, makes CreateFile return an existing same-content file in
 	// the target folder instead of storing a duplicate blob.
 	dedup bool
+
+	// scanner, when non-nil, inspects each upload's bytes before they are
+	// written to the backend and may reject the file. Nil disables scanning.
+	scanner scan.Scanner
 }
 
 func NewFileService(
@@ -57,6 +62,7 @@ func NewFileService(
 
 	emit events.Handler,
 	dedup bool,
+	scanner scan.Scanner,
 ) domain.FileService {
 	bucktLogger.Info("🚀 Initialising file services")
 	if emit == nil {
@@ -76,8 +82,9 @@ func NewFileService(
 		maxFileSize:      maxFileSize,
 		backendOpTimeout: backendOpTimeout,
 
-		emit:  emit,
-		dedup: dedup,
+		emit:    emit,
+		dedup:   dedup,
+		scanner: scanner,
 	}
 }
 
@@ -102,6 +109,17 @@ func (f *FileService) CreateFile(ctx context.Context, user_id, parent_id, file_n
 	detectedType := http.DetectContentType(file_data)
 	if content_type == "" || content_type == "application/octet-stream" {
 		content_type = detectedType
+	}
+
+	// Scan the bytes before doing any DB or backend work. A configured scanner
+	// can reject the upload (malware, disallowed type); on rejection nothing is
+	// persisted and the reason is wrapped in ErrUploadRejected so callers can
+	// branch with errors.Is while still reading the scanner's message. This is
+	// the single upload chokepoint — every upload path funnels through here.
+	if f.scanner != nil {
+		if err := f.scanner.Scan(ctx, file_name, file_data); err != nil {
+			return "", fmt.Errorf("%w: %w", buckterr.ErrUploadRejected, err)
+		}
 	}
 
 	// Get the parent folder

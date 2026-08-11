@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"testing"
@@ -8,7 +9,9 @@ import (
 	"github.com/Rhaqim/buckt/internal/domain"
 	"github.com/Rhaqim/buckt/internal/mocks"
 	"github.com/Rhaqim/buckt/internal/model"
+	"github.com/Rhaqim/buckt/pkg/buckterr"
 	"github.com/Rhaqim/buckt/pkg/logger"
+	"github.com/Rhaqim/buckt/pkg/scan"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -29,7 +32,7 @@ func setupFileTest() MockFileServices {
 	mockFolderService := new(mocks.FolderService)
 	mockLocalFileSystemService := new(mocks.LocalFileSystemService)
 
-	fileService := NewFileService(mockLogger, mockCache, mockFileRepo, mockFolderService, mockLocalFileSystemService, false, 100*1024*1024, 0, nil, false)
+	fileService := NewFileService(mockLogger, mockCache, mockFileRepo, mockFolderService, mockLocalFileSystemService, false, 100*1024*1024, 0, nil, false, nil)
 
 	return MockFileServices{
 		fileService:    fileService,
@@ -88,6 +91,67 @@ func TestCreateFile_BackendPutFailureRollsBackMetadata(t *testing.T) {
 	assert.Error(t, err)
 	assert.ErrorIs(t, err, putErr)
 	mockSetUp.fileRepository.AssertCalled(t, "ScrubFile", mock.Anything)
+}
+
+// setupFileTestWithScanner builds a file service wired with the given scanner so
+// the upload-rejection path can be exercised.
+func setupFileTestWithScanner(s scan.Scanner) MockFileServices {
+	mockLogger := logger.NewLogger("", true, false)
+	mockCache := new(mocks.CacheManager)
+	mockFileRepo := new(mocks.FileRepository)
+	mockFolderService := new(mocks.FolderService)
+	mockBackend := new(mocks.LocalFileSystemService)
+
+	fileService := NewFileService(mockLogger, mockCache, mockFileRepo, mockFolderService, mockBackend, false, 100*1024*1024, 0, nil, false, s)
+
+	return MockFileServices{
+		fileService:    fileService,
+		cacheManager:   mockCache,
+		fileRepository: mockFileRepo,
+		folderService:  mockFolderService,
+		backend:        mockBackend,
+	}
+}
+
+// TestCreateFile_ScannerRejectsUpload verifies that when the scanner returns an
+// error, the upload is rejected as ErrUploadRejected before any DB row or blob
+// is written, and the scanner's own error remains inspectable.
+func TestCreateFile_ScannerRejectsUpload(t *testing.T) {
+	scanErr := fmt.Errorf("eicar signature detected")
+	rejecting := scan.ScannerFunc(func(_ context.Context, _ string, _ []byte) error {
+		return scanErr
+	})
+	mockSetUp := setupFileTestWithScanner(rejecting)
+	ctx := t.Context()
+
+	_, err := mockSetUp.fileService.CreateFile(ctx, "user1", "parent_id", "virus.exe", "application/octet-stream", []byte("malicious"))
+	assert.Error(t, err)
+	assert.ErrorIs(t, err, buckterr.ErrUploadRejected)
+	assert.ErrorIs(t, err, scanErr)
+
+	// Rejection happens before any DB or backend work — none of these run.
+	mockSetUp.folderService.AssertNotCalled(t, "GetFolder", mock.Anything, mock.Anything)
+	mockSetUp.fileRepository.AssertNotCalled(t, "Create", mock.Anything)
+	mockSetUp.backend.AssertNotCalled(t, "Put", mock.Anything, mock.Anything)
+}
+
+// TestCreateFile_ScannerAdmitsUpload verifies a scanner that returns nil lets the
+// upload proceed to storage unchanged.
+func TestCreateFile_ScannerAdmitsUpload(t *testing.T) {
+	admitting := scan.ScannerFunc(func(_ context.Context, _ string, _ []byte) error {
+		return nil
+	})
+	mockSetUp := setupFileTestWithScanner(admitting)
+	ctx := t.Context()
+
+	parentFolder := &model.FolderModel{ID: uuid.New(), Path: "/parent/folder"}
+	mockSetUp.folderService.On("GetFolder", "user1", "parent_id").Return(parentFolder, nil)
+	mockSetUp.fileRepository.On("Create", mock.Anything).Return(nil)
+	mockSetUp.backend.On("Put", "/parent/folder/file.txt", []byte("clean data")).Return(nil)
+
+	_, err := mockSetUp.fileService.CreateFile(ctx, "user1", "parent_id", "file.txt", "text/plain", []byte("clean data"))
+	assert.NoError(t, err)
+	mockSetUp.backend.AssertCalled(t, "Put", "/parent/folder/file.txt", []byte("clean data"))
 }
 
 func TestGetFiles(t *testing.T) {

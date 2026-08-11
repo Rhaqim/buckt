@@ -10,6 +10,7 @@ import (
 	"github.com/Rhaqim/buckt/pkg/events"
 	"github.com/Rhaqim/buckt/pkg/imageproc"
 	"github.com/Rhaqim/buckt/pkg/metrics"
+	"github.com/Rhaqim/buckt/pkg/scan"
 )
 
 type DBDrivers = model.DBDrivers // Type alias
@@ -206,6 +207,14 @@ type Config struct {
 	// WithEventHandler. Handlers run synchronously post-operation — keep them
 	// fast (enqueue and return). Empty (the default) means zero overhead.
 	EventHandlers []events.Handler
+
+	// Scanner, when non-nil, inspects every upload's bytes before they are
+	// committed to the backend and can reject the file (malware, disallowed
+	// type). buckt ships no scanner engine — supply one (ClamAV, VirusTotal, a
+	// content-type allowlist, …) via WithUploadScanner. A rejection surfaces as
+	// ErrUploadRejected and nothing is stored. Nil (the default) disables
+	// scanning with zero overhead.
+	Scanner scan.Scanner
 
 	// Derivatives defines the resized image variants GenerateDerivatives will
 	// produce. Empty (the default) disables the feature. Configure with
@@ -408,6 +417,31 @@ func WithEventHandler(h events.Handler) ConfigFunc {
 		if h != nil {
 			c.EventHandlers = append(c.EventHandlers, h)
 		}
+	}
+}
+
+// WithUploadScanner registers a scanner that inspects every upload's bytes
+// before they are committed to the storage backend. If the scanner returns an
+// error, the upload is rejected: no blob is written, the metadata row is rolled
+// back, and no file.uploaded event fires. The rejection is returned as
+// ErrUploadRejected wrapping the scanner's error, so callers can branch with
+// errors.Is(err, buckt.ErrUploadRejected) while still reading the reason.
+//
+// buckt ships no scanning engine — the scanner is where you plug in ClamAV, a
+// VirusTotal lookup, a magic-byte/content-type allowlist, etc. The scanner runs
+// synchronously on the upload path and is shared across concurrent uploads, so
+// it must be safe for concurrent use and reasonably fast (or internally queued).
+//
+// Example:
+//
+//	client, _ := buckt.Default(buckt.WithUploadScanner(
+//		scan.ScannerFunc(func(ctx context.Context, name string, data []byte) error {
+//			return clamav.Scan(ctx, data) // your engine
+//		}),
+//	))
+func WithUploadScanner(s scan.Scanner) ConfigFunc {
+	return func(c *Config) {
+		c.Scanner = s
 	}
 }
 
