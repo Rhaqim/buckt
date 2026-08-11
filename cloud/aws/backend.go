@@ -106,6 +106,24 @@ func (s *S3Backend) Name() string {
 	return NAME
 }
 
+// altKey returns the leading-slash-stripped form of a key and whether it differs
+// from the input. buckt's nested-namespace paths are stored with a leading slash
+// (e.g. "/user/root_folder/file"), but a local -> S3 migration copies objects
+// under the keys the local backend's List() reports, which are relative and so
+// have NO leading slash. Reads and deletes therefore try both forms so objects
+// written by either path (direct/dual-write vs. bulk migration) resolve.
+func altKey(path string) (string, bool) {
+	alt := strings.TrimPrefix(path, "/")
+	return alt, alt != path
+}
+
+// isNotFound reports whether err is an S3 "object missing" error (GetObject
+// returns NoSuchKey; HeadObject returns NotFound).
+func isNotFound(err error) bool {
+	var ae smithy.APIError
+	return errors.As(err, &ae) && (ae.ErrorCode() == "NoSuchKey" || ae.ErrorCode() == "NotFound")
+}
+
 // Ping verifies connectivity to the S3 bucket by performing a lightweight HeadBucket call.
 // Call this after NewBackend to catch credential or network issues early.
 func (s *S3Backend) Ping(ctx context.Context) error {
@@ -135,10 +153,22 @@ func (s *S3Backend) Put(ctx context.Context, path string, data []byte) error {
 }
 
 func (s *S3Backend) Get(ctx context.Context, path string) ([]byte, error) {
+	data, err := s.getObject(ctx, path)
+	if err != nil && isNotFound(err) {
+		if alt, ok := altKey(path); ok {
+			if d, altErr := s.getObject(ctx, alt); altErr == nil {
+				return d, nil
+			}
+		}
+	}
+	return data, err
+}
+
+func (s *S3Backend) getObject(ctx context.Context, key string) ([]byte, error) {
 	start := time.Now()
 	resp, err := s.client.GetObject(ctx, &s3.GetObjectInput{
 		Bucket: aws.String(s.bucketName),
-		Key:    aws.String(path),
+		Key:    aws.String(key),
 	})
 	if err != nil {
 		s.record("GetObject", 0, start, err)
@@ -180,10 +210,22 @@ func (s *S3Backend) List(ctx context.Context, prefix string) ([]string, error) {
 }
 
 func (s *S3Backend) Stream(ctx context.Context, path string) (io.ReadCloser, error) {
+	rc, err := s.streamObject(ctx, path)
+	if err != nil && isNotFound(err) {
+		if alt, ok := altKey(path); ok {
+			if r, altErr := s.streamObject(ctx, alt); altErr == nil {
+				return r, nil
+			}
+		}
+	}
+	return rc, err
+}
+
+func (s *S3Backend) streamObject(ctx context.Context, key string) (io.ReadCloser, error) {
 	start := time.Now()
 	resp, err := s.client.GetObject(ctx, &s3.GetObjectInput{
 		Bucket: aws.String(s.bucketName),
-		Key:    aws.String(path),
+		Key:    aws.String(key),
 	})
 	s.record("GetObject", 0, start, err)
 	if err != nil {
@@ -193,26 +235,48 @@ func (s *S3Backend) Stream(ctx context.Context, path string) (io.ReadCloser, err
 	return resp.Body, nil
 }
 
+// Delete removes the object. It deletes both the given key and its
+// leading-slash-stripped form so a file migrated under the relative key is
+// removed too (deletes are idempotent, so the redundant call is harmless).
 func (s *S3Backend) Delete(ctx context.Context, path string) error {
+	err := s.deleteKey(ctx, path)
+	if alt, ok := altKey(path); ok {
+		if altErr := s.deleteKey(ctx, alt); altErr != nil && err == nil {
+			err = altErr
+		}
+	}
+	return err
+}
+
+func (s *S3Backend) deleteKey(ctx context.Context, key string) error {
 	start := time.Now()
 	_, err := s.client.DeleteObject(ctx, &s3.DeleteObjectInput{
 		Bucket: aws.String(s.bucketName),
-		Key:    aws.String(path),
+		Key:    aws.String(key),
 	})
 	s.record("DeleteObject", 0, start, err)
 	return err
 }
 
 func (s *S3Backend) Exists(ctx context.Context, path string) (bool, error) {
+	exists, err := s.headExists(ctx, path)
+	if err == nil && !exists {
+		if alt, ok := altKey(path); ok {
+			return s.headExists(ctx, alt)
+		}
+	}
+	return exists, err
+}
+
+func (s *S3Backend) headExists(ctx context.Context, key string) (bool, error) {
 	start := time.Now()
 	_, err := s.client.HeadObject(ctx, &s3.HeadObjectInput{
 		Bucket: aws.String(s.bucketName),
-		Key:    aws.String(path),
+		Key:    aws.String(key),
 	})
 	s.record("HeadObject", 0, start, err)
 	if err != nil {
-		var ae smithy.APIError
-		if errors.As(err, &ae) && ae.ErrorCode() == "NotFound" {
+		if isNotFound(err) {
 			return false, nil
 		}
 		return false, err
@@ -252,39 +316,59 @@ func (s3b *S3Backend) Move(ctx context.Context, oldPath, newPath string) error {
 	ctx, cancel := withTimeoutIfNone(ctx, MOVE_TIMEOUT)
 	defer cancel()
 
-	copyStart := time.Now()
-	_, err := s3b.client.CopyObject(ctx, &s3.CopyObjectInput{
-		Bucket:     aws.String(s3b.bucketName),
-		CopySource: aws.String(s3b.bucketName + "/" + oldPath),
-		Key:        aws.String(newPath),
-	})
-	s3b.record("CopyObject", 0, copyStart, err)
+	// Copy from whichever key form the source object actually lives under —
+	// direct writes keep the leading slash, a migration copy dropped it.
+	err := s3b.copyObject(ctx, oldPath, newPath)
+	if err != nil && isNotFound(err) {
+		if alt, ok := altKey(oldPath); ok {
+			err = s3b.copyObject(ctx, alt, newPath)
+		}
+	}
 	if err != nil {
 		return fmt.Errorf("failed to copy object: %w", err)
 	}
 
-	// Delete the old object synchronously to ensure consistency
-	delStart := time.Now()
-	_, err = s3b.client.DeleteObject(ctx, &s3.DeleteObjectInput{
-		Bucket: aws.String(s3b.bucketName),
-		Key:    aws.String(oldPath),
-	})
-	s3b.record("DeleteObject", 0, delStart, err)
-	if err != nil {
-		// Log but don't fail — the copy succeeded, old object is just orphaned
-		log.Printf("warning: failed to delete old object %s after move: %v\n", oldPath, err)
+	// Remove the old object under both key forms (Delete handles both).
+	if delErr := s3b.Delete(ctx, oldPath); delErr != nil {
+		// Log but don't fail — the copy succeeded, the old object is just orphaned.
+		log.Printf("warning: failed to delete old object %s after move: %v\n", oldPath, delErr)
 	}
 
 	return nil
+}
+
+func (s3b *S3Backend) copyObject(ctx context.Context, src, dst string) error {
+	start := time.Now()
+	_, err := s3b.client.CopyObject(ctx, &s3.CopyObjectInput{
+		Bucket:     aws.String(s3b.bucketName),
+		CopySource: aws.String(s3b.bucketName + "/" + src),
+		Key:        aws.String(dst),
+	})
+	s3b.record("CopyObject", 0, start, err)
+	return err
 }
 
 func (s *S3Backend) DeleteFolder(ctx context.Context, prefix string) error {
 	ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
 	defer cancel()
 
+	base := strings.TrimSuffix(prefix, "/") + "/"
+	if err := s.deletePrefix(ctx, base); err != nil {
+		return err
+	}
+	// Also clear objects a migration wrote under the leading-slash-stripped key.
+	if alt, ok := altKey(base); ok {
+		if err := s.deletePrefix(ctx, alt); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *S3Backend) deletePrefix(ctx context.Context, prefix string) error {
 	paginator := s3.NewListObjectsV2Paginator(s.client, &s3.ListObjectsV2Input{
 		Bucket: aws.String(s.bucketName),
-		Prefix: aws.String(strings.TrimSuffix(prefix, "/") + "/"),
+		Prefix: aws.String(prefix),
 	})
 
 	const batchSize = 1000

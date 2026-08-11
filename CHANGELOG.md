@@ -25,6 +25,21 @@ drive and observe a local → cloud storage migration. Additive; no API removals
   `db.sqlite` + `media/`) — `make ui MODE=migrate` walks the local → R2 →
   direct-R2 lifecycle; `example/migration/headless` is the non-UI equivalent.
 
+### 🐛 Fixed
+
+- **Files bulk-migrated to S3/R2 were unreachable (`NoSuchKey` on read).** In
+  nested-namespace mode buckt keys blobs by a path with a leading slash
+  (`/user/…`), but `MigrateAll` copies objects under the keys the local backend's
+  `List()` reports, which are relative and drop the leading slash (`user/…`). The
+  S3 backend used keys verbatim, so migrated objects landed under a key reads
+  never asked for — directly-uploaded files worked, bulk-migrated ones 404'd. The
+  S3 backend now transparently handles both key forms: reads (`Get`/`Stream`)
+  fall back to the slash-stripped key, `Exists` checks both, and `Delete` /
+  `DeleteFolder` / `Move` operate on both so nothing is orphaned. Writes are
+  unchanged, so existing deployments keep working with no re-keying. The same
+  fix is applied to the Azure Blob and Google Cloud Storage backends, which
+  carried the identical latent mismatch.
+
 ## [1.7.0]
 
 A backward-compatible **minor** release on top of v1.6.0 that adds opt-in

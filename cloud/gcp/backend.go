@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strings"
 
 	"cloud.google.com/go/storage"
 	"google.golang.org/api/iterator"
@@ -52,6 +53,21 @@ func (g *GCPBackend) Name() string {
 	return "gcp"
 }
 
+// altKey returns the leading-slash-stripped form of an object name and whether it
+// differs. buckt's nested-namespace paths carry a leading slash (/user/...), but
+// a local -> GCS migration copies objects under the local backend's relative
+// List() names (no leading slash). Reads and deletes try both so objects written
+// by either path resolve. See the aws backend for the full rationale.
+func altKey(path string) (string, bool) {
+	alt := strings.TrimPrefix(path, "/")
+	return alt, alt != path
+}
+
+// isNotFound reports whether err is a "object missing" error.
+func isNotFound(err error) bool {
+	return errors.Is(err, storage.ErrObjectNotExist)
+}
+
 // Ping verifies connectivity to the GCS bucket by checking its attributes.
 func (g *GCPBackend) Ping(ctx context.Context) error {
 	_, err := g.client.Bucket(g.bucketName).Attrs(ctx)
@@ -75,9 +91,21 @@ func (g *GCPBackend) Put(ctx context.Context, path string, data []byte) error {
 }
 
 func (g *GCPBackend) Get(ctx context.Context, path string) ([]byte, error) {
-	r, err := g.client.Bucket(g.bucketName).Object(path).NewReader(ctx)
+	data, err := g.getObject(ctx, path)
+	if err != nil && isNotFound(err) {
+		if alt, ok := altKey(path); ok {
+			if d, altErr := g.getObject(ctx, alt); altErr == nil {
+				return d, nil
+			}
+		}
+	}
+	return data, err
+}
+
+func (g *GCPBackend) getObject(ctx context.Context, key string) ([]byte, error) {
+	r, err := g.client.Bucket(g.bucketName).Object(key).NewReader(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to open reader: %w", err)
+		return nil, err
 	}
 	defer func() { _ = r.Close() }()
 
@@ -106,23 +134,60 @@ func (g *GCPBackend) List(ctx context.Context, prefix string) ([]string, error) 
 }
 
 func (g *GCPBackend) Stream(ctx context.Context, path string) (io.ReadCloser, error) {
-	r, err := g.client.Bucket(g.bucketName).Object(path).NewReader(ctx)
+	r, err := g.streamObject(ctx, path)
+	if err != nil && isNotFound(err) {
+		if alt, ok := altKey(path); ok {
+			if rc, altErr := g.streamObject(ctx, alt); altErr == nil {
+				return rc, nil
+			}
+		}
+	}
+	return r, err
+}
+
+func (g *GCPBackend) streamObject(ctx context.Context, key string) (io.ReadCloser, error) {
+	r, err := g.client.Bucket(g.bucketName).Object(key).NewReader(ctx)
 	if err != nil {
 		return nil, err
 	}
 	return r, nil // caller must close
 }
 
+// Delete removes the object under both key forms so a migrated copy (relative
+// key) is cleaned up too. A missing object is treated as already-deleted.
 func (g *GCPBackend) Delete(ctx context.Context, path string) error {
-	if err := g.client.Bucket(g.bucketName).Object(path).Delete(ctx); err != nil {
+	err := g.deleteKey(ctx, path)
+	if alt, ok := altKey(path); ok {
+		if altErr := g.deleteKey(ctx, alt); altErr != nil && err == nil {
+			err = altErr
+		}
+	}
+	return err
+}
+
+func (g *GCPBackend) deleteKey(ctx context.Context, key string) error {
+	if err := g.client.Bucket(g.bucketName).Object(key).Delete(ctx); err != nil {
+		if isNotFound(err) {
+			return nil // idempotent: already gone
+		}
 		return fmt.Errorf("failed to delete object: %w", err)
 	}
 	return nil
 }
 
 func (g *GCPBackend) Exists(ctx context.Context, path string) (bool, error) {
-	_, err := g.client.Bucket(g.bucketName).Object(path).Attrs(ctx)
-	if errors.Is(err, storage.ErrObjectNotExist) {
+	exists, err := g.existsKey(ctx, path)
+	if err == nil && !exists {
+		if alt, ok := altKey(path); ok {
+			return g.existsKey(ctx, alt)
+		}
+	}
+	return exists, err
+}
+
+func (g *GCPBackend) existsKey(ctx context.Context, key string) (bool, error) {
+	_, err := g.client.Bucket(g.bucketName).Object(key).Attrs(ctx)
+	if isNotFound(err) {
 		return false, nil
 	}
 	if err != nil {
@@ -145,7 +210,20 @@ func (g *GCPBackend) Stat(ctx context.Context, path string) (*FileInfo, error) {
 }
 
 func (g *GCPBackend) DeleteFolder(ctx context.Context, prefix string) error {
-	it := g.client.Bucket(g.bucketName).Objects(ctx, &storage.Query{Prefix: prefix + "/"})
+	if err := g.deletePrefix(ctx, prefix+"/"); err != nil {
+		return err
+	}
+	// Also clear objects a migration wrote under the leading-slash-stripped key.
+	if alt, ok := altKey(prefix); ok {
+		if err := g.deletePrefix(ctx, alt+"/"); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (g *GCPBackend) deletePrefix(ctx context.Context, prefix string) error {
+	it := g.client.Bucket(g.bucketName).Objects(ctx, &storage.Query{Prefix: prefix})
 
 	for {
 		obj, err := it.Next()
@@ -155,7 +233,7 @@ func (g *GCPBackend) DeleteFolder(ctx context.Context, prefix string) error {
 		if err != nil {
 			return fmt.Errorf("failed to list objects: %w", err)
 		}
-		if delErr := g.client.Bucket(g.bucketName).Object(obj.Name).Delete(ctx); delErr != nil {
+		if delErr := g.deleteKey(ctx, obj.Name); delErr != nil {
 			return fmt.Errorf("failed to delete object %s: %w", obj.Name, delErr)
 		}
 	}
@@ -163,7 +241,15 @@ func (g *GCPBackend) DeleteFolder(ctx context.Context, prefix string) error {
 }
 
 func (g *GCPBackend) Move(ctx context.Context, oldPath, newPath string) error {
-	src := g.client.Bucket(g.bucketName).Object(oldPath)
+	// The source may live under either key form (direct write vs. migrated copy).
+	srcKey := oldPath
+	if alt, ok := altKey(oldPath); ok {
+		if exists, _ := g.existsKey(ctx, oldPath); !exists {
+			srcKey = alt
+		}
+	}
+
+	src := g.client.Bucket(g.bucketName).Object(srcKey)
 	dst := g.client.Bucket(g.bucketName).Object(newPath)
 
 	// Copy
@@ -171,8 +257,8 @@ func (g *GCPBackend) Move(ctx context.Context, oldPath, newPath string) error {
 		return fmt.Errorf("failed to copy object: %w", err)
 	}
 
-	// Delete old
-	if err := src.Delete(ctx); err != nil {
+	// Delete old (both key forms)
+	if err := g.Delete(ctx, oldPath); err != nil {
 		return fmt.Errorf("failed to delete old object: %w", err)
 	}
 	return nil
