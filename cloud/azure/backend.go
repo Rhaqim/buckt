@@ -52,6 +52,21 @@ func (a *AzureBackend) Name() string {
 	return "azure"
 }
 
+// altKey returns the leading-slash-stripped form of a blob name and whether it
+// differs. buckt's nested-namespace paths carry a leading slash (/user/...), but
+// a local -> Azure migration copies blobs under the local backend's relative
+// List() names (no leading slash). Reads and deletes try both so objects written
+// by either path resolve. See the aws backend for the full rationale.
+func altKey(path string) (string, bool) {
+	alt := strings.TrimPrefix(path, "/")
+	return alt, alt != path
+}
+
+// isNotFound reports whether err is a "blob missing" error.
+func isNotFound(err error) bool {
+	return bloberror.HasCode(err, bloberror.BlobNotFound)
+}
+
 // Ping verifies connectivity to the Azure container by fetching its properties.
 func (a *AzureBackend) Ping(ctx context.Context) error {
 	_, err := a.client.GetProperties(ctx, nil)
@@ -68,7 +83,19 @@ func (a *AzureBackend) Put(ctx context.Context, path string, data []byte) error 
 }
 
 func (a *AzureBackend) Get(ctx context.Context, path string) ([]byte, error) {
-	blobClient := a.client.NewBlockBlobClient(path)
+	data, err := a.getBlob(ctx, path)
+	if err != nil && isNotFound(err) {
+		if alt, ok := altKey(path); ok {
+			if d, altErr := a.getBlob(ctx, alt); altErr == nil {
+				return d, nil
+			}
+		}
+	}
+	return data, err
+}
+
+func (a *AzureBackend) getBlob(ctx context.Context, key string) ([]byte, error) {
+	blobClient := a.client.NewBlockBlobClient(key)
 	resp, err := blobClient.DownloadStream(ctx, nil)
 	if err != nil {
 		return nil, err
@@ -105,7 +132,19 @@ func (a *AzureBackend) List(ctx context.Context, prefix string) ([]string, error
 }
 
 func (a *AzureBackend) Stream(ctx context.Context, path string) (io.ReadCloser, error) {
-	blobClient := a.client.NewBlockBlobClient(path)
+	rc, err := a.streamBlob(ctx, path)
+	if err != nil && isNotFound(err) {
+		if alt, ok := altKey(path); ok {
+			if r, altErr := a.streamBlob(ctx, alt); altErr == nil {
+				return r, nil
+			}
+		}
+	}
+	return rc, err
+}
+
+func (a *AzureBackend) streamBlob(ctx context.Context, key string) (io.ReadCloser, error) {
+	blobClient := a.client.NewBlockBlobClient(key)
 	resp, err := blobClient.DownloadStream(ctx, nil)
 	if err != nil {
 		return nil, err
@@ -113,19 +152,42 @@ func (a *AzureBackend) Stream(ctx context.Context, path string) (io.ReadCloser, 
 	return resp.Body, nil
 }
 
+// Delete removes the blob under both key forms so a migrated copy (relative key)
+// is cleaned up too. A missing blob is treated as already-deleted.
 func (a *AzureBackend) Delete(ctx context.Context, path string) error {
-	blobClient := a.client.NewBlockBlobClient(path)
-	_, err := blobClient.Delete(ctx, nil)
+	err := a.deleteKey(ctx, path)
+	if alt, ok := altKey(path); ok {
+		if altErr := a.deleteKey(ctx, alt); altErr != nil && err == nil {
+			err = altErr
+		}
+	}
+	return err
+}
+
+func (a *AzureBackend) deleteKey(ctx context.Context, key string) error {
+	_, err := a.client.NewBlockBlobClient(key).Delete(ctx, nil)
+	if err != nil && isNotFound(err) {
+		return nil // idempotent: already gone
+	}
 	return err
 }
 
 func (a *AzureBackend) Exists(ctx context.Context, path string) (bool, error) {
-	blobClient := a.client.NewBlockBlobClient(path)
-	_, err := blobClient.GetProperties(ctx, nil)
+	exists, err := a.existsKey(ctx, path)
+	if err == nil && !exists {
+		if alt, ok := altKey(path); ok {
+			return a.existsKey(ctx, alt)
+		}
+	}
+	return exists, err
+}
+
+func (a *AzureBackend) existsKey(ctx context.Context, key string) (bool, error) {
+	_, err := a.client.NewBlockBlobClient(key).GetProperties(ctx, nil)
 	if err != nil {
 		// bloberror.HasCode is the SDK's way to match a service error code.
 		// (bloberror.Code is a string, so errors.As against it panics.)
-		if bloberror.HasCode(err, bloberror.BlobNotFound) {
+		if isNotFound(err) {
 			return false, nil
 		}
 		return false, err
@@ -157,6 +219,19 @@ func (a *AzureBackend) Stat(ctx context.Context, path string) (*FileInfo, error)
 }
 
 func (a *AzureBackend) DeleteFolder(ctx context.Context, prefix string) error {
+	if err := a.deletePrefix(ctx, prefix); err != nil {
+		return err
+	}
+	// Also clear blobs a migration wrote under the leading-slash-stripped key.
+	if alt, ok := altKey(prefix); ok {
+		if err := a.deletePrefix(ctx, alt); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (a *AzureBackend) deletePrefix(ctx context.Context, prefix string) error {
 	pager := a.client.NewListBlobsFlatPager(&container.ListBlobsFlatOptions{
 		Prefix: &prefix,
 	})
@@ -171,7 +246,7 @@ func (a *AzureBackend) DeleteFolder(ctx context.Context, prefix string) error {
 			if blob.Name == nil {
 				continue
 			}
-			_ = a.Delete(ctx, *blob.Name) // best-effort delete
+			_ = a.deleteKey(ctx, *blob.Name) // best-effort delete
 		}
 	}
 
@@ -186,7 +261,15 @@ func (a *AzureBackend) Move(ctx context.Context, oldPath, newPath string) error 
 		defer cancel()
 	}
 
-	srcBlob := a.client.NewBlockBlobClient(oldPath)
+	// The source may live under either key form (direct write vs. migrated copy).
+	src := oldPath
+	if alt, ok := altKey(oldPath); ok {
+		if exists, _ := a.existsKey(ctx, oldPath); !exists {
+			src = alt
+		}
+	}
+
+	srcBlob := a.client.NewBlockBlobClient(src)
 	destBlob := a.client.NewBlockBlobClient(newPath)
 
 	_, err := destBlob.StartCopyFromURL(ctx, srcBlob.URL(), nil)

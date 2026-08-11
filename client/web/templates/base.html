@@ -65,6 +65,10 @@
 
 				<div class="flex-1 min-w-0">{{ template "toolbar" . }}</div>
 
+				<!-- Active storage backend (and migration progress). Populated by JS from /backend. -->
+				<span id="backend-badge" title=""
+					class="hidden shrink-0 items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300"></span>
+
 				<a href="/web/trash" title="Trash"
 					class="shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800">
 					<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
@@ -182,6 +186,35 @@
 			}
 
 			document.addEventListener("keydown", function (e) { if (e.key === "Escape") closeUsage(); });
+
+			/* Storage-backend badge: shows the active backend, and during a
+			   migration shows "source → target" plus live copy progress. */
+			async function loadBackend() {
+				var badge = document.getElementById("backend-badge");
+				if (!badge) return;
+				try {
+					var r = await fetch("/backend");
+					var b = await r.json();
+					var mig = b.migration || {};
+					var name = String(b.name || "").replace("->", " → ");
+					var icon = name.indexOf("→") >= 0 ? "🔄" : (name === "local" ? "🗄️" : "☁️");
+					if (mig.running) {
+						badge.textContent = icon + " " + name + " · " + mig.completed + "/" + mig.total;
+						badge.title = "Migrating " + mig.completed + " of " + mig.total + " objects (source → target)";
+						badge.classList.add("animate-pulse");
+						setTimeout(loadBackend, 2000); // keep polling while migrating
+					} else {
+						badge.textContent = icon + " " + name;
+						badge.title = mig.enabled
+							? "Migration mode — source → target (dual-write)"
+							: "Active storage backend";
+						badge.classList.remove("animate-pulse");
+					}
+					badge.classList.remove("hidden");
+					badge.classList.add("inline-flex");
+				} catch (e) { /* backend endpoint unavailable — leave the badge hidden */ }
+			}
+			document.addEventListener("DOMContentLoaded", loadBackend);
 		</script>
 	</body>
 </html>

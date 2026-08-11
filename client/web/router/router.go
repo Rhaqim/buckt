@@ -111,6 +111,9 @@ func (r *Router) registerBaseRoutes(mode model.WebMode) {
 	// backend operation counts with R2 billing class. Surfaces the metrics added
 	// in buckt 1.6.0.
 	r.GET("/metrics", r.APIService.Metrics)
+
+	// Which storage backend is active + migration progress (for the UI badge).
+	r.GET("/backend", r.APIService.Backend)
 }
 
 // RegisterAPIRoutes sets up API endpoints

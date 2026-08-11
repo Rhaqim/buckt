@@ -206,6 +206,12 @@ func (b *Client) CacheStats() (hits, misses uint64) {
 	return b.lruCache.Hits(), b.lruCache.Misses()
 }
 
+// BackendName returns a human-readable name for the active storage backend —
+// e.g. "local", "s3", or, in migration mode, "local->s3" (source->target).
+func (b *Client) BackendName() string {
+	return b.backend.Name()
+}
+
 // MetricsSnapshot returns the per-backend, per-operation metrics collected so
 // far, plus true, when metrics were configured with a *metrics.Collector via
 // WithMetrics. It returns (nil, false) when no metrics are configured or a
@@ -921,6 +927,36 @@ func (b *Client) GetDerivativeContext(ctx context.Context, file_id, name string)
 }
 
 /* Migration */
+
+// MigrateAll starts a background copy of every stored object from the source
+// backend to the target backend. It works only when the Client was created with
+// WithMigration; otherwise it returns ErrBackendUnavailable. It returns as soon
+// as the copy is scheduled — poll MigrationStatus for progress. Objects already
+// present in the target are skipped, so it is safe to call more than once.
+//
+// This is the bulk counterpart to the automatic behaviour of migration mode
+// (every write is mirrored to the target, and reads lazily copy forward): use
+// it to move pre-existing files that predate the cutover.
+func (b *Client) MigrateAll(ctx context.Context) error {
+	m, ok := b.backend.(domain.MigratableBackend)
+	if !ok {
+		return fmt.Errorf("migration is not enabled — create the client with WithMigration: %w", ErrBackendUnavailable)
+	}
+	return m.MigrateAll(ctx)
+}
+
+// MigrationStatus reports how many objects have been copied to the target so far
+// and the total scheduled by the most recent MigrateAll. ok is false when the
+// Client was not created with WithMigration. When a migration finishes,
+// completed == total.
+func (b *Client) MigrationStatus(ctx context.Context) (completed, total int64, ok bool) {
+	m, isMigratable := b.backend.(domain.MigratableBackend)
+	if !isMigratable {
+		return 0, 0, false
+	}
+	completed, total = m.MigrationStatus(ctx)
+	return completed, total, true
+}
 
 /* Helper Methods */
 
