@@ -405,6 +405,8 @@ Migration is **always forward** (primary → secondary). The primary is treated 
 
 Each in-flight file is buffered in full, so higher concurrency trades memory and provider rate-limit headroom for throughput.
 
+**Resumable.** In migration mode buckt records each copied object in the database (the `buckt_migration_models` table). If the process stops mid-migration, the next `MigrateAll` **resumes from where it left off** — already-copied files are skipped straight from the persisted state, without re-scanning the target. Progress (`MigrationStatus`) reflects the recorded state, so a restarted migration doesn't start its count from zero. Persistence is best-effort: a recording failure never fails a copy (copies are idempotent), and the state is keyed by the target backend's name.
+
 `client.BackendName()` reports the active backend (`"local"`, `"s3"`, or `"local->s3"` mid-migration) — handy for a status badge. When you're done migrating, swap to the target alone:
 
 ```go

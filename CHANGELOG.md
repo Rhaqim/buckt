@@ -42,6 +42,12 @@ Additive; no API removals.
   longer hangs. The new `Client.MigrationFailures(ctx)` reports how many objects
   could not be copied (re-run `MigrateAll` to retry them); the web `/backend`
   endpoint gained a `failed` field.
+- **`MigrateAll` is now resumable.** Each copied object is recorded in the
+  database (`buckt_migration_models`), so a migration interrupted by a
+  restart/crash resumes from where it left off — already-copied files are skipped
+  straight from the persisted state without re-scanning the target, and progress
+  no longer restarts from zero. Persistence is best-effort (a recording failure
+  never fails an idempotent copy) and keyed by the target backend's name.
 
 ### 🧹 Removed
 

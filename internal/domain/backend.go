@@ -52,6 +52,21 @@ type MigratableBackend interface {
 	MigrationStatus(ctx context.Context) (completed int64, failed int64, total int64)
 }
 
+// MigrationStateStore persists which object keys have been copied to a target
+// backend, so a bulk migration can resume across a restart without re-scanning
+// the target. Keyed by the target backend's Name(). Implementations must be
+// safe for concurrent use. Persistence is best-effort from the migration's
+// point of view: a failed record never fails a copy (the copy is idempotent, so
+// the worst case is re-copying the object on the next run).
+type MigrationStateStore interface {
+	// MigratedKeys returns the set of keys already committed to backend.
+	MigratedKeys(ctx context.Context, backend string) (map[string]struct{}, error)
+
+	// MarkMigrated records that key (of the given size) was copied to backend.
+	// It is idempotent — marking an already-recorded key is a no-op.
+	MarkMigrated(ctx context.Context, backend, key string, size int64) error
+}
+
 type PlaceholderBackend struct {
 	Title string
 }

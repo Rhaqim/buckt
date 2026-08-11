@@ -366,6 +366,70 @@ func TestMigration_PermanentFailureStillCompletes(t *testing.T) {
 	assert.Equal(t, 0, target.count(), "nothing landed in the target")
 }
 
+// TestMigration_ResumesFromPersistedState proves the DB-backed resume: after a
+// migration records its progress, a restart (new client on the same DB) skips
+// the already-copied files WITHOUT re-scanning the target. The second run uses a
+// brand-new empty target that counts Put calls — a zero count proves the skip
+// was driven by the persisted state, not by listing the target.
+func TestMigration_ResumesFromPersistedState(t *testing.T) {
+	dir := t.TempDir()
+	mediaDir := filepath.Join(dir, "media")
+	dbPath := filepath.Join(dir, "db.sqlite")
+	const user = "u1"
+
+	// Phase 1 — local-only files.
+	db1, err := sql.Open("sqlite3", dbPath)
+	require.NoError(t, err)
+	c1, err := New(Config{DB: DBConfig{Driver: SQLite, Database: db1}, MediaDir: mediaDir, Log: LogConfig{Silence: true}})
+	require.NoError(t, err)
+	for _, n := range []string{"a.txt", "b.txt", "c.txt"} {
+		_, err := c1.UploadFile(user, "", n, "text/plain", []byte(n))
+		require.NoError(t, err)
+	}
+	require.NoError(t, c1.Close())
+	require.NoError(t, db1.Close())
+
+	// Phase 2 — migrate to target1, which records the copies in the DB.
+	target1 := newMemBackend()
+	db2, err := sql.Open("sqlite3", dbPath)
+	require.NoError(t, err)
+	c2, err := New(Config{
+		DB:       DBConfig{Driver: SQLite, Database: db2},
+		MediaDir: mediaDir,
+		Log:      LogConfig{Silence: true},
+		Backend:  BackendConfig{Source: LocalBackend(), Target: target1, MigrationEnabled: true},
+	})
+	require.NoError(t, err)
+	require.NoError(t, c2.MigrateAll(context.Background()))
+	requireMigrationDone(t, c2)
+	require.Equal(t, 3, target1.count(), "first run copies everything")
+	require.NoError(t, c2.Close())
+	require.NoError(t, db2.Close())
+
+	// Phase 3 — "restart": same DB, a fresh EMPTY target. Because the persisted
+	// state already records all three keys as committed, MigrateAll must skip
+	// them without a single Put to the new target.
+	target2 := newMemBackend()
+	db3, err := sql.Open("sqlite3", dbPath)
+	require.NoError(t, err)
+	c3, err := New(Config{
+		DB:       DBConfig{Driver: SQLite, Database: db3},
+		MediaDir: mediaDir,
+		Log:      LogConfig{Silence: true},
+		Backend:  BackendConfig{Source: LocalBackend(), Target: target2, MigrationEnabled: true},
+	})
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = c3.Close(); _ = db3.Close() })
+
+	require.NoError(t, c3.MigrateAll(context.Background()))
+	requireMigrationDone(t, c3)
+
+	assert.Equal(t, 0, target2.putCalls(), "resume skips already-migrated files without re-copying")
+	done, total, _ := c3.MigrationStatus(context.Background())
+	assert.Equal(t, int64(3), total)
+	assert.Equal(t, total, done, "progress still reaches total on resume")
+}
+
 func TestMigration_NotEnabledReturnsError(t *testing.T) {
 	c := newTestClient(t) // plain local backend
 

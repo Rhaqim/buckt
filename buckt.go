@@ -92,8 +92,14 @@ func New(conf Config, opts ...ConfigFunc) (*Client, error) {
 	// Initialize cache
 	cacheManager, lruCache := initializeCache(conf.Cache, bucktLog)
 
-	// Initialise Backend
-	backend := resolveBackend(conf.MediaDir, conf.Backend, bucktLog, lruCache, conf.Metrics)
+	// Initialise Backend. In migration mode, back the resumable bulk copy with a
+	// DB-persisted state store (the MigrationModel table, created by db.Migrate
+	// above) so an interrupted MigrateAll resumes without re-scanning the target.
+	var migrationStore domain.MigrationStateStore
+	if conf.Backend.MigrationEnabled {
+		migrationStore = repository.NewMigrationStateStore(db.DB)
+	}
+	backend := resolveBackend(conf.MediaDir, conf.Backend, bucktLog, lruCache, conf.Metrics, migrationStore)
 
 	// Max file size: 0 means no limit (backward compatible)
 	maxFileSize := conf.MaxFileSize
@@ -1052,7 +1058,14 @@ func newAppServices(
 	return folderService, fileService
 }
 
-func resolveBackend(mediaDir string, bc BackendConfig, log domain.BucktLogger, lru domain.LRUCache, rec metrics.Recorder) Backend {
+func resolveBackend(
+	mediaDir string,
+	bc BackendConfig,
+	log domain.BucktLogger,
+	lru domain.LRUCache,
+	rec metrics.Recorder,
+	migrationStore domain.MigrationStateStore,
+) Backend {
 	// meter wraps a leaf backend so every operation is recorded. It is a no-op
 	// when rec is nil. In migration mode the leaves (source/target) are metered
 	// individually — never the composite — so per-backend counts stay distinct
@@ -1100,7 +1113,7 @@ func resolveBackend(mediaDir string, bc BackendConfig, log domain.BucktLogger, l
 		}
 
 		log.Infof("🔄 Migration mode: %s → %s", source.Name(), target.Name())
-		return backend.NewMigrationBackend(log, meter(source), meter(target), bc.MigrationConcurrency)
+		return backend.NewMigrationBackend(log, meter(source), meter(target), bc.MigrationConcurrency, migrationStore)
 	}
 
 	// Non-migration modes

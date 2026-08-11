@@ -21,6 +21,11 @@ type MigrationBackendService struct {
 	// concurrency is how many files MigrateAll copies in parallel (>= 1).
 	concurrency int
 
+	// store persists per-file migration progress so MigrateAll can resume after
+	// a restart without re-scanning the target. Nil disables persistence (the
+	// migration still works, relying on the target's own contents to skip).
+	store domain.MigrationStateStore
+
 	migrating atomic.Bool
 	stats     migrationStats
 }
@@ -37,7 +42,7 @@ type migrationStats struct {
 // one, not the other way around.
 const defaultMigrationConcurrency = 8
 
-func NewMigrationBackend(bucktLogger domain.BucktLogger, primary domain.FileBackend, secondary domain.FileBackend, concurrency int) domain.MigratableBackend {
+func NewMigrationBackend(bucktLogger domain.BucktLogger, primary domain.FileBackend, secondary domain.FileBackend, concurrency int, store domain.MigrationStateStore) domain.MigratableBackend {
 	if concurrency <= 0 {
 		concurrency = defaultMigrationConcurrency
 	}
@@ -47,6 +52,7 @@ func NewMigrationBackend(bucktLogger domain.BucktLogger, primary domain.FileBack
 		primaryBackend:   primary,
 		secondaryBackend: secondary,
 		concurrency:      concurrency,
+		store:            store,
 	}
 }
 
@@ -261,18 +267,38 @@ func (d *MigrationBackendService) MigrateAll(ctx context.Context) error {
 	d.stats.completed = 0
 	d.stats.mu.Unlock()
 
-	// Build a skip-set from a single List of the secondary, instead of one
-	// Exists round-trip per file (halving the request count on large buckets).
-	// Keys are normalised with normaliseKey so both the leading-slash and
-	// slash-stripped forms of a key match — see the cloud backends' altKey.
-	skip, haveSkipSet := d.secondarySkipSet(ctx)
+	// Persisted progress (for resume): the set of keys a previous run already
+	// recorded as copied. On a restart this lets us skip completed files without
+	// re-scanning the target. Empty (and best-effort) when no store is wired.
+	persisted := map[string]struct{}{}
+	if d.store != nil {
+		if keys, err := d.store.MigratedKeys(ctx, d.secondaryBackend.Name()); err == nil {
+			persisted = keys
+		} else {
+			d.logger.Errorf("Could not load persisted migration state (resuming from scratch): %v", err)
+		}
+	}
 
-	// alreadyInSecondary reports whether the secondary already holds path. It
-	// uses the pre-listed skip-set when available, and otherwise falls back to a
-	// per-file Exists check (e.g. when the secondary's List failed).
-	alreadyInSecondary := func(path string) bool {
-		if haveSkipSet {
-			_, ok := skip[normaliseKey(path)]
+	// Live skip-set from a single List of the secondary, instead of one Exists
+	// round-trip per file (halving the request count on large buckets). Keys are
+	// normalised with normaliseKey so both the leading-slash and slash-stripped
+	// forms of a key match — see the cloud backends' altKey.
+	secondary, haveSecondary := d.secondarySkipSet(ctx)
+
+	inPersisted := func(path string) bool {
+		_, ok := persisted[normaliseKey(path)]
+		return ok
+	}
+
+	// alreadyDone reports whether path is already at the target — recorded in the
+	// persisted state, present in the pre-listed secondary set, or (as a fallback
+	// when the secondary List failed) confirmed by a per-file Exists check.
+	alreadyDone := func(path string) bool {
+		if inPersisted(path) {
+			return true
+		}
+		if haveSecondary {
+			_, ok := secondary[normaliseKey(path)]
 			return ok
 		}
 		exists, err := d.secondaryBackend.Exists(ctx, path)
@@ -307,10 +333,17 @@ func (d *MigrationBackendService) MigrateAll(ctx context.Context) error {
 					if ctx.Err() != nil {
 						return // cancelled — drain quietly
 					}
-					if alreadyInSecondary(path) {
+					if alreadyDone(path) {
 						d.stats.mu.Lock()
 						d.stats.completed++
 						d.stats.mu.Unlock()
+						// Backfill the persisted state for files that are already
+						// in the secondary but not yet recorded (e.g. copied by an
+						// earlier version, or out of band), so a later resume can
+						// skip them without listing the target.
+						if !inPersisted(path) {
+							d.markMigrated(ctx, path)
+						}
 						continue
 					}
 					if err := d.MigrateFile(ctx, path); err != nil {
@@ -321,7 +354,10 @@ func (d *MigrationBackendService) MigrateAll(ctx context.Context) error {
 						d.stats.mu.Lock()
 						d.stats.failed++
 						d.stats.mu.Unlock()
+						continue
 					}
+					// Record the successful copy so a restart resumes past it.
+					d.markMigrated(ctx, path)
 				}
 			}()
 		}
@@ -371,6 +407,18 @@ func (d *MigrationBackendService) secondarySkipSet(ctx context.Context) (map[str
 // compare equal.
 func normaliseKey(key string) string {
 	return strings.TrimPrefix(key, "/")
+}
+
+// markMigrated records, best-effort, that path is now at the secondary so a
+// later run can resume past it. A persistence failure never fails the migration
+// — the copy already succeeded and is idempotent — it is only logged.
+func (d *MigrationBackendService) markMigrated(ctx context.Context, path string) {
+	if d.store == nil {
+		return
+	}
+	if err := d.store.MarkMigrated(ctx, d.secondaryBackend.Name(), normaliseKey(path), 0); err != nil {
+		d.logger.Errorf("Failed to persist migration state for %s: %v", path, err)
+	}
 }
 
 // MigrationStatus returns the current migration progress: files copied (or
