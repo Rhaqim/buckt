@@ -63,6 +63,22 @@ func (svc *APIService) Metrics(c *gin.Context) {
 	})
 }
 
+// Backend reports which storage backend is active and, in migration mode,
+// how far a bulk migration has progressed — so the UI can show the backend in
+// use (and both backends during a migration) plus live status.
+func (svc *APIService) Backend(c *gin.Context) {
+	completed, total, enabled := svc.client.MigrationStatus(c.Request.Context())
+	c.JSON(200, gin.H{
+		"name": svc.client.BackendName(),
+		"migration": gin.H{
+			"enabled":   enabled,
+			"running":   enabled && total > 0 && completed < total,
+			"completed": completed,
+			"total":     total,
+		},
+	})
+}
+
 // CreateFolder implements domain.APIService.
 // Subtle: this method shadows the method (FolderService).CreateFolder of APIService.FolderService.
 func (svc *APIService) CreateFolder(c *gin.Context) {

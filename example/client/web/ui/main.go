@@ -1,3 +1,20 @@
+// Package main runs the full-featured Buckt web UI (metrics, dedup, image
+// derivatives, and a file.uploaded handler) over one of three storage modes,
+// selected with -mode:
+//
+//	-mode=local    (default) filesystem storage in ./media + ./db.sqlite
+//	-mode=migrate  dual-write local -> object store, bulk-copying existing files
+//	-mode=r2       object store only
+//
+// All modes share the same features and the same ./db.sqlite + ./media, so you
+// can start on local, upload files, then re-run with -mode=migrate to watch them
+// migrate (the header badge shows the active backend and live progress).
+//
+// migrate/r2 read the object store from the environment (Cloudflare R2 shown):
+//
+//	export R2_ACCESS_KEY=... R2_SECRET_KEY=... R2_BUCKET=... \
+//	       R2_ENDPOINT=https://<ACCOUNT_ID>.r2.cloudflarestorage.com
+//	# for MinIO also: R2_USE_PATH_STYLE=true R2_REGION=us-east-1
 package main
 
 import (
@@ -7,47 +24,72 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"time"
 
 	"github.com/Rhaqim/buckt"
 	"github.com/Rhaqim/buckt/client/web"
+	"github.com/Rhaqim/buckt/cloud/aws"
 	"github.com/Rhaqim/buckt/pkg/events"
 	"github.com/Rhaqim/buckt/pkg/metrics"
 )
 
 func main() {
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = "8080"
-	}
-
-	withDB := false
-	flatNamespaces := false
-
-	// Allow overriding via command-line flags
-	flagPort := flag.String("port", port, "Port to run the server on")
-	flag.BoolVar(&withDB, "db", withDB, "Use external database")
-	flag.BoolVar(&flatNamespaces, "flat", flatNamespaces, "Use flat namespaces")
+	mode := flag.String("mode", "local", "storage mode: local | migrate | r2")
+	flagPort := flag.String("port", envOr("PORT", "8080"), "Port to run the server on")
+	withDB := flag.Bool("db", false, "Use an external Postgres database")
+	flatNamespaces := flag.Bool("flat", false, "Use flat namespaces")
 	flag.Parse()
 
-	// Initialize the database
-	var config buckt.ConfigFunc
-	if withDB {
-		db, err := InitDB()
+	// Feature set — identical across every storage mode.
+	opts := []buckt.ConfigFunc{
+		buckt.FlatNameSpaces(*flatNamespaces),
+		buckt.WithMetrics(metrics.NewCollector()),
+		buckt.WithDedup(),
+		buckt.WithImageDerivatives(
+			buckt.DerivativeSpec{Name: "thumbnail", MaxWidth: 200},
+			buckt.DerivativeSpec{Name: "medium", MaxWidth: 800},
+		),
+	}
+
+	if *withDB {
+		db, err := initDB()
 		if err != nil {
 			log.Fatalf("Failed to initialize the database: %v", err)
 		}
-
-		config = buckt.WithDB(buckt.Postgres, db)
+		opts = append(opts, buckt.WithDB(buckt.Postgres, db))
 	}
 
-	// client is referenced by the upload handler below, so declare it first and
-	// assign with '=' (not ':=') to keep the closure bound to this variable.
+	// Storage mode only swaps the backend — everything above stays the same.
+	migrating := false
+	switch *mode {
+	case "local":
+		log.Println("📁 storage: local filesystem (./media + ./db.sqlite)")
+	case "migrate":
+		store, err := newObjectStore()
+		if err != nil {
+			log.Fatalf("migrate mode: %v", err)
+		}
+		opts = append(opts, buckt.WithMigration(buckt.MigrationConfig{From: buckt.LocalBackend(), To: store}))
+		migrating = true
+		log.Println("🔄 storage: migration (local → object store; existing files bulk-copying)")
+	case "r2":
+		store, err := newObjectStore()
+		if err != nil {
+			log.Fatalf("r2 mode: %v", err)
+		}
+		opts = append(opts, buckt.WithBackend(store))
+		log.Println("☁️  storage: object store only")
+	default:
+		log.Fatalf("unknown -mode %q (use local | migrate | r2)", *mode)
+	}
+
+	// client is referenced by the upload handler, so declare it first and assign
+	// with '=' (not ':=') to keep the closure bound to this variable.
 	var client *buckt.Client
 
-	// onUpload fires after every successful upload. Here we generate image
-	// derivatives and tag the file. Events run synchronously after the upload,
-	// so in production you'd typically enqueue this to a worker instead of
-	// resizing inline; for the demo, doing it here keeps things simple.
+	// onUpload fires after every successful upload: generate image derivatives
+	// and tag the file. In production, enqueue this to a worker rather than
+	// resizing inline.
 	onUpload := func(_ context.Context, e events.Event) {
 		if e.Type != events.FileUploaded {
 			return
@@ -59,49 +101,94 @@ func main() {
 			log.Printf("setting metadata failed for %s: %v", e.FileID, err)
 		}
 	}
+	opts = append(opts, buckt.WithEventHandler(onUpload))
 
-	// Enable, in order: backend metrics (/metrics endpoint), content dedup,
-	// image derivatives (thumbnail/medium), and the upload handler above.
 	var err error
-	client, err = buckt.Default(
-		buckt.FlatNameSpaces(flatNamespaces),
-		config,
-		buckt.WithMetrics(metrics.NewCollector()),
-		buckt.WithDedup(),
-		buckt.WithImageDerivatives(
-			buckt.DerivativeSpec{Name: "thumbnail", MaxWidth: 200},
-			buckt.DerivativeSpec{Name: "medium", MaxWidth: 800},
-		),
-		buckt.WithEventHandler(onUpload),
-	)
+	client, err = buckt.Default(opts...)
 	if err != nil {
 		log.Fatalf("Failed to initialize Buckt: %v", err)
 	}
-	defer client.Close() // Ensure resources are cleaned up
+	defer client.Close()
+
+	// In migration mode, bulk-copy pre-existing files to the target in the
+	// background while the UI keeps serving (new uploads are mirrored anyway).
+	if migrating {
+		go bulkMigrate(client)
+	}
 
 	webClient, err := web.NewClient(client)
 	if err != nil {
 		log.Fatalf("Failed to create web client: %v", err)
 	}
 
-	// Start the router (optional, based on user choice)
+	log.Printf("Serving the Buckt UI at http://localhost:%s/web/", *flagPort)
 	if err := webClient.Run(":" + *flagPort); err != nil {
 		log.Fatalf("Failed to start Buckt: %v", err)
 	}
 }
 
-func InitDB() (*sql.DB, error) {
-	var err error
-	var db *sql.DB
+// bulkMigrate kicks off MigrateAll and logs progress until it finishes.
+func bulkMigrate(client *buckt.Client) {
+	ctx := context.Background()
+	if err := client.MigrateAll(ctx); err != nil {
+		log.Printf("could not start bulk migration: %v", err)
+		return
+	}
+	for {
+		done, total, _ := client.MigrationStatus(ctx)
+		if total == 0 {
+			log.Println("migration: no pre-existing files to copy")
+			return
+		}
+		log.Printf("migration: %d/%d objects copied", done, total)
+		if done >= total {
+			log.Println("✅ migration complete — you can now restart with -mode=r2")
+			return
+		}
+		time.Sleep(time.Second)
+	}
+}
 
-	// Postgres database
-	conn_string := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=disable",
-		"localhost", 5432, "postgres", "password", "postgres")
-
-	db, err = sql.Open("postgres", conn_string)
-	if err != nil {
-		return nil, fmt.Errorf("failed to connect to the database: %v", err)
+// newObjectStore builds an S3-compatible backend (Cloudflare R2 by default) from
+// environment variables.
+func newObjectStore() (buckt.Backend, error) {
+	cfg := aws.Config{
+		AccessKey: os.Getenv("R2_ACCESS_KEY"),
+		SecretKey: os.Getenv("R2_SECRET_KEY"),
+		Bucket:    os.Getenv("R2_BUCKET"),
+		Endpoint:  os.Getenv("R2_ENDPOINT"),
+		Region:    os.Getenv("R2_REGION"),
+	}
+	if os.Getenv("R2_USE_PATH_STYLE") == "true" {
+		cfg.UsePathStyle = true // for non-R2 S3-compatible stores like MinIO
+	}
+	if cfg.AccessKey == "" || cfg.SecretKey == "" || cfg.Bucket == "" || cfg.Endpoint == "" {
+		return nil, fmt.Errorf("set R2_ACCESS_KEY, R2_SECRET_KEY, R2_BUCKET and R2_ENDPOINT")
 	}
 
+	backend, err := aws.NewBackend(cfg)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create object-store backend: %w", err)
+	}
+	if err := backend.Ping(context.Background()); err != nil {
+		return nil, fmt.Errorf("cannot reach the object store: %w", err)
+	}
+	return backend, nil
+}
+
+func initDB() (*sql.DB, error) {
+	connString := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=disable",
+		"localhost", 5432, "postgres", "password", "postgres")
+	db, err := sql.Open("postgres", connString)
+	if err != nil {
+		return nil, fmt.Errorf("failed to connect to the database: %w", err)
+	}
 	return db, nil
+}
+
+func envOr(key, fallback string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return fallback
 }

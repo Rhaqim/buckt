@@ -21,6 +21,9 @@ type APIService interface {
 	// Metrics reports backend operation counts, storage bytes, and cache stats.
 	Metrics(c *gin.Context)
 
+	// Backend reports the active storage backend and migration progress.
+	Backend(c *gin.Context)
+
 	// TODO: Might not be needed
 	GetFilesInFolder(c *gin.Context)
 	GetSubFolders(c *gin.Context)

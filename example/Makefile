@@ -1,13 +1,16 @@
-.PHONY: direct aws gcp azure migration ui api mount clean
+.PHONY: direct aws gcp azure cloudflare migration migration-ui ui api mount clean
 
 CMD = go run
 MAIN = main.go
 CLOUD_ROOT = cloud
 WEB_ROOT = client/web
+MIGRATION_ROOT = migration
 PORT ?= 8080
 FLATNAME ?= false
+MODE ?= local
 PORT_FLAG = -port=$(PORT)
 FLATNAME_FLAG = -flat=$(FLATNAME)
+MODE_FLAG = -mode=$(MODE)
 
 
 direct:
@@ -25,11 +28,22 @@ gcp:
 azure:
 	$(CMD) $(CLOUD_ROOT)/azure/$(MAIN)
 
+# Headless local -> object-store migration demo (env-configured).
 migration:
-	$(CMD) $(CLOUD_ROOT)/migration/$(MAIN)
+	$(CMD) $(MIGRATION_ROOT)/headless/$(MAIN)
 
+# The full-featured UI (metrics, dedup, derivatives, events). The same binary
+# also does migration — switch the backend with MODE=:
+#   make ui                    # MODE=local (default) — filesystem
+#   make ui MODE=migrate       # local -> object store dual-write + bulk copy
+#   make ui MODE=r2            # object store only
+# migrate/r2 need R2_ACCESS_KEY, R2_SECRET_KEY, R2_BUCKET, R2_ENDPOINT in the env.
 ui:
-	$(CMD) $(WEB_ROOT)/UI/$(MAIN) $(PORT_FLAG) $(FLATNAME_FLAG)
+	$(CMD) $(WEB_ROOT)/ui/$(MAIN) $(PORT_FLAG) $(FLATNAME_FLAG) $(MODE_FLAG)
+
+# Convenience alias: the UI in migration mode (identical config, MODE=migrate).
+migration-ui: MODE = migrate
+migration-ui: ui
 
 api:
 	$(CMD) $(WEB_ROOT)/api/$(MAIN) $(PORT_FLAG)
