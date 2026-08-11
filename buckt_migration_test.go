@@ -21,6 +21,7 @@ import (
 type memBackend struct {
 	mu   sync.Mutex
 	objs map[string][]byte
+	puts int // total Put calls, to detect wasteful re-uploads
 }
 
 func newMemBackend() *memBackend { return &memBackend{objs: map[string][]byte{}} }
@@ -30,10 +31,17 @@ func (m *memBackend) Name() string { return "mem" }
 func (m *memBackend) Put(_ context.Context, path string, data []byte) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	m.puts++
 	cp := make([]byte, len(data))
 	copy(cp, data)
 	m.objs[path] = cp
 	return nil
+}
+
+func (m *memBackend) putCalls() int {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.puts
 }
 
 func (m *memBackend) Get(_ context.Context, path string) ([]byte, error) {
@@ -165,6 +173,67 @@ func TestMigration_BulkMigrateExistingFiles(t *testing.T) {
 	_, err = c2.UploadFile(user, "", "c.txt", "text/plain", []byte("gamma"))
 	require.NoError(t, err)
 	assert.Greater(t, target.count(), before, "new writes are dual-written to the target")
+}
+
+// requireMigrationDone waits for the background copy to finish (completed==total).
+func requireMigrationDone(t *testing.T, c *Client) {
+	t.Helper()
+	require.Eventually(t, func() bool {
+		done, total, _ := c.MigrationStatus(context.Background())
+		return total > 0 && done >= total
+	}, 5*time.Second, 20*time.Millisecond, "migration should finish")
+}
+
+// TestMigration_MigrateAllIsIdempotent models an interrupted migration: the
+// process stops and MigrateAll runs again on restart. Files already copied must
+// NOT be re-uploaded — the target's Put count must not grow on the second pass.
+func TestMigration_MigrateAllIsIdempotent(t *testing.T) {
+	dir := t.TempDir()
+	mediaDir := filepath.Join(dir, "media")
+	dbPath := filepath.Join(dir, "db.sqlite")
+	const user = "u1"
+
+	// Local-only files.
+	db1, err := sql.Open("sqlite3", dbPath)
+	require.NoError(t, err)
+	c1, err := New(Config{DB: DBConfig{Driver: SQLite, Database: db1}, MediaDir: mediaDir, Log: LogConfig{Silence: true}})
+	require.NoError(t, err)
+	for _, n := range []string{"a.txt", "b.txt", "c.txt"} {
+		_, err := c1.UploadFile(user, "", n, "text/plain", []byte(n))
+		require.NoError(t, err)
+	}
+	require.NoError(t, c1.Close())
+	require.NoError(t, db1.Close())
+
+	// Migration client.
+	target := newMemBackend()
+	db2, err := sql.Open("sqlite3", dbPath)
+	require.NoError(t, err)
+	c2, err := New(Config{
+		DB:       DBConfig{Driver: SQLite, Database: db2},
+		MediaDir: mediaDir,
+		Log:      LogConfig{Silence: true},
+		Backend:  BackendConfig{Source: LocalBackend(), Target: target, MigrationEnabled: true},
+	})
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = c2.Close(); _ = db2.Close() })
+
+	ctx := context.Background()
+
+	// First pass copies everything.
+	require.NoError(t, c2.MigrateAll(ctx))
+	requireMigrationDone(t, c2)
+	firstPuts := target.putCalls()
+	objectsAfterFirst := target.count()
+	require.GreaterOrEqual(t, firstPuts, 3, "all files copied on the first pass")
+
+	// Second pass (as if the server restarted mid-migration and re-ran it).
+	// Retry until the first goroutine has released the in-flight flag.
+	require.Eventually(t, func() bool { return c2.MigrateAll(ctx) == nil }, 3*time.Second, 20*time.Millisecond)
+	requireMigrationDone(t, c2)
+
+	assert.Equal(t, firstPuts, target.putCalls(), "re-running migration must not re-upload already-copied files")
+	assert.Equal(t, objectsAfterFirst, target.count(), "the object set is unchanged on the second pass")
 }
 
 func TestMigration_NotEnabledReturnsError(t *testing.T) {

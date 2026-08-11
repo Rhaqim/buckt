@@ -14,7 +14,8 @@ drive and observe a local → cloud storage migration. Additive; no API removals
   `Client.BackendName`). When a Client is created with `WithMigration` (local →
   cloud dual-write), these drive and observe a background copy of the files that
   predate the cutover — `MigrateAll` schedules the copy (skipping objects already
-  in the target), `MigrationStatus` reports `completed`/`total`, and
+  in the target, so it is idempotent and safe to re-run after an interruption),
+  `MigrationStatus` reports `completed`/`total`, and
   `BackendName` returns the active backend (`local`, `s3`, or `local->s3` mid
   migration). `MigrateAll`/`MigrationStatus` return `ErrBackendUnavailable` /
   `ok=false` when migration isn't enabled. The bundled web UI adds a header badge
