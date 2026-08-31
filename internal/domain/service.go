@@ -23,6 +23,8 @@ type FolderService interface {
 
 type FileService interface {
 	CreateFile(ctx context.Context, user_id, parent_id, file_name, content_type string, file_data []byte) (string, error)
+	// CreateFileWithExpiry is CreateFile that also stamps an expiry in the same insert.
+	CreateFileWithExpiry(ctx context.Context, user_id, parent_id, file_name, content_type string, file_data []byte, expires_at *time.Time) (string, error)
 	GetFile(ctx context.Context, file_id string) (*model.FileModel, error)
 	GetFileStream(ctx context.Context, file_id string) (*model.FileModel, io.ReadCloser, error)
 	GetFiles(ctx context.Context, parent_id string) ([]model.FileModel, error)

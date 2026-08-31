@@ -22,6 +22,11 @@ func (m *FileService) CreateFile(ctx context.Context, user_id, parent_id, file_n
 	return args.String(0), args.Error(1)
 }
 
+func (m *FileService) CreateFileWithExpiry(ctx context.Context, user_id, parent_id, file_name, content_type string, file_data []byte, expires_at *time.Time) (string, error) {
+	args := m.Called(user_id, parent_id, file_name, content_type, file_data, expires_at)
+	return args.String(0), args.Error(1)
+}
+
 func (m *FileService) GetFilesMetadata(ctx context.Context, parent_id string) ([]model.FileModel, error) {
 	args := m.Called(parent_id)
 	return args.Get(0).([]model.FileModel), args.Error(1)

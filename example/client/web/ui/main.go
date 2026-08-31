@@ -38,6 +38,7 @@ func main() {
 	flagPort := flag.String("port", envOr("PORT", "8080"), "Port to run the server on")
 	withDB := flag.Bool("db", false, "Use an external Postgres database")
 	flatNamespaces := flag.Bool("flat", false, "Use flat namespaces")
+	expirySweep := flag.Duration("expiry", 0, "if >0, run the background expiry sweeper at this interval (e.g. 30s) so files given a TTL in the UI are auto-deleted")
 	flag.Parse()
 
 	// Feature set — identical across every storage mode.
@@ -49,6 +50,13 @@ func main() {
 			buckt.DerivativeSpec{Name: "thumbnail", MaxWidth: 200},
 			buckt.DerivativeSpec{Name: "medium", MaxWidth: 800},
 		),
+	}
+
+	// Optional: let buckt auto-delete files past their TTL. Set a TTL on a file
+	// from the UI (the ⏳ menu), and the sweeper purges it on this interval.
+	if *expirySweep > 0 {
+		opts = append(opts, buckt.WithExpirySweeper(*expirySweep))
+		log.Printf("⏳ expiry sweeper on — purging expired files every %s", *expirySweep)
 	}
 
 	if *withDB {

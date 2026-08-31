@@ -18,6 +18,11 @@ type APIService interface {
 	DeleteFile(c *gin.Context)
 	DeleteFilePermanently(c *gin.Context)
 
+	// SetExpiry sets or clears a file's automatic-deletion time (ttl or absolute at).
+	SetExpiry(c *gin.Context)
+	// PurgeExpired permanently deletes every file whose expiry has passed.
+	PurgeExpired(c *gin.Context)
+
 	// Metrics reports backend operation counts, storage bytes, and cache stats.
 	Metrics(c *gin.Context)
 

@@ -591,12 +591,17 @@ Each `metrics.Stat` holds `Count`, `Errors`, `Bytes`, and `TotalDur` (divide by 
 Give a file a TTL and buckt will permanently delete it — blob, image derivatives, and metadata row — once it's due. Ideal for temp uploads, one-time shares, and scratch files.
 
 ```go
-  fileID, _ := client.UploadFile("user123", "", "share.zip", "application/zip", data)
+  // Upload as a temp file — the TTL is written in the same insert ("save temp"),
+  // so there's no window where the file exists without an expiry:
+  fileID, _ := client.UploadFileWithTTL("user123", "", "share.zip", "application/zip", data, 24*time.Hour)
+  // (UploadFileWithExpiry takes an absolute time; UploadFileFromReaderWithTTLContext streams.)
 
+  // Or add / change / clear a TTL on an existing file:
   client.SetFileTTL(fileID, 24*time.Hour)        // expire 24h from now
-  // or an absolute time:
-  client.SetFileExpiry(fileID, someTime)         // pass the zero time.Time to clear it
+  client.SetFileExpiry(fileID, someTime)         // absolute; pass the zero time.Time to clear
 ```
+
+Temp uploads are never deduplicated, so a temp file is always its own object (it can never collapse onto — and later expire — a permanent file that shares its bytes).
 
 Expiry isn't automatic on its own — a **sweep** does the deleting, and you choose who drives it:
 
@@ -614,6 +619,8 @@ Expiry isn't automatic on its own — a **sweep** does the deleting, and you cho
 ```
 
 Each expiry deletion emits a `file.purged` [event](#lifecycle-events), so you can hook post-deletion behaviour (audit log, notify, etc.). `PurgeExpired` works in batches and is safe to call repeatedly.
+
+The bundled web client exposes expiry too: the upload endpoints accept an optional `ttl` form field (e.g. `ttl=24h`) to upload a temp file directly, and the UI's upload dialog has an **Auto-delete after** selector. There's also `PUT /expiry/:file_id` (form/query `ttl=24h` or absolute `at=<RFC3339>`; empty/`0` clears) and `POST /purge-expired`; each file's menu has an **Expire in 1h / 24h / 7d** control and an expiry badge. The `ui` example can run the sweeper with `make ui EXPIRY=30s`, and `example/expiry/headless` walks the whole lifecycle.
 
 > **Beyond deletion:** because expiry rides on the events system, it's the first step toward general *scheduled actions* ("after 24h, email this file"). The delete action is built in; a future release can add app-registered actions on the same sweep. Ask if you need that now.
 
@@ -686,6 +693,7 @@ The optional web client gives you a Gin-based HTTP API and a Tailwind UI for fre
 - 📝 Inline rename
 - 🗂️ Folder browser for choosing move targets
 - 🗑️ Move to Trash + Delete Permanently options
+- ⏳ Per-file "Expire in 1h / 24h / 7d" with an expiry badge
 - ⌨️ Keyboard shortcuts (Esc to close modals)
 
 [<img src="https://run.pstmn.io/button.svg" alt="Run In Postman" style="width: 128px; height: 32px;">](https://app.getpostman.com/run-collection/17061476-00806d0d-9584-4889-ade7-f8407932dba2?action=collection%2Ffork&source=rip_markdown&collection-url=entityId%3D17061476-00806d0d-9584-4889-ade7-f8407932dba2%26entityType%3Dcollection%26workspaceId%3D28697276-d953-482a-bd39-c4695366a55a)
@@ -807,7 +815,9 @@ SetFileMetadata(fileID string, metadata map[string]string) error
 GetFileMetadata(fileID string) (map[string]string, error)
 
 // Expiry / temp files
-SetFileTTL(fileID string, ttl time.Duration) error       // expire ttl from now
+UploadFileWithTTL(userID, parentID, name, contentType string, data []byte, ttl time.Duration) (string, error) // upload a temp file
+UploadFileWithExpiry(userID, parentID, name, contentType string, data []byte, at time.Time) (string, error)   // upload with absolute expiry
+SetFileTTL(fileID string, ttl time.Duration) error       // add/change a TTL after upload
 SetFileExpiry(fileID string, at time.Time) error         // absolute; zero time clears
 PurgeExpired(ctx context.Context) (purged int, err error) // delete everything past due
 
@@ -855,6 +865,7 @@ Branch on failures with `errors.Is` using the re-exported sentinels (also availa
 | [Azure Blob Storage](example/cloud/azure/main.go) | Azure setup |
 | [Full-featured UI](example/client/web/ui/main.go) | Metrics, dedup, derivatives, and upload events across `local`/`migrate`/`r2` modes |
 | [Headless migration](example/migration/headless/main.go) | Bulk `MigrateAll` + progress polling without the UI |
+| [Expiring / temp files](example/expiry/headless/main.go) | `SetFileTTL` → `PurgeExpired` lifecycle |
 
 ---
 

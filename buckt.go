@@ -662,6 +662,54 @@ func (b *Client) UploadFileContext(ctx context.Context, user_id string, parent_i
 	return b.fileService.CreateFile(ctx, user_id, parent_id, file_name, content_type, file_data)
 }
 
+// UploadFileWithTTL uploads a file that will be permanently deleted ttl from now
+// — a "save temp". The expiry is written in the same insert as the file, so
+// there's no window where the file exists without its TTL. A non-positive ttl
+// uploads a normal (non-expiring) file. Temp uploads are never deduplicated, so
+// a temp file is always its own object. Delete happens on a PurgeExpired sweep
+// (call it yourself or use WithExpirySweeper). See also SetFileTTL to add or
+// change a TTL after upload.
+func (b *Client) UploadFileWithTTL(user_id, parent_id, file_name, content_type string, file_data []byte, ttl time.Duration) (string, error) {
+	return b.UploadFileWithTTLContext(context.Background(), user_id, parent_id, file_name, content_type, file_data, ttl)
+}
+
+// UploadFileWithTTLContext is UploadFileWithTTL with an explicit context.
+func (b *Client) UploadFileWithTTLContext(ctx context.Context, user_id, parent_id, file_name, content_type string, file_data []byte, ttl time.Duration) (string, error) {
+	return b.fileService.CreateFileWithExpiry(ctx, user_id, parent_id, file_name, content_type, file_data, ttlToExpiry(ttl))
+}
+
+// UploadFileWithExpiry uploads a file that will be permanently deleted at the
+// given absolute time. The zero time.Time uploads a normal (non-expiring) file.
+// Like UploadFileWithTTL, the expiry is set atomically and the upload is not
+// deduplicated.
+func (b *Client) UploadFileWithExpiry(user_id, parent_id, file_name, content_type string, file_data []byte, at time.Time) (string, error) {
+	return b.UploadFileWithExpiryContext(context.Background(), user_id, parent_id, file_name, content_type, file_data, at)
+}
+
+// UploadFileWithExpiryContext is UploadFileWithExpiry with an explicit context.
+func (b *Client) UploadFileWithExpiryContext(ctx context.Context, user_id, parent_id, file_name, content_type string, file_data []byte, at time.Time) (string, error) {
+	return b.fileService.CreateFileWithExpiry(ctx, user_id, parent_id, file_name, content_type, file_data, timeToExpiry(at))
+}
+
+// ttlToExpiry converts a TTL to an absolute-expiry pointer: nil for a
+// non-positive ttl (no expiry), else now+ttl.
+func ttlToExpiry(ttl time.Duration) *time.Time {
+	if ttl <= 0 {
+		return nil
+	}
+	t := time.Now().Add(ttl)
+	return &t
+}
+
+// timeToExpiry converts an absolute time to an expiry pointer: nil for the zero
+// time (no expiry), else a copy of at.
+func timeToExpiry(at time.Time) *time.Time {
+	if at.IsZero() {
+		return nil
+	}
+	return &at
+}
+
 // UploadFileFromReaderContext uploads a file to the specified user's bucket from an io.Reader.
 //
 // Parameters:
@@ -676,6 +724,19 @@ func (b *Client) UploadFileContext(ctx context.Context, user_id string, parent_i
 //   - string: The ID of the newly created file.
 //   - error: An error if the file upload fails, otherwise nil.
 func (b *Client) UploadFileFromReaderContext(ctx context.Context, user_id string, parent_id string, file_name string, content_type string, file_data io.Reader) (string, error) {
+	return b.uploadFromReader(ctx, user_id, parent_id, file_name, content_type, file_data, nil)
+}
+
+// UploadFileFromReaderWithTTLContext streams a file that will be permanently
+// deleted ttl from now — the streaming form of UploadFileWithTTL. A non-positive
+// ttl uploads a normal (non-expiring) file.
+func (b *Client) UploadFileFromReaderWithTTLContext(ctx context.Context, user_id, parent_id, file_name, content_type string, file_data io.Reader, ttl time.Duration) (string, error) {
+	return b.uploadFromReader(ctx, user_id, parent_id, file_name, content_type, file_data, ttlToExpiry(ttl))
+}
+
+// uploadFromReader is the shared reader-upload core; expiresAt is nil for a
+// normal upload or a time for a temp/expiring upload.
+func (b *Client) uploadFromReader(ctx context.Context, user_id, parent_id, file_name, content_type string, file_data io.Reader, expiresAt *time.Time) (string, error) {
 	// Try to use Seeker for efficiency if available
 	if seeker, ok := file_data.(io.Seeker); ok {
 		fileSize, err := seeker.Seek(0, io.SeekEnd)
@@ -698,7 +759,7 @@ func (b *Client) UploadFileFromReaderContext(ctx context.Context, user_id string
 		if _, err = io.ReadFull(file_data, file_bytes); err != nil {
 			return "", err
 		}
-		return b.fileService.CreateFile(ctx, user_id, parent_id, file_name, content_type, file_bytes)
+		return b.fileService.CreateFileWithExpiry(ctx, user_id, parent_id, file_name, content_type, file_bytes, expiresAt)
 	}
 
 	// Fallback: read with bounded reader for non-seekable streams
@@ -714,7 +775,7 @@ func (b *Client) UploadFileFromReaderContext(ctx context.Context, user_id string
 		return "", fmt.Errorf("file size exceeds maximum allowed size %d bytes", b.maxFileSize)
 	}
 
-	return b.fileService.CreateFile(ctx, user_id, parent_id, file_name, content_type, file_bytes)
+	return b.fileService.CreateFileWithExpiry(ctx, user_id, parent_id, file_name, content_type, file_bytes, expiresAt)
 }
 
 // GetFileContext retrieves a file based on the provided file ID.

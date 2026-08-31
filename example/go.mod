@@ -4,10 +4,10 @@ go 1.26.0
 
 require (
 	github.com/Rhaqim/buckt v1.9.0
-	github.com/Rhaqim/buckt/client/web v0.0.0-20260802184508-6344f351b356
-	github.com/Rhaqim/buckt/cloud/aws v0.0.0-20260802184508-6344f351b356
-	github.com/Rhaqim/buckt/cloud/azure v0.0.0-20260802184508-6344f351b356
-	github.com/Rhaqim/buckt/cloud/gcp v0.0.0-20260802184508-6344f351b356
+	github.com/Rhaqim/buckt/client/web v0.0.0-20260811222453-a0c76c88650c
+	github.com/Rhaqim/buckt/cloud/aws v0.0.0-20260811222453-a0c76c88650c
+	github.com/Rhaqim/buckt/cloud/azure v0.0.0-20260811222453-a0c76c88650c
+	github.com/Rhaqim/buckt/cloud/gcp v0.0.0-20260811222453-a0c76c88650c
 )
 
 require (
@@ -44,7 +44,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/sts v1.47.1 // indirect
 	github.com/aws/smithy-go v1.28.1 // indirect
 	github.com/bytedance/gopkg v0.1.4 // indirect
-	github.com/bytedance/sonic v1.15.2 // indirect
+	github.com/bytedance/sonic v1.15.3 // indirect
 	github.com/bytedance/sonic/loader v0.5.2 // indirect
 	github.com/cenkalti/backoff/v4 v4.3.0 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
@@ -88,13 +88,13 @@ require (
 	github.com/pelletier/go-toml/v2 v2.4.3 // indirect
 	github.com/planetscale/vtprotobuf v0.6.1-0.20240319094008-0393e58bdf10 // indirect
 	github.com/quic-go/qpack v0.6.0 // indirect
-	github.com/quic-go/quic-go v0.61.0 // indirect
+	github.com/quic-go/quic-go v0.62.0 // indirect
 	github.com/spiffe/go-spiffe/v2 v2.8.1 // indirect
 	github.com/stretchr/objx v0.5.3 // indirect
 	github.com/stretchr/testify v1.12.1 // indirect
 	github.com/twitchyliquid64/golang-asm v0.15.1 // indirect
 	github.com/ugorji/go/codec v1.3.2 // indirect
-	go.mongodb.org/mongo-driver/v2 v2.8.0 // indirect
+	go.mongodb.org/mongo-driver/v2 v2.8.2 // indirect
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
 	go.opentelemetry.io/contrib/detectors/gcp v1.46.0 // indirect
 	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.71.0 // indirect

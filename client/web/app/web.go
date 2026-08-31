@@ -1,6 +1,8 @@
 package app
 
 import (
+	"time"
+
 	"github.com/Rhaqim/buckt"
 	"github.com/Rhaqim/buckt/client/web/domain"
 	"github.com/Rhaqim/buckt/pkg/fileutil"
@@ -230,6 +232,13 @@ func (svc *WebService) UploadFile(c *gin.Context) {
 		return
 	}
 
+	// Optional ttl (a Go duration like "24h") makes every file in this upload a
+	// temp file that expires. Invalid values are ignored (treated as permanent).
+	var ttl time.Duration
+	if ttlStr := c.PostForm("ttl"); ttlStr != "" {
+		ttl, _ = time.ParseDuration(ttlStr)
+	}
+
 	for _, file := range form.File["files"] {
 		fileName, fileByte, err := fileutil.ProcessFileWithLimit(file, svc.client.MaxFileSize())
 		if err != nil {
@@ -237,7 +246,13 @@ func (svc *WebService) UploadFile(c *gin.Context) {
 			return
 		}
 
-		if _, err := svc.client.UploadFile(user_id, folderID, fileName, file.Header.Get("Content-Type"), fileByte); err != nil {
+		contentType := file.Header.Get("Content-Type")
+		if ttl > 0 {
+			_, err = svc.client.UploadFileWithTTL(user_id, folderID, fileName, contentType, fileByte, ttl)
+		} else {
+			_, err = svc.client.UploadFile(user_id, folderID, fileName, contentType, fileByte)
+		}
+		if err != nil {
 			abort500(c, "failed to create file", err)
 			return
 		}
@@ -277,6 +292,58 @@ func (svc *WebService) RegenerateDerivatives(c *gin.Context) {
 	}
 
 	c.JSON(200, response.Success("derivatives regenerated"))
+}
+
+// SetTTL sets (or clears) a file's expiry from the UI. The `ttl` form value is a
+// Go duration (e.g. "1h", "24h"); an empty value, "0", or "clear" removes the
+// expiry. Answers HTMX with an HX-Refresh so the card re-renders with its new
+// expiry badge; redirects non-HTMX callers back to the folder.
+func (svc *WebService) SetTTL(c *gin.Context) {
+	fileID, ok := requireParam(c, "file_id")
+	if !ok {
+		return
+	}
+
+	ttlStr := c.PostForm("ttl")
+	switch ttlStr {
+	case "", "0", "clear":
+		if err := svc.client.SetFileExpiry(fileID, time.Time{}); err != nil {
+			abort500(c, "failed to clear expiry", err)
+			return
+		}
+	default:
+		ttl, err := time.ParseDuration(ttlStr)
+		if err != nil {
+			c.AbortWithStatusJSON(400, response.Error("invalid ttl (use a Go duration like 24h)", err.Error()))
+			return
+		}
+		if err := svc.client.SetFileTTL(fileID, ttl); err != nil {
+			abort500(c, "failed to set expiry", err)
+			return
+		}
+	}
+
+	if c.GetHeader("HX-Request") == "true" {
+		c.Header("HX-Refresh", "true")
+		c.String(200, "")
+		return
+	}
+	c.Redirect(302, c.GetHeader("Referer"))
+}
+
+// PurgeExpired permanently deletes every file whose expiry has passed, then
+// refreshes the view (HTMX) or redirects back.
+func (svc *WebService) PurgeExpired(c *gin.Context) {
+	if _, err := svc.client.PurgeExpired(c.Request.Context()); err != nil {
+		abort500(c, "failed to purge expired files", err)
+		return
+	}
+	if c.GetHeader("HX-Request") == "true" {
+		c.Header("HX-Refresh", "true")
+		c.String(200, "")
+		return
+	}
+	c.Redirect(302, c.GetHeader("Referer"))
 }
 
 // MoveFile implements domain.WebService.

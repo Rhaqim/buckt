@@ -90,6 +90,19 @@ func NewFileService(
 
 // CreateFile implements domain.FileService.
 func (f *FileService) CreateFile(ctx context.Context, user_id, parent_id, file_name, content_type string, file_data []byte) (string, error) {
+	return f.createFile(ctx, user_id, parent_id, file_name, content_type, file_data, nil)
+}
+
+// CreateFileWithExpiry implements domain.FileService: like CreateFile but stamps
+// the file with an expiry in the SAME insert (a "save temp"), so there's no
+// window where the file exists without its TTL.
+func (f *FileService) CreateFileWithExpiry(ctx context.Context, user_id, parent_id, file_name, content_type string, file_data []byte, expires_at *time.Time) (string, error) {
+	return f.createFile(ctx, user_id, parent_id, file_name, content_type, file_data, expires_at)
+}
+
+// createFile is the shared upload core. expiresAt is nil for a normal upload, or
+// a time for a temp/expiring upload.
+func (f *FileService) createFile(ctx context.Context, user_id, parent_id, file_name, content_type string, file_data []byte, expiresAt *time.Time) (string, error) {
 	var err error
 
 	// Validate the file name before it is ever joined to a folder path or used
@@ -149,7 +162,11 @@ func (f *FileService) CreateFile(ctx context.Context, user_id, parent_id, file_n
 	// for this owner, return it instead of storing the bytes again. Scoped to the
 	// target folder, so it never resurrects a trashed duplicate. No new blob is
 	// written and no upload event fires — nothing new was stored.
-	if f.dedup {
+	//
+	// Skipped for temp uploads (expiresAt != nil): a temp file must be its own
+	// object, or it could collapse onto an existing permanent file and later
+	// expire it out from under other references.
+	if f.dedup && expiresAt == nil {
 		if existing, _ := f.repo.FindByHash(ctx, user_id, parentFolder.ID, hash); existing != nil {
 			return existing.ID.String(), nil
 		}
@@ -167,6 +184,7 @@ func (f *FileService) CreateFile(ctx context.Context, user_id, parent_id, file_n
 		Hash:        hash,
 		ContentType: content_type,
 		Size:        fileSize,
+		ExpiresAt:   expiresAt,
 	}
 
 	// Create the file

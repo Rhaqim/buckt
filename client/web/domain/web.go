@@ -19,4 +19,9 @@ type WebService interface {
 	MoveFile(c *gin.Context)
 	DeleteFile(c *gin.Context)
 	DeleteFilePermanently(c *gin.Context)
+
+	// SetTTL sets or clears a file's expiry from the UI.
+	SetTTL(c *gin.Context)
+	// PurgeExpired permanently deletes every file whose expiry has passed.
+	PurgeExpired(c *gin.Context)
 }

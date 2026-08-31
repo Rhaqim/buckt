@@ -11,14 +11,21 @@ Additive; no API removals.
 ### ✨ Added
 
 - **Expiring / temp files** (`SetFileTTL`, `SetFileExpiry`, `PurgeExpired`,
-  `WithExpirySweeper`). Give a file a TTL and buckt permanently deletes it —
+  `WithExpirySweeper`, and upload-with-TTL: `UploadFileWithTTL` /
+  `UploadFileWithExpiry` / `UploadFileFromReaderWithTTLContext`). Give a file a
+  TTL and buckt permanently deletes it —
   blob, image derivatives, and metadata row — once it's due, emitting a
   `file.purged` event. A new indexed `expires_at` column (schema migration v6,
   additive) makes the sweep a cheap ranged query. The sweep is app-driven by
   default (call `PurgeExpired` from your own scheduler); `WithExpirySweeper`
   opts into a built-in background ticker (stopped by `Client.Close`). Built to
   extend toward general scheduled actions (e.g. "email this after 24h") on the
-  same event-backed sweep.
+  same event-backed sweep. The web client exposes it too: `PUT /expiry/:file_id`
+  (ttl or absolute RFC3339) and `POST /purge-expired` on the API, and in the UI
+  a per-file "Expire in 1h/24h/7d" menu with an expiry badge (`POST
+  /web/set-ttl/:file_id`, `POST /web/purge-expired`). The `ui` example gains an
+  `-expiry=<interval>` flag (`make ui EXPIRY=30s`) to run the sweeper, and a new
+  `example/expiry/headless` walks the TTL → purge lifecycle.
 
 ## [1.9.0] — 2026-08-11
 
