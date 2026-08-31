@@ -1156,6 +1156,50 @@ func (b *Client) startExpirySweeper(interval time.Duration) {
 	}()
 }
 
+/* Presigned URLs */
+
+// PresignedURL returns a time-limited URL that downloads the file's bytes
+// directly from the storage backend, so reads bypass this process entirely —
+// ideal for serving media (hand the URL to a browser/CDN instead of streaming
+// through your server). Valid for ttl.
+//
+// Only cloud backends can presign. With the local filesystem backend, or while
+// a migration is in progress, this returns ErrUnsupported. The URL grants access
+// for its whole lifetime regardless of buckt's own auth, so keep ttl short.
+func (b *Client) PresignedURL(file_id string, ttl time.Duration) (string, error) {
+	return b.PresignedURLContext(context.Background(), file_id, ttl)
+}
+
+// PresignedURLContext is PresignedURL with an explicit context.
+func (b *Client) PresignedURLContext(ctx context.Context, file_id string, ttl time.Duration) (string, error) {
+	p, ok := b.backend.(domain.PresignBackend)
+	if !ok {
+		return "", fmt.Errorf("backend %q does not support presigned URLs: %w", b.backend.Name(), ErrUnsupported)
+	}
+	file, err := b.fileService.GetFile(ctx, file_id)
+	if err != nil {
+		return "", err
+	}
+	return p.PresignGetURL(ctx, file.Path, ttl)
+}
+
+// PresignedDerivativeURL returns a time-limited direct-download URL for a
+// generated image derivative (e.g. "thumbnail"), valid for ttl. Like
+// PresignedURL it needs a cloud backend (else ErrUnsupported); the URL 404s if
+// the derivative hasn't been generated. See GenerateDerivatives.
+func (b *Client) PresignedDerivativeURL(file_id, name string, ttl time.Duration) (string, error) {
+	return b.PresignedDerivativeURLContext(context.Background(), file_id, name, ttl)
+}
+
+// PresignedDerivativeURLContext is PresignedDerivativeURL with an explicit context.
+func (b *Client) PresignedDerivativeURLContext(ctx context.Context, file_id, name string, ttl time.Duration) (string, error) {
+	p, ok := b.backend.(domain.PresignBackend)
+	if !ok {
+		return "", fmt.Errorf("backend %q does not support presigned URLs: %w", b.backend.Name(), ErrUnsupported)
+	}
+	return p.PresignGetURL(ctx, derivativeKey(file_id, name), ttl)
+}
+
 /* Helper Methods */
 
 func initializeCache(conf CacheConfig, bucktLog domain.BucktLogger) (domain.CacheManager, domain.LRUCache) {

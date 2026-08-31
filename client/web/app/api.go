@@ -1,6 +1,7 @@
 package app
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"time"
@@ -576,6 +577,38 @@ func (svc *APIService) SetExpiry(c *gin.Context) {
 		return
 	}
 	c.JSON(200, response.Success("expiry set"))
+}
+
+// Presign returns a time-limited URL that downloads the file directly from the
+// storage backend (so reads bypass this process). The optional `ttl` query is a
+// Go duration (default 15m). Returns 501 when the backend can't presign (e.g.
+// the local filesystem).
+func (svc *APIService) Presign(c *gin.Context) {
+	fileID, ok := requireParam(c, "file_id")
+	if !ok {
+		return
+	}
+
+	ttl := 15 * time.Minute
+	if ttlStr := c.Query("ttl"); ttlStr != "" {
+		d, err := time.ParseDuration(ttlStr)
+		if err != nil {
+			c.AbortWithStatusJSON(400, response.Error("invalid ttl (use a Go duration like 15m)", err.Error()))
+			return
+		}
+		ttl = d
+	}
+
+	url, err := svc.client.PresignedURLContext(c.Request.Context(), fileID, ttl)
+	if err != nil {
+		if errors.Is(err, buckt.ErrUnsupported) {
+			c.AbortWithStatusJSON(501, response.WrapError("this backend cannot presign URLs", err))
+			return
+		}
+		abort500(c, "failed to presign url", err)
+		return
+	}
+	c.JSON(200, gin.H{"status": "success", "url": url})
 }
 
 // PurgeExpired permanently deletes every file whose expiry has passed and

@@ -61,4 +61,9 @@ var (
 	// underlying reason remains inspectable. Map it to 4xx (e.g. 422). See
 	// WithUploadScanner.
 	ErrUploadRejected = errors.New("upload rejected")
+
+	// ErrUnsupported is returned when an operation isn't supported by the active
+	// backend — e.g. a presigned URL on the local filesystem backend, or during
+	// migration mode. Map it to 501/400 as appropriate.
+	ErrUnsupported = errors.New("operation not supported by this backend")
 )

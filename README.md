@@ -78,6 +78,7 @@ In fact, Buckt can use MinIO as its storage backend, allowing you to combine Min
   - [Quick Start](#quick-start)
   - [Configuration](#configuration)
     - [All Options](#all-options)
+  - [Presigned URLs](#presigned-urls)
   - [Storage Backends](#storage-backends)
     - [Local Filesystem](#local-filesystem)
     - [AWS S3](#aws-s3)
@@ -238,6 +239,31 @@ Or with options:
 | `WithBackendOpTimeout(time.Duration)` | Bound backend I/O time during a delete (negative = disable) |
 | `MediaDir(string)` | Local filesystem media directory |
 | `FlatNameSpaces(bool)` | Store files by UUID at the root vs. by logical path |
+
+---
+
+## Presigned URLs
+
+Hand clients a time-limited URL that downloads a file **directly from the storage backend**, so reads don't stream through your process — the standard, CDN-friendly way to serve media (images, video, downloads).
+
+```go
+  // 15-minute direct-download link for the file's bytes:
+  url, err := client.PresignedURL(fileID, 15*time.Minute)
+
+  // ...or for a generated image derivative (thumbnail, etc.):
+  thumbURL, err := client.PresignedDerivativeURL(fileID, "thumbnail", 15*time.Minute)
+```
+
+Presigning is a **cloud-backend capability**: it works with S3/R2 (`cloud/aws`) today (Azure/GCS can follow). The local filesystem backend — and a Client mid-migration — can't presign, and return `ErrUnsupported`:
+
+```go
+  url, err := client.PresignedURL(fileID, ttl)
+  if errors.Is(err, buckt.ErrUnsupported) {
+    // fall back to streaming via GetFileStream / the /serve handler
+  }
+```
+
+> A presigned URL grants access to whoever holds it — bypassing buckt's own auth — for the whole TTL, so keep the TTL short and don't log the URLs. The web client exposes `GET /presign/:file_id?ttl=15m` (returns 501 when the backend can't presign).
 
 ---
 
@@ -804,6 +830,8 @@ UploadFile(userID, parentID, name, contentType string, data []byte) (string, err
 UploadFileFromReader(userID, parentID, name, contentType string, r io.Reader) (string, error)
 GetFile(fileID string) (*FileModel, error)
 GetFileStream(fileID string) (*FileModel, io.ReadCloser, error)
+PresignedURL(fileID string, ttl time.Duration) (string, error)                 // direct-download URL (cloud backends)
+PresignedDerivativeURL(fileID, name string, ttl time.Duration) (string, error) // direct URL for a derivative
 ListFiles(folderID string) ([]FileModel, error)
 ListFilesMetadata(folderID string) ([]FileModel, error)
 MoveFile(fileID, newParentID string) error
@@ -848,6 +876,7 @@ Branch on failures with `errors.Is` using the re-exported sentinels (also availa
 | `buckt.ErrUploadRejected` | Rejected by an upload scanner | 422 |
 | `buckt.ErrTrashBatchExceeded` | Folder delete exceeds the trash batch cap | 409 |
 | `buckt.ErrBackendUnavailable` | Backend unreachable / feature not enabled | 503 |
+| `buckt.ErrUnsupported` | Operation not supported by the active backend (e.g. presign on local) | 501 |
 
 ---
 

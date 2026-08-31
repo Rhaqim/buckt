@@ -18,6 +18,9 @@ type APIService interface {
 	DeleteFile(c *gin.Context)
 	DeleteFilePermanently(c *gin.Context)
 
+	// Presign returns a time-limited direct-download URL for a file.
+	Presign(c *gin.Context)
+
 	// SetExpiry sets or clears a file's automatic-deletion time (ttl or absolute at).
 	SetExpiry(c *gin.Context)
 	// PurgeExpired permanently deletes every file whose expiry has passed.

@@ -5,6 +5,26 @@ All notable changes to buckt are documented here. This project follows
 
 ## [1.10.0] — unreleased
 
+A backward-compatible **minor** release adding presigned (direct-download) URLs.
+Additive; no API removals.
+
+### ✨ Added
+
+- **Presigned URLs** (`Client.PresignedURL` / `PresignedURLContext`,
+  `PresignedDerivativeURL` / `…Context`, and the `domain.PresignBackend`
+  capability). Mint a time-limited URL that downloads a file (or an image
+  derivative) **directly from the storage backend**, so reads bypass the
+  application process entirely — hand the URL to a browser or CDN instead of
+  streaming bytes through your server. Implemented for the S3/R2 backend
+  (`cloud/aws`), designed as an optional capability so Azure/GCS can follow;
+  backends that can't presign (the local filesystem, or during a migration)
+  return the new `ErrUnsupported`. For an S3/R2 object the correct key form is
+  resolved first, so a URL for a migrated object doesn't 404. The web client
+  adds `GET /presign/:file_id?ttl=15m` (501 when unsupported). Presigned URLs
+  bypass buckt's auth for their lifetime — keep the TTL short.
+
+## [1.9.1] — unreleased
+
 A backward-compatible **minor** release adding file expiry / temp files.
 Additive; no API removals.
 

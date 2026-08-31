@@ -2,10 +2,12 @@ package backend
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"time"
 
 	"github.com/Rhaqim/buckt/internal/domain"
+	"github.com/Rhaqim/buckt/pkg/buckterr"
 	"github.com/Rhaqim/buckt/pkg/metrics"
 )
 
@@ -113,4 +115,17 @@ func (m *meteredBackend) DeleteFolder(ctx context.Context, prefix string) error 
 	err := m.inner.DeleteFolder(ctx, prefix)
 	m.record(metrics.OpDeleteFolder, 0, start, err)
 	return err
+}
+
+// PresignGetURL forwards to the inner backend when it supports presigning, so
+// the capability survives the metering wrapper. Returns ErrUnsupported when the
+// inner backend can't presign (e.g. local). Not metered: GET presigning is a
+// local signing operation (any existence check the inner backend does is counted
+// by its own recorder).
+func (m *meteredBackend) PresignGetURL(ctx context.Context, key string, ttl time.Duration) (string, error) {
+	p, ok := m.inner.(domain.PresignBackend)
+	if !ok {
+		return "", fmt.Errorf("backend %q does not support presigned URLs: %w", m.inner.Name(), buckterr.ErrUnsupported)
+	}
+	return p.PresignGetURL(ctx, key, ttl)
 }

@@ -123,6 +123,7 @@ func (r *Router) registerAPIRoutes() {
 		{
 			r.POST("/upload", r.APIService.UploadFile)
 			r.GET("/download/:file_id", r.APIService.DownloadFile)
+			r.GET("/presign/:file_id", r.APIService.Presign)
 			r.DELETE("/delete/:file_id", r.APIService.DeleteFile)
 			r.DELETE("/scrub/:file_id", r.APIService.DeleteFilePermanently)
 			r.PUT("/expiry/:file_id", r.APIService.SetExpiry)
