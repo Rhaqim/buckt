@@ -3,7 +3,24 @@
 All notable changes to buckt are documented here. This project follows
 [Semantic Versioning](https://semver.org/).
 
-## [1.9.0] — unreleased
+## [1.10.0] — unreleased
+
+A backward-compatible **minor** release adding file expiry / temp files.
+Additive; no API removals.
+
+### ✨ Added
+
+- **Expiring / temp files** (`SetFileTTL`, `SetFileExpiry`, `PurgeExpired`,
+  `WithExpirySweeper`). Give a file a TTL and buckt permanently deletes it —
+  blob, image derivatives, and metadata row — once it's due, emitting a
+  `file.purged` event. A new indexed `expires_at` column (schema migration v6,
+  additive) makes the sweep a cheap ranged query. The sweep is app-driven by
+  default (call `PurgeExpired` from your own scheduler); `WithExpirySweeper`
+  opts into a built-in background ticker (stopped by `Client.Close`). Built to
+  extend toward general scheduled actions (e.g. "email this after 24h") on the
+  same event-backed sweep.
+
+## [1.9.0] — 2026-08-11
 
 A backward-compatible **minor** release adding a pluggable upload-scanning hook.
 Additive; no API removals.
@@ -21,15 +38,6 @@ Additive; no API removals.
   content-type allowlist, etc. Unlike event handlers (which fire *after* commit),
   the scanner runs *before* it, so it can actually block. Nil by default — zero
   overhead when unused.
-- **Expiring / temp files** (`SetFileTTL`, `SetFileExpiry`, `PurgeExpired`,
-  `WithExpirySweeper`). Give a file a TTL and buckt permanently deletes it —
-  blob, image derivatives, and metadata row — once it's due, emitting a
-  `file.purged` event. A new indexed `expires_at` column (schema migration v6,
-  additive) makes the sweep a cheap ranged query. The sweep is app-driven by
-  default (call `PurgeExpired` from your own scheduler); `WithExpirySweeper`
-  opts into a built-in background ticker (stopped by `Client.Close`). Built to
-  extend toward general scheduled actions (e.g. "email this after 24h") on the
-  same event-backed sweep.
 - **Repo secret-scanning** — a gitleaks pre-commit hook
   (`.pre-commit-config.yaml` + `.gitleaks.toml`) and a `secret-scan` GitHub
   Actions workflow catch hardcoded credentials before they reach history.
