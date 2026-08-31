@@ -26,6 +26,12 @@ type FileModel struct {
 	// GORM's built-in serializer, so there's no extra dependency and no schema
 	// churn as keys change. buckt never interprets it.
 	Metadata map[string]string `gorm:"serializer:json" json:"metadata,omitempty"`
+	// ExpiresAt, when set, marks the file for automatic permanent deletion at or
+	// after this time. PurgeExpired (called on a schedule, or by the optional
+	// background sweeper) removes expired files — blob, derivatives, and row —
+	// and emits a file.purged event. Nil means the file never expires. Indexed so
+	// the expiry sweep is a cheap ranged query, not a full-table scan.
+	ExpiresAt *time.Time `gorm:"index" json:"expires_at,omitempty"`
 	// DerivativesBytes is the total size of generated image derivatives for this
 	// file (thumbnails etc.), which live on the backend but are not tracked as
 	// files. Counted in Client.StorageBytes so storage totals stay accurate.

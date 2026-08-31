@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/Rhaqim/buckt/internal/database"
 	"github.com/Rhaqim/buckt/internal/domain"
@@ -324,6 +325,34 @@ func (f *FileRepository) SetMetadata(ctx context.Context, id uuid.UUID, metadata
 // ScrubFile permanently deletes a file regardless of its location.
 func (f *FileRepository) ScrubFile(ctx context.Context, id uuid.UUID) error {
 	return f.db.DB.WithContext(ctx).Delete(&model.FileModel{}, id).Error
+}
+
+// SetExpiry sets (at != nil) or clears (at == nil) the file's expiry. Like
+// SetMetadata it loads the row then does a field-aware Select(...).Updates so
+// the column is written even when the value is nil (clearing the expiry).
+func (f *FileRepository) SetExpiry(ctx context.Context, id uuid.UUID, at *time.Time) error {
+	var file model.FileModel
+	if err := f.db.DB.WithContext(ctx).First(&file, id).Error; err != nil {
+		return asNotFound(err, "file not found")
+	}
+	file.ExpiresAt = at
+	return f.db.DB.WithContext(ctx).Model(&file).Select("ExpiresAt").Updates(file).Error
+}
+
+// FindExpired returns up to limit files whose expires_at is set and at or before
+// now, ordered oldest-expiry first so the most-overdue files are purged first.
+func (f *FileRepository) FindExpired(ctx context.Context, now time.Time, limit int) ([]*model.FileModel, error) {
+	var files []*model.FileModel
+	q := f.db.DB.WithContext(ctx).
+		Where("expires_at IS NOT NULL AND expires_at <= ?", now).
+		Order("expires_at ASC")
+	if limit > 0 {
+		q = q.Limit(limit)
+	}
+	if err := q.Find(&files).Error; err != nil {
+		return nil, err
+	}
+	return files, nil
 }
 
 // getOrCreateTrashFolder returns the user's trash folder, creating it if missing.

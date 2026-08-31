@@ -90,6 +90,19 @@ func NewFileService(
 
 // CreateFile implements domain.FileService.
 func (f *FileService) CreateFile(ctx context.Context, user_id, parent_id, file_name, content_type string, file_data []byte) (string, error) {
+	return f.createFile(ctx, user_id, parent_id, file_name, content_type, file_data, nil)
+}
+
+// CreateFileWithExpiry implements domain.FileService: like CreateFile but stamps
+// the file with an expiry in the SAME insert (a "save temp"), so there's no
+// window where the file exists without its TTL.
+func (f *FileService) CreateFileWithExpiry(ctx context.Context, user_id, parent_id, file_name, content_type string, file_data []byte, expires_at *time.Time) (string, error) {
+	return f.createFile(ctx, user_id, parent_id, file_name, content_type, file_data, expires_at)
+}
+
+// createFile is the shared upload core. expiresAt is nil for a normal upload, or
+// a time for a temp/expiring upload.
+func (f *FileService) createFile(ctx context.Context, user_id, parent_id, file_name, content_type string, file_data []byte, expiresAt *time.Time) (string, error) {
 	var err error
 
 	// Validate the file name before it is ever joined to a folder path or used
@@ -149,7 +162,11 @@ func (f *FileService) CreateFile(ctx context.Context, user_id, parent_id, file_n
 	// for this owner, return it instead of storing the bytes again. Scoped to the
 	// target folder, so it never resurrects a trashed duplicate. No new blob is
 	// written and no upload event fires — nothing new was stored.
-	if f.dedup {
+	//
+	// Skipped for temp uploads (expiresAt != nil): a temp file must be its own
+	// object, or it could collapse onto an existing permanent file and later
+	// expire it out from under other references.
+	if f.dedup && expiresAt == nil {
 		if existing, _ := f.repo.FindByHash(ctx, user_id, parentFolder.ID, hash); existing != nil {
 			return existing.ID.String(), nil
 		}
@@ -167,6 +184,7 @@ func (f *FileService) CreateFile(ctx context.Context, user_id, parent_id, file_n
 		Hash:        hash,
 		ContentType: content_type,
 		Size:        fileSize,
+		ExpiresAt:   expiresAt,
 	}
 
 	// Create the file
@@ -694,6 +712,33 @@ func (f *FileService) SetMetadata(ctx context.Context, file_id string, metadata 
 		_ = f.cache.DeleteBucktValue(ctx, file_id)
 	}
 	return nil
+}
+
+// SetExpiry sets (at != nil) or clears (at == nil) a file's automatic-deletion
+// time. The cached copy is invalidated so a later read reflects the change.
+func (f *FileService) SetExpiry(ctx context.Context, file_id string, at *time.Time) error {
+	fileID, err := uuid.Parse(file_id)
+	if err != nil {
+		return fmt.Errorf("invalid id: %w", buckterr.ErrInvalidID)
+	}
+
+	if err := f.repo.SetExpiry(ctx, fileID, at); err != nil {
+		return f.logger.WrapError("failed to set file expiry", err)
+	}
+
+	if f.cache != nil {
+		_ = f.cache.DeleteBucktValue(ctx, file_id)
+	}
+	return nil
+}
+
+// FindExpired returns up to limit files whose expiry is at or before now.
+func (f *FileService) FindExpired(ctx context.Context, now time.Time, limit int) ([]*model.FileModel, error) {
+	files, err := f.repo.FindExpired(ctx, now, limit)
+	if err != nil {
+		return nil, f.logger.WrapError("failed to list expired files", err)
+	}
+	return files, nil
 }
 
 // GetMetadata returns the metadata stored on a file (nil when none is set).

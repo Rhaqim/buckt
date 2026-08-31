@@ -53,6 +53,10 @@ type Client struct {
 
 	fileService   domain.FileService
 	folderService domain.FolderService
+
+	// sweeperStop cancels the optional background expiry sweeper (WithExpirySweeper).
+	// Nil when no sweeper is running. Called by Close.
+	sweeperStop func()
 }
 
 // New initializes a new Buckt client with the provided configuration options.
@@ -155,6 +159,11 @@ func New(conf Config, opts ...ConfigFunc) (*Client, error) {
 		folderService:     folderService,
 	}
 
+	// Optional background expiry sweeper (opt-in via WithExpirySweeper).
+	if conf.ExpirySweepInterval > 0 {
+		buckt.startExpirySweeper(conf.ExpirySweepInterval)
+	}
+
 	bucktLog.Info("✅ Buckt initialized")
 
 	return buckt, nil
@@ -196,6 +205,9 @@ func Default(opts ...ConfigFunc) (*Client, error) {
 // value is source-compatible — existing `defer client.Close()` and
 // `client.Close()` call sites keep working.
 func (b *Client) Close() error {
+	if b.sweeperStop != nil {
+		b.sweeperStop()
+	}
 	b.lruCache.Close()
 	return b.db.Close()
 }
@@ -650,6 +662,54 @@ func (b *Client) UploadFileContext(ctx context.Context, user_id string, parent_i
 	return b.fileService.CreateFile(ctx, user_id, parent_id, file_name, content_type, file_data)
 }
 
+// UploadFileWithTTL uploads a file that will be permanently deleted ttl from now
+// — a "save temp". The expiry is written in the same insert as the file, so
+// there's no window where the file exists without its TTL. A non-positive ttl
+// uploads a normal (non-expiring) file. Temp uploads are never deduplicated, so
+// a temp file is always its own object. Delete happens on a PurgeExpired sweep
+// (call it yourself or use WithExpirySweeper). See also SetFileTTL to add or
+// change a TTL after upload.
+func (b *Client) UploadFileWithTTL(user_id, parent_id, file_name, content_type string, file_data []byte, ttl time.Duration) (string, error) {
+	return b.UploadFileWithTTLContext(context.Background(), user_id, parent_id, file_name, content_type, file_data, ttl)
+}
+
+// UploadFileWithTTLContext is UploadFileWithTTL with an explicit context.
+func (b *Client) UploadFileWithTTLContext(ctx context.Context, user_id, parent_id, file_name, content_type string, file_data []byte, ttl time.Duration) (string, error) {
+	return b.fileService.CreateFileWithExpiry(ctx, user_id, parent_id, file_name, content_type, file_data, ttlToExpiry(ttl))
+}
+
+// UploadFileWithExpiry uploads a file that will be permanently deleted at the
+// given absolute time. The zero time.Time uploads a normal (non-expiring) file.
+// Like UploadFileWithTTL, the expiry is set atomically and the upload is not
+// deduplicated.
+func (b *Client) UploadFileWithExpiry(user_id, parent_id, file_name, content_type string, file_data []byte, at time.Time) (string, error) {
+	return b.UploadFileWithExpiryContext(context.Background(), user_id, parent_id, file_name, content_type, file_data, at)
+}
+
+// UploadFileWithExpiryContext is UploadFileWithExpiry with an explicit context.
+func (b *Client) UploadFileWithExpiryContext(ctx context.Context, user_id, parent_id, file_name, content_type string, file_data []byte, at time.Time) (string, error) {
+	return b.fileService.CreateFileWithExpiry(ctx, user_id, parent_id, file_name, content_type, file_data, timeToExpiry(at))
+}
+
+// ttlToExpiry converts a TTL to an absolute-expiry pointer: nil for a
+// non-positive ttl (no expiry), else now+ttl.
+func ttlToExpiry(ttl time.Duration) *time.Time {
+	if ttl <= 0 {
+		return nil
+	}
+	t := time.Now().Add(ttl)
+	return &t
+}
+
+// timeToExpiry converts an absolute time to an expiry pointer: nil for the zero
+// time (no expiry), else a copy of at.
+func timeToExpiry(at time.Time) *time.Time {
+	if at.IsZero() {
+		return nil
+	}
+	return &at
+}
+
 // UploadFileFromReaderContext uploads a file to the specified user's bucket from an io.Reader.
 //
 // Parameters:
@@ -664,6 +724,19 @@ func (b *Client) UploadFileContext(ctx context.Context, user_id string, parent_i
 //   - string: The ID of the newly created file.
 //   - error: An error if the file upload fails, otherwise nil.
 func (b *Client) UploadFileFromReaderContext(ctx context.Context, user_id string, parent_id string, file_name string, content_type string, file_data io.Reader) (string, error) {
+	return b.uploadFromReader(ctx, user_id, parent_id, file_name, content_type, file_data, nil)
+}
+
+// UploadFileFromReaderWithTTLContext streams a file that will be permanently
+// deleted ttl from now — the streaming form of UploadFileWithTTL. A non-positive
+// ttl uploads a normal (non-expiring) file.
+func (b *Client) UploadFileFromReaderWithTTLContext(ctx context.Context, user_id, parent_id, file_name, content_type string, file_data io.Reader, ttl time.Duration) (string, error) {
+	return b.uploadFromReader(ctx, user_id, parent_id, file_name, content_type, file_data, ttlToExpiry(ttl))
+}
+
+// uploadFromReader is the shared reader-upload core; expiresAt is nil for a
+// normal upload or a time for a temp/expiring upload.
+func (b *Client) uploadFromReader(ctx context.Context, user_id, parent_id, file_name, content_type string, file_data io.Reader, expiresAt *time.Time) (string, error) {
 	// Try to use Seeker for efficiency if available
 	if seeker, ok := file_data.(io.Seeker); ok {
 		fileSize, err := seeker.Seek(0, io.SeekEnd)
@@ -686,7 +759,7 @@ func (b *Client) UploadFileFromReaderContext(ctx context.Context, user_id string
 		if _, err = io.ReadFull(file_data, file_bytes); err != nil {
 			return "", err
 		}
-		return b.fileService.CreateFile(ctx, user_id, parent_id, file_name, content_type, file_bytes)
+		return b.fileService.CreateFileWithExpiry(ctx, user_id, parent_id, file_name, content_type, file_bytes, expiresAt)
 	}
 
 	// Fallback: read with bounded reader for non-seekable streams
@@ -702,7 +775,7 @@ func (b *Client) UploadFileFromReaderContext(ctx context.Context, user_id string
 		return "", fmt.Errorf("file size exceeds maximum allowed size %d bytes", b.maxFileSize)
 	}
 
-	return b.fileService.CreateFile(ctx, user_id, parent_id, file_name, content_type, file_bytes)
+	return b.fileService.CreateFileWithExpiry(ctx, user_id, parent_id, file_name, content_type, file_bytes, expiresAt)
 }
 
 // GetFileContext retrieves a file based on the provided file ID.
@@ -981,6 +1054,106 @@ func (b *Client) MigrationFailures(ctx context.Context) (failed int64, ok bool) 
 	}
 	_, failed, _ = m.MigrationStatus(ctx)
 	return failed, true
+}
+
+/* Expiry */
+
+// SetFileExpiry sets the time at which a file is automatically, permanently
+// deleted by PurgeExpired (and by the optional background sweeper). Passing the
+// zero time.Time clears the expiry, making the file permanent again.
+func (b *Client) SetFileExpiry(file_id string, at time.Time) error {
+	return b.SetFileExpiryContext(context.Background(), file_id, at)
+}
+
+// SetFileExpiryContext is SetFileExpiry with an explicit context.
+func (b *Client) SetFileExpiryContext(ctx context.Context, file_id string, at time.Time) error {
+	if at.IsZero() {
+		return b.fileService.SetExpiry(ctx, file_id, nil)
+	}
+	return b.fileService.SetExpiry(ctx, file_id, &at)
+}
+
+// SetFileTTL sets a file to expire ttl from now — the convenient form for temp
+// files ("delete this in 1h"). A non-positive ttl clears the expiry.
+func (b *Client) SetFileTTL(file_id string, ttl time.Duration) error {
+	return b.SetFileTTLContext(context.Background(), file_id, ttl)
+}
+
+// SetFileTTLContext is SetFileTTL with an explicit context.
+func (b *Client) SetFileTTLContext(ctx context.Context, file_id string, ttl time.Duration) error {
+	if ttl <= 0 {
+		return b.fileService.SetExpiry(ctx, file_id, nil)
+	}
+	return b.SetFileExpiryContext(ctx, file_id, time.Now().Add(ttl))
+}
+
+// PurgeExpired permanently deletes every file whose expiry has passed — blob,
+// image derivatives, and metadata row — emitting a file.uploaded-style
+// file.purged event for each (so event handlers can react). It returns the
+// number purged. Safe to call repeatedly; call it from your own scheduler, or
+// let WithExpirySweeper call it for you.
+//
+// Work is done in batches so a large backlog doesn't load every row at once.
+// A file that fails to purge is logged and left for the next run; if an entire
+// batch fails to make progress, PurgeExpired stops and returns an error rather
+// than spinning.
+func (b *Client) PurgeExpired(ctx context.Context) (purged int, err error) {
+	const batch = 500
+	for {
+		if err := ctx.Err(); err != nil {
+			return purged, err
+		}
+
+		files, ferr := b.fileService.FindExpired(ctx, time.Now(), batch)
+		if ferr != nil {
+			return purged, ferr
+		}
+		if len(files) == 0 {
+			return purged, nil
+		}
+
+		progressed := 0
+		for _, f := range files {
+			if _, derr := b.DeleteFilePermanentlyContext(ctx, f.ID.String()); derr != nil {
+				b.logger.Warn("failed to purge expired file " + f.ID.String() + ": " + derr.Error())
+				continue
+			}
+			purged++
+			progressed++
+		}
+
+		// Every file in this batch failed — stop rather than loop forever over
+		// the same undeletable rows.
+		if progressed == 0 {
+			return purged, fmt.Errorf("failed to purge any of %d expired file(s): %w", len(files), ErrBackendUnavailable)
+		}
+		// A short final batch means there's nothing left to fetch.
+		if len(files) < batch {
+			return purged, nil
+		}
+	}
+}
+
+// startExpirySweeper launches the background ticker started by WithExpirySweeper.
+func (b *Client) startExpirySweeper(interval time.Duration) {
+	ctx, cancel := context.WithCancel(context.Background())
+	b.sweeperStop = cancel
+	go func() {
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				if n, err := b.PurgeExpired(ctx); err != nil {
+					b.logger.Warn("expiry sweep failed: " + err.Error())
+				} else if n > 0 {
+					b.logger.Infof("expiry sweep purged %d file(s)", n)
+				}
+			}
+		}
+	}()
 }
 
 /* Helper Methods */

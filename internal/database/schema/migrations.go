@@ -55,7 +55,23 @@ func migrations() []Migration {
 			Name:    "file-derivatives-bytes",
 			Up:      migrateFileDerivativesBytes,
 		},
+		{
+			Version: 6,
+			Name:    "file-expires-at",
+			Up:      migrateFileExpiresAt,
+		},
 	}
+}
+
+// migrateFileExpiresAt adds the nullable, indexed expires_at column used by the
+// temp-file / expiry feature. Additive and non-destructive: AutoMigrate only
+// ADDs the column (existing rows get NULL = never expires) and its index; on a
+// fresh database V1 already created it.
+func migrateFileExpiresAt(ctx context.Context, tx *gorm.DB, prefix string, d Dialect) error {
+	if err := tx.AutoMigrate(&model.FileModel{}); err != nil {
+		return fmt.Errorf("file expires_at column: %w", err)
+	}
+	return nil
 }
 
 // migrateFileDerivativesBytes adds the derivatives_bytes column (total size of a

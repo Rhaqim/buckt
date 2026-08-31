@@ -226,6 +226,12 @@ type Config struct {
 	// scanning with zero overhead.
 	Scanner scan.Scanner
 
+	// ExpirySweepInterval, when > 0, starts a background ticker that calls
+	// PurgeExpired on this interval to delete files past their ExpiresAt. 0 (the
+	// default) leaves expiry app-driven — set file expiries and call PurgeExpired
+	// from your own scheduler. Configure with WithExpirySweeper.
+	ExpirySweepInterval time.Duration
+
 	// Derivatives defines the resized image variants GenerateDerivatives will
 	// produce. Empty (the default) disables the feature. Configure with
 	// WithImageDerivatives.
@@ -458,6 +464,20 @@ func WithEventHandler(h events.Handler) ConfigFunc {
 func WithUploadScanner(s scan.Scanner) ConfigFunc {
 	return func(c *Config) {
 		c.Scanner = s
+	}
+}
+
+// WithExpirySweeper runs a background goroutine that calls PurgeExpired every
+// interval, permanently deleting files whose expiry (see SetFileExpiry /
+// SetFileTTL) has passed. The sweeper is stopped by Client.Close.
+//
+// This is a convenience for single-instance deployments. Leave it unset (and
+// call PurgeExpired from your own cron/worker) when you'd rather control the
+// cadence yourself or run one sweeper across a multi-instance deployment. A
+// non-positive interval disables it (the default).
+func WithExpirySweeper(interval time.Duration) ConfigFunc {
+	return func(c *Config) {
+		c.ExpirySweepInterval = interval
 	}
 }
 

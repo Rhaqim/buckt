@@ -125,6 +125,8 @@ func (r *Router) registerAPIRoutes() {
 			r.GET("/download/:file_id", r.APIService.DownloadFile)
 			r.DELETE("/delete/:file_id", r.APIService.DeleteFile)
 			r.DELETE("/scrub/:file_id", r.APIService.DeleteFilePermanently)
+			r.PUT("/expiry/:file_id", r.APIService.SetExpiry)
+			r.POST("/purge-expired", r.APIService.PurgeExpired)
 		}
 
 		{
@@ -163,6 +165,8 @@ func (r *Router) registerWebRoutes() {
 			web.POST("/regenerate-derivatives/:file_id", r.WebService.RegenerateDerivatives)
 			web.GET("/file/:file_id", r.WebService.DownloadFile)
 			web.POST("/move-file/:file_id", r.WebService.MoveFile)
+			web.POST("/set-ttl/:file_id", r.WebService.SetTTL)
+			web.POST("/purge-expired", r.WebService.PurgeExpired)
 			web.DELETE("/file/:file_id", r.WebService.DeleteFile)
 			web.DELETE("/scrub/:file_id", r.WebService.DeleteFilePermanently)
 		}

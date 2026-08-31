@@ -258,7 +258,7 @@ func TestMigration_ConcurrentCopiesEachFileOnce(t *testing.T) {
 	c1, err := New(Config{DB: DBConfig{Driver: SQLite, Database: db1}, MediaDir: mediaDir, Log: LogConfig{Silence: true}})
 	require.NoError(t, err)
 	for i := 0; i < nFiles; i++ {
-		_, err := c1.UploadFile(user, "", fmt.Sprintf("file-%02d.txt", i), "text/plain", []byte(fmt.Sprintf("data-%02d", i)))
+		_, err := c1.UploadFile(user, "", fmt.Sprintf("file-%02d.txt", i), "text/plain", fmt.Appendf(nil, "data-%02d", i))
 		require.NoError(t, err)
 	}
 	require.NoError(t, c1.Close())

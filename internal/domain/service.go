@@ -3,6 +3,7 @@ package domain
 import (
 	"context"
 	"io"
+	"time"
 
 	"github.com/Rhaqim/buckt/internal/model"
 )
@@ -22,6 +23,8 @@ type FolderService interface {
 
 type FileService interface {
 	CreateFile(ctx context.Context, user_id, parent_id, file_name, content_type string, file_data []byte) (string, error)
+	// CreateFileWithExpiry is CreateFile that also stamps an expiry in the same insert.
+	CreateFileWithExpiry(ctx context.Context, user_id, parent_id, file_name, content_type string, file_data []byte, expires_at *time.Time) (string, error)
 	GetFile(ctx context.Context, file_id string) (*model.FileModel, error)
 	GetFileStream(ctx context.Context, file_id string) (*model.FileModel, io.ReadCloser, error)
 	GetFiles(ctx context.Context, parent_id string) ([]model.FileModel, error)
@@ -34,4 +37,8 @@ type FileService interface {
 	ScrubFile(ctx context.Context, file_id string) (string, error)
 	SetMetadata(ctx context.Context, file_id string, metadata map[string]string) error
 	GetMetadata(ctx context.Context, file_id string) (map[string]string, error)
+	// SetExpiry sets (or, with a nil time, clears) a file's automatic-deletion time.
+	SetExpiry(ctx context.Context, file_id string, at *time.Time) error
+	// FindExpired returns up to limit files whose expiry is at or before now.
+	FindExpired(ctx context.Context, now time.Time, limit int) ([]*model.FileModel, error)
 }

@@ -34,9 +34,13 @@
 			</div>
 		{{ end }}
 	</div>
+	{{ if .ExpiresAt }}
+	<span class="absolute top-2 left-2 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-500/90 text-white shadow" style="z-index:30;" title="Expires {{ .ExpiresAt.Format "Jan 02, 2006 15:04" }}">⏳ expires</span>
+	{{ end }}
 	<div class="p-3 min-w-0">
 		<p class="name text-sm font-medium truncate" title="{{ .Name }}">{{ .Name }}</p>
 		<p class="text-xs text-slate-400 mt-0.5">{{ formatSize .Size }} &middot; {{ .CreatedAt.Format "Jan 02, 2006" }}</p>
+		{{ if .ExpiresAt }}<p class="text-xs text-amber-600 dark:text-amber-400 mt-0.5">Expires {{ .ExpiresAt.Format "Jan 02, 15:04" }}</p>{{ end }}
 	</div>
 	<div class="absolute top-2 right-2 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity" style="z-index:30;">
 		<button type="button" class="menu-trigger p-1.5 rounded-md bg-black/40 hover:bg-black/60 text-white" data-menu="file-menu-{{ .ID }}" aria-label="File actions">
@@ -47,6 +51,16 @@
 			<button type="button" class="action-move w-full text-left px-3 py-2 text-sm hover:bg-slate-50 dark:hover:bg-slate-700" data-type="file" data-id="{{ .ID }}">Move</button>
 			{{ if hasPrefix .ContentType "image/" }}
 			<button type="button" class="action-regenerate w-full text-left px-3 py-2 text-sm hover:bg-slate-50 dark:hover:bg-slate-700" data-id="{{ .ID }}">Regenerate previews</button>
+			{{ end }}
+			<hr class="my-1 border-slate-200 dark:border-slate-700">
+			<p class="px-3 pt-1 pb-0.5 text-[10px] uppercase tracking-wide text-slate-400">Expire in</p>
+			<div class="flex gap-1 px-3 pb-1">
+				<button type="button" hx-post="/web/set-ttl/{{ .ID }}" hx-vals='{"ttl":"1h"}' hx-swap="none" class="flex-1 px-2 py-1 text-xs rounded bg-amber-50 text-amber-700 hover:bg-amber-100 dark:bg-amber-950/40 dark:text-amber-300">1h</button>
+				<button type="button" hx-post="/web/set-ttl/{{ .ID }}" hx-vals='{"ttl":"24h"}' hx-swap="none" class="flex-1 px-2 py-1 text-xs rounded bg-amber-50 text-amber-700 hover:bg-amber-100 dark:bg-amber-950/40 dark:text-amber-300">24h</button>
+				<button type="button" hx-post="/web/set-ttl/{{ .ID }}" hx-vals='{"ttl":"168h"}' hx-swap="none" class="flex-1 px-2 py-1 text-xs rounded bg-amber-50 text-amber-700 hover:bg-amber-100 dark:bg-amber-950/40 dark:text-amber-300">7d</button>
+			</div>
+			{{ if .ExpiresAt }}
+			<button type="button" hx-post="/web/set-ttl/{{ .ID }}" hx-vals='{"ttl":"clear"}' hx-swap="none" class="w-full text-left px-3 py-2 text-sm hover:bg-slate-50 dark:hover:bg-slate-700">Clear expiry</button>
 			{{ end }}
 			<hr class="my-1 border-slate-200 dark:border-slate-700">
 			<button type="button" hx-delete="/web/file/{{ .ID }}" hx-target="#file-{{ .ID }}" hx-swap="outerHTML" hx-confirm="Move this file to trash?" class="w-full text-left px-3 py-2 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40">Move to Trash</button>

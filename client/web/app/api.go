@@ -3,6 +3,7 @@ package app
 import (
 	"fmt"
 	"io"
+	"time"
 
 	"github.com/Rhaqim/buckt"
 	"github.com/Rhaqim/buckt/client/web/domain"
@@ -288,7 +289,25 @@ func (svc *APIService) UploadFile(c *gin.Context) {
 		return
 	}
 
-	fileID, err := svc.client.UploadFile(user_id, parentID, fileName, file.Header.Get("Content-Type"), fileByte)
+	// Optional ttl (a Go duration like "24h") uploads a temp file that expires —
+	// the expiry is set in the same insert (a "save temp").
+	ttlStr := c.PostForm("ttl")
+	if ttlStr == "" {
+		ttlStr = c.Query("ttl")
+	}
+
+	contentType := file.Header.Get("Content-Type")
+	var fileID string
+	if ttlStr != "" {
+		ttl, perr := time.ParseDuration(ttlStr)
+		if perr != nil {
+			c.AbortWithStatusJSON(400, response.Error("invalid ttl (use a Go duration like 24h)", perr.Error()))
+			return
+		}
+		fileID, err = svc.client.UploadFileWithTTLContext(c.Request.Context(), user_id, parentID, fileName, contentType, fileByte, ttl)
+	} else {
+		fileID, err = svc.client.UploadFile(user_id, parentID, fileName, contentType, fileByte)
+	}
 	if err != nil {
 		abort500(c, "failed to create file", err)
 		return
@@ -510,6 +529,64 @@ func (svc *APIService) DeleteFilePermanently(c *gin.Context) {
 	}
 
 	c.JSON(200, response.Success("file deleted"))
+}
+
+// SetExpiry sets (or clears) a file's automatic-deletion time. It accepts either
+// a `ttl` (a Go duration like "24h" or "30m"; "0"/empty clears) or an absolute
+// `at` (RFC3339). Body values may be form-encoded or query params.
+func (svc *APIService) SetExpiry(c *gin.Context) {
+	fileID, ok := requireParam(c, "file_id")
+	if !ok {
+		return
+	}
+
+	// Prefer ttl (the temp-file ergonomic); fall back to an absolute time.
+	if ttlStr := c.PostForm("ttl"); ttlStr != "" || c.Query("ttl") != "" {
+		if ttlStr == "" {
+			ttlStr = c.Query("ttl")
+		}
+		ttl, err := time.ParseDuration(ttlStr)
+		if err != nil {
+			c.AbortWithStatusJSON(400, response.Error("invalid ttl (use a Go duration like 24h)", err.Error()))
+			return
+		}
+		if err := svc.client.SetFileTTLContext(c.Request.Context(), fileID, ttl); err != nil {
+			abort500(c, "failed to set expiry", err)
+			return
+		}
+		c.JSON(200, response.Success("expiry set"))
+		return
+	}
+
+	atStr := c.PostForm("at")
+	if atStr == "" {
+		atStr = c.Query("at")
+	}
+	if atStr == "" {
+		c.AbortWithStatusJSON(400, response.Error("provide a ttl (e.g. 24h) or an absolute at (RFC3339)", ""))
+		return
+	}
+	at, err := time.Parse(time.RFC3339, atStr)
+	if err != nil {
+		c.AbortWithStatusJSON(400, response.Error("invalid at (use RFC3339)", err.Error()))
+		return
+	}
+	if err := svc.client.SetFileExpiryContext(c.Request.Context(), fileID, at); err != nil {
+		abort500(c, "failed to set expiry", err)
+		return
+	}
+	c.JSON(200, response.Success("expiry set"))
+}
+
+// PurgeExpired permanently deletes every file whose expiry has passed and
+// reports how many were removed.
+func (svc *APIService) PurgeExpired(c *gin.Context) {
+	n, err := svc.client.PurgeExpired(c.Request.Context())
+	if err != nil {
+		abort500(c, "failed to purge expired files", err)
+		return
+	}
+	c.JSON(200, gin.H{"status": "success", "purged": n})
 }
 
 /* Helper functions */
