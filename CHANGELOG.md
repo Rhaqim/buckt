@@ -3,7 +3,7 @@
 All notable changes to buckt are documented here. This project follows
 [Semantic Versioning](https://semver.org/).
 
-## [1.10.0] — unreleased
+## [1.9.2] — unreleased
 
 A backward-compatible **minor** release adding presigned (direct-download) URLs.
 Additive; no API removals.
