@@ -3,6 +3,7 @@ package mocks
 import (
 	"context"
 	"io"
+	"time"
 
 	"github.com/Rhaqim/buckt/internal/domain"
 	"github.com/Rhaqim/buckt/internal/model"
@@ -87,6 +88,19 @@ func (m *FileService) RestoreFile(ctx context.Context, user_id, file_id string) 
 func (m *FileService) SetMetadata(ctx context.Context, file_id string, metadata map[string]string) error {
 	args := m.Called(file_id, metadata)
 	return args.Error(0)
+}
+
+// SetExpiry implements domain.FileService.
+func (m *FileService) SetExpiry(ctx context.Context, file_id string, at *time.Time) error {
+	args := m.Called(file_id, at)
+	return args.Error(0)
+}
+
+// FindExpired implements domain.FileService.
+func (m *FileService) FindExpired(ctx context.Context, now time.Time, limit int) ([]*model.FileModel, error) {
+	args := m.Called(now, limit)
+	files, _ := args.Get(0).([]*model.FileModel)
+	return files, args.Error(1)
 }
 
 // GetMetadata implements domain.FileService.

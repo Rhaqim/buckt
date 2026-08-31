@@ -3,6 +3,7 @@ package domain
 import (
 	"context"
 	"io"
+	"time"
 
 	"github.com/Rhaqim/buckt/internal/model"
 )
@@ -34,4 +35,8 @@ type FileService interface {
 	ScrubFile(ctx context.Context, file_id string) (string, error)
 	SetMetadata(ctx context.Context, file_id string, metadata map[string]string) error
 	GetMetadata(ctx context.Context, file_id string) (map[string]string, error)
+	// SetExpiry sets (or, with a nil time, clears) a file's automatic-deletion time.
+	SetExpiry(ctx context.Context, file_id string, at *time.Time) error
+	// FindExpired returns up to limit files whose expiry is at or before now.
+	FindExpired(ctx context.Context, now time.Time, limit int) ([]*model.FileModel, error)
 }

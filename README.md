@@ -91,6 +91,7 @@ In fact, Buckt can use MinIO as its storage backend, allowing you to combine Min
   - [Lifecycle Events](#lifecycle-events)
   - [Upload Scanning](#upload-scanning)
   - [Metrics](#metrics)
+  - [Expiring / Temp Files](#expiring--temp-files)
   - [Trash \& Deletion](#trash--deletion)
   - [Web Client](#web-client)
     - [Modes](#modes)
@@ -120,6 +121,7 @@ In fact, Buckt can use MinIO as its storage backend, allowing you to combine Min
 | 🛡️ **Upload Scanning** | Pluggable pre-write hook to reject malware/disallowed files before they're stored |
 | 🧬 **Content Dedup** | Collapse identical uploads in a folder to a single stored blob |
 | 🏷️ **File Metadata** | Attach arbitrary key/value metadata to any file |
+| ⏳ **Expiring / Temp Files** | Give a file a TTL; an app-driven or background sweep permanently deletes it when due |
 | 📊 **Metrics** | Per-backend operation counters (count, errors, bytes, latency) via a pluggable recorder |
 | 🗑️ **Trash & Restore** | Soft-delete moves items to a per-user trash folder, hard-delete is one click away |
 | 🌐 **Web UI** | Optional Gin-based dashboard with drag-and-drop, breadcrumbs, and previews |
@@ -230,6 +232,7 @@ Or with options:
 | `WithUploadScanner(scan.Scanner)` | Reject uploads before they're stored — see [Upload Scanning](#upload-scanning) |
 | `WithDedup()` | Collapse identical uploads in a folder to one blob — see [Deduplication](#deduplication) |
 | `WithMetrics(metrics.Recorder)` | Record per-backend operation metrics — see [Metrics](#metrics) |
+| `WithExpirySweeper(time.Duration)` | Run a background ticker that purges expired files — see [Expiring / Temp Files](#expiring--temp-files) |
 | `WithMaxFileSize(int64)` | Reject uploads larger than the limit (0 = no limit) |
 | `WithMaxTrashBatchSize(int)` | Cap descendant files moved in a single folder delete |
 | `WithBackendOpTimeout(time.Duration)` | Bound backend I/O time during a delete (negative = disable) |
@@ -583,6 +586,39 @@ Each `metrics.Stat` holds `Count`, `Errors`, `Bytes`, and `TotalDur` (divide by 
 
 ---
 
+## Expiring / Temp Files
+
+Give a file a TTL and buckt will permanently delete it — blob, image derivatives, and metadata row — once it's due. Ideal for temp uploads, one-time shares, and scratch files.
+
+```go
+  fileID, _ := client.UploadFile("user123", "", "share.zip", "application/zip", data)
+
+  client.SetFileTTL(fileID, 24*time.Hour)        // expire 24h from now
+  // or an absolute time:
+  client.SetFileExpiry(fileID, someTime)         // pass the zero time.Time to clear it
+```
+
+Expiry isn't automatic on its own — a **sweep** does the deleting, and you choose who drives it:
+
+**App-driven (recommended for control / multi-instance):** call `PurgeExpired` from your own cron/worker.
+
+```go
+  purged, err := client.PurgeExpired(ctx) // permanently deletes everything past due; returns the count
+```
+
+**Built-in background sweeper (convenient for single-instance):** let buckt run the ticker for you.
+
+```go
+  client, _ := buckt.Default(buckt.WithExpirySweeper(10 * time.Minute))
+  // buckt now calls PurgeExpired every 10 minutes; Client.Close() stops it.
+```
+
+Each expiry deletion emits a `file.purged` [event](#lifecycle-events), so you can hook post-deletion behaviour (audit log, notify, etc.). `PurgeExpired` works in batches and is safe to call repeatedly.
+
+> **Beyond deletion:** because expiry rides on the events system, it's the first step toward general *scheduled actions* ("after 24h, email this file"). The delete action is built in; a future release can add app-registered actions on the same sweep. Ask if you need that now.
+
+---
+
 ## Trash & Deletion
 
 Buckt has two delete modes:
@@ -769,6 +805,11 @@ DeleteFilePermanently(fileID string) (string, error)   // → hard delete
 // Metadata
 SetFileMetadata(fileID string, metadata map[string]string) error
 GetFileMetadata(fileID string) (map[string]string, error)
+
+// Expiry / temp files
+SetFileTTL(fileID string, ttl time.Duration) error       // expire ttl from now
+SetFileExpiry(fileID string, at time.Time) error         // absolute; zero time clears
+PurgeExpired(ctx context.Context) (purged int, err error) // delete everything past due
 
 // Image derivatives
 GenerateDerivatives(fileID string) error

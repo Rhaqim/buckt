@@ -53,6 +53,10 @@ type Client struct {
 
 	fileService   domain.FileService
 	folderService domain.FolderService
+
+	// sweeperStop cancels the optional background expiry sweeper (WithExpirySweeper).
+	// Nil when no sweeper is running. Called by Close.
+	sweeperStop func()
 }
 
 // New initializes a new Buckt client with the provided configuration options.
@@ -155,6 +159,11 @@ func New(conf Config, opts ...ConfigFunc) (*Client, error) {
 		folderService:     folderService,
 	}
 
+	// Optional background expiry sweeper (opt-in via WithExpirySweeper).
+	if conf.ExpirySweepInterval > 0 {
+		buckt.startExpirySweeper(conf.ExpirySweepInterval)
+	}
+
 	bucktLog.Info("✅ Buckt initialized")
 
 	return buckt, nil
@@ -196,6 +205,9 @@ func Default(opts ...ConfigFunc) (*Client, error) {
 // value is source-compatible — existing `defer client.Close()` and
 // `client.Close()` call sites keep working.
 func (b *Client) Close() error {
+	if b.sweeperStop != nil {
+		b.sweeperStop()
+	}
 	b.lruCache.Close()
 	return b.db.Close()
 }
@@ -981,6 +993,106 @@ func (b *Client) MigrationFailures(ctx context.Context) (failed int64, ok bool) 
 	}
 	_, failed, _ = m.MigrationStatus(ctx)
 	return failed, true
+}
+
+/* Expiry */
+
+// SetFileExpiry sets the time at which a file is automatically, permanently
+// deleted by PurgeExpired (and by the optional background sweeper). Passing the
+// zero time.Time clears the expiry, making the file permanent again.
+func (b *Client) SetFileExpiry(file_id string, at time.Time) error {
+	return b.SetFileExpiryContext(context.Background(), file_id, at)
+}
+
+// SetFileExpiryContext is SetFileExpiry with an explicit context.
+func (b *Client) SetFileExpiryContext(ctx context.Context, file_id string, at time.Time) error {
+	if at.IsZero() {
+		return b.fileService.SetExpiry(ctx, file_id, nil)
+	}
+	return b.fileService.SetExpiry(ctx, file_id, &at)
+}
+
+// SetFileTTL sets a file to expire ttl from now — the convenient form for temp
+// files ("delete this in 1h"). A non-positive ttl clears the expiry.
+func (b *Client) SetFileTTL(file_id string, ttl time.Duration) error {
+	return b.SetFileTTLContext(context.Background(), file_id, ttl)
+}
+
+// SetFileTTLContext is SetFileTTL with an explicit context.
+func (b *Client) SetFileTTLContext(ctx context.Context, file_id string, ttl time.Duration) error {
+	if ttl <= 0 {
+		return b.fileService.SetExpiry(ctx, file_id, nil)
+	}
+	return b.SetFileExpiryContext(ctx, file_id, time.Now().Add(ttl))
+}
+
+// PurgeExpired permanently deletes every file whose expiry has passed — blob,
+// image derivatives, and metadata row — emitting a file.uploaded-style
+// file.purged event for each (so event handlers can react). It returns the
+// number purged. Safe to call repeatedly; call it from your own scheduler, or
+// let WithExpirySweeper call it for you.
+//
+// Work is done in batches so a large backlog doesn't load every row at once.
+// A file that fails to purge is logged and left for the next run; if an entire
+// batch fails to make progress, PurgeExpired stops and returns an error rather
+// than spinning.
+func (b *Client) PurgeExpired(ctx context.Context) (purged int, err error) {
+	const batch = 500
+	for {
+		if err := ctx.Err(); err != nil {
+			return purged, err
+		}
+
+		files, ferr := b.fileService.FindExpired(ctx, time.Now(), batch)
+		if ferr != nil {
+			return purged, ferr
+		}
+		if len(files) == 0 {
+			return purged, nil
+		}
+
+		progressed := 0
+		for _, f := range files {
+			if _, derr := b.DeleteFilePermanentlyContext(ctx, f.ID.String()); derr != nil {
+				b.logger.Warn("failed to purge expired file " + f.ID.String() + ": " + derr.Error())
+				continue
+			}
+			purged++
+			progressed++
+		}
+
+		// Every file in this batch failed — stop rather than loop forever over
+		// the same undeletable rows.
+		if progressed == 0 {
+			return purged, fmt.Errorf("failed to purge any of %d expired file(s): %w", len(files), ErrBackendUnavailable)
+		}
+		// A short final batch means there's nothing left to fetch.
+		if len(files) < batch {
+			return purged, nil
+		}
+	}
+}
+
+// startExpirySweeper launches the background ticker started by WithExpirySweeper.
+func (b *Client) startExpirySweeper(interval time.Duration) {
+	ctx, cancel := context.WithCancel(context.Background())
+	b.sweeperStop = cancel
+	go func() {
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				if n, err := b.PurgeExpired(ctx); err != nil {
+					b.logger.Warn("expiry sweep failed: " + err.Error())
+				} else if n > 0 {
+					b.logger.Infof("expiry sweep purged %d file(s)", n)
+				}
+			}
+		}
+	}()
 }
 
 /* Helper Methods */

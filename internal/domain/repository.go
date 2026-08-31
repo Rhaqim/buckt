@@ -2,6 +2,7 @@ package domain
 
 import (
 	"context"
+	"time"
 
 	"github.com/Rhaqim/buckt/internal/model"
 	"github.com/google/uuid"
@@ -36,4 +37,8 @@ type FileRepository interface {
 	RestoreFile(ctx context.Context, id, target uuid.UUID, beforeCommit func(oldPath, newPath string) error) (oldPath, newPath string, err error)
 	ScrubFile(ctx context.Context, id uuid.UUID) error
 	SetMetadata(ctx context.Context, id uuid.UUID, metadata map[string]string) error
+	// SetExpiry sets (or, with a nil time, clears) the file's expiry.
+	SetExpiry(ctx context.Context, id uuid.UUID, at *time.Time) error
+	// FindExpired returns up to limit files whose expiry is at or before now.
+	FindExpired(ctx context.Context, now time.Time, limit int) ([]*model.FileModel, error)
 }

@@ -696,6 +696,33 @@ func (f *FileService) SetMetadata(ctx context.Context, file_id string, metadata 
 	return nil
 }
 
+// SetExpiry sets (at != nil) or clears (at == nil) a file's automatic-deletion
+// time. The cached copy is invalidated so a later read reflects the change.
+func (f *FileService) SetExpiry(ctx context.Context, file_id string, at *time.Time) error {
+	fileID, err := uuid.Parse(file_id)
+	if err != nil {
+		return fmt.Errorf("invalid id: %w", buckterr.ErrInvalidID)
+	}
+
+	if err := f.repo.SetExpiry(ctx, fileID, at); err != nil {
+		return f.logger.WrapError("failed to set file expiry", err)
+	}
+
+	if f.cache != nil {
+		_ = f.cache.DeleteBucktValue(ctx, file_id)
+	}
+	return nil
+}
+
+// FindExpired returns up to limit files whose expiry is at or before now.
+func (f *FileService) FindExpired(ctx context.Context, now time.Time, limit int) ([]*model.FileModel, error) {
+	files, err := f.repo.FindExpired(ctx, now, limit)
+	if err != nil {
+		return nil, f.logger.WrapError("failed to list expired files", err)
+	}
+	return files, nil
+}
+
 // GetMetadata returns the metadata stored on a file (nil when none is set).
 func (f *FileService) GetMetadata(ctx context.Context, file_id string) (map[string]string, error) {
 	fileID, err := uuid.Parse(file_id)

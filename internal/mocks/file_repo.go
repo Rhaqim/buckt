@@ -2,6 +2,7 @@ package mocks
 
 import (
 	"context"
+	"time"
 
 	"github.com/Rhaqim/buckt/internal/domain"
 	"github.com/Rhaqim/buckt/internal/model"
@@ -103,6 +104,17 @@ func (m *FileRepository) FindByHash(ctx context.Context, user_id string, parent_
 func (m *FileRepository) SetMetadata(ctx context.Context, id uuid.UUID, metadata map[string]string) error {
 	args := m.Called(id, metadata)
 	return args.Error(0)
+}
+
+func (m *FileRepository) SetExpiry(ctx context.Context, id uuid.UUID, at *time.Time) error {
+	args := m.Called(id, at)
+	return args.Error(0)
+}
+
+func (m *FileRepository) FindExpired(ctx context.Context, now time.Time, limit int) ([]*model.FileModel, error) {
+	args := m.Called(now, limit)
+	files, _ := args.Get(0).([]*model.FileModel)
+	return files, args.Error(1)
 }
 
 func (m *FileRepository) ScrubFile(ctx context.Context, fileID uuid.UUID) error {
