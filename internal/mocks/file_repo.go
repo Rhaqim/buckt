@@ -117,6 +117,12 @@ func (m *FileRepository) FindExpired(ctx context.Context, now time.Time, limit i
 	return files, args.Error(1)
 }
 
+func (m *FileRepository) FinalizeUpload(ctx context.Context, id uuid.UUID, size int64) (*model.FileModel, error) {
+	args := m.Called(id, size)
+	f, _ := args.Get(0).(*model.FileModel)
+	return f, args.Error(1)
+}
+
 func (m *FileRepository) ScrubFile(ctx context.Context, fileID uuid.UUID) error {
 	args := m.Called(fileID)
 	return args.Error(0)

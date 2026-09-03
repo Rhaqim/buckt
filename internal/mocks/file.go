@@ -108,6 +108,18 @@ func (m *FileService) FindExpired(ctx context.Context, now time.Time, limit int)
 	return files, args.Error(1)
 }
 
+// CreatePendingUpload implements domain.FileService.
+func (m *FileService) CreatePendingUpload(ctx context.Context, user_id, parent_id, file_name, content_type string) (string, string, error) {
+	args := m.Called(user_id, parent_id, file_name, content_type)
+	return args.String(0), args.String(1), args.Error(2)
+}
+
+// FinalizeUpload implements domain.FileService.
+func (m *FileService) FinalizeUpload(ctx context.Context, file_id string, size int64) (string, error) {
+	args := m.Called(file_id, size)
+	return args.String(0), args.Error(1)
+}
+
 // GetMetadata implements domain.FileService.
 func (m *FileService) GetMetadata(ctx context.Context, file_id string) (map[string]string, error) {
 	args := m.Called(file_id)

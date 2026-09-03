@@ -122,7 +122,10 @@ func (r *Router) registerAPIRoutes() {
 		r.Use(r.APIGuardMiddleware())
 		{
 			r.POST("/upload", r.APIService.UploadFile)
+			r.POST("/upload/presign", r.APIService.PresignUpload)
+			r.POST("/upload/finalize", r.APIService.FinalizeUpload)
 			r.GET("/download/:file_id", r.APIService.DownloadFile)
+			r.GET("/presign/:file_id", r.APIService.Presign)
 			r.DELETE("/delete/:file_id", r.APIService.DeleteFile)
 			r.DELETE("/scrub/:file_id", r.APIService.DeleteFilePermanently)
 			r.PUT("/expiry/:file_id", r.APIService.SetExpiry)

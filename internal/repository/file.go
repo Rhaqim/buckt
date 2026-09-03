@@ -35,19 +35,21 @@ func (f *FileRepository) GetFile(ctx context.Context, id uuid.UUID) (*model.File
 	return &file, asNotFound(err, "file not found")
 }
 
-// GetFiles implements domain.FileRepository.
+// GetFiles implements domain.FileRepository. Pending files (a presigned upload
+// that hasn't been finalized) are excluded — their bytes may not be stored yet.
 func (f *FileRepository) GetFiles(ctx context.Context, parent_id uuid.UUID) ([]*model.FileModel, error) {
 	var files []*model.FileModel
-	err := f.db.DB.WithContext(ctx).Where("parent_id = ?", parent_id).Find(&files).Error
+	err := f.db.DB.WithContext(ctx).Where("parent_id = ? AND pending = ?", parent_id, false).Find(&files).Error
 	return files, err
 }
 
-// GetFilesPaginated implements domain.FileRepository.
+// GetFilesPaginated implements domain.FileRepository. Pending files are excluded
+// (see GetFiles).
 func (f *FileRepository) GetFilesPaginated(ctx context.Context, parent_id uuid.UUID, page model.Pagination) ([]*model.FileModel, error) {
 	page.Validate()
 	var files []*model.FileModel
 	err := f.db.DB.WithContext(ctx).
-		Where("parent_id = ?", parent_id).
+		Where("parent_id = ? AND pending = ?", parent_id, false).
 		Offset(page.Offset()).
 		Limit(page.PageSize).
 		Order("created_at DESC").
@@ -337,6 +339,22 @@ func (f *FileRepository) SetExpiry(ctx context.Context, id uuid.UUID, at *time.T
 	}
 	file.ExpiresAt = at
 	return f.db.DB.WithContext(ctx).Model(&file).Select("ExpiresAt").Updates(file).Error
+}
+
+// FinalizeUpload marks a pending presigned-upload row complete: it clears the
+// pending flag and records the final size. Returns the (now-finalized) file so
+// callers can emit an upload event.
+func (f *FileRepository) FinalizeUpload(ctx context.Context, id uuid.UUID, size int64) (*model.FileModel, error) {
+	var file model.FileModel
+	if err := f.db.DB.WithContext(ctx).First(&file, id).Error; err != nil {
+		return nil, asNotFound(err, "file not found")
+	}
+	file.Pending = false
+	file.Size = size
+	if err := f.db.DB.WithContext(ctx).Model(&file).Select("Pending", "Size").Updates(file).Error; err != nil {
+		return nil, err
+	}
+	return &file, nil
 }
 
 // FindExpired returns up to limit files whose expires_at is set and at or before

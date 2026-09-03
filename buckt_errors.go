@@ -21,4 +21,5 @@ var (
 	ErrTrashBatchExceeded = buckterr.ErrTrashBatchExceeded
 	ErrBackendUnavailable = buckterr.ErrBackendUnavailable
 	ErrUploadRejected     = buckterr.ErrUploadRejected
+	ErrUnsupported        = buckterr.ErrUnsupported
 )

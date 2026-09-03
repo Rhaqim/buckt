@@ -60,7 +60,23 @@ func migrations() []Migration {
 			Name:    "file-expires-at",
 			Up:      migrateFileExpiresAt,
 		},
+		{
+			Version: 7,
+			Name:    "file-pending",
+			Up:      migrateFilePending,
+		},
 	}
+}
+
+// migrateFilePending adds the pending column used by presigned direct uploads
+// (the metadata row exists before the bytes land). Additive and non-destructive:
+// AutoMigrate only ADDs the column with a false default; existing rows become
+// non-pending (correct — they already have their bytes).
+func migrateFilePending(ctx context.Context, tx *gorm.DB, prefix string, d Dialect) error {
+	if err := tx.AutoMigrate(&model.FileModel{}); err != nil {
+		return fmt.Errorf("file pending column: %w", err)
+	}
+	return nil
 }
 
 // migrateFileExpiresAt adds the nullable, indexed expires_at column used by the

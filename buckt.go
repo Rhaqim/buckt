@@ -1156,6 +1156,97 @@ func (b *Client) startExpirySweeper(interval time.Duration) {
 	}()
 }
 
+/* Presigned URLs */
+
+// PresignedURL returns a time-limited URL that downloads the file's bytes
+// directly from the storage backend, so reads bypass this process entirely —
+// ideal for serving media (hand the URL to a browser/CDN instead of streaming
+// through your server). Valid for ttl.
+//
+// Only cloud backends can presign. With the local filesystem backend, or while
+// a migration is in progress, this returns ErrUnsupported. The URL grants access
+// for its whole lifetime regardless of buckt's own auth, so keep ttl short.
+func (b *Client) PresignedURL(file_id string, ttl time.Duration) (string, error) {
+	return b.PresignedURLContext(context.Background(), file_id, ttl)
+}
+
+// PresignedURLContext is PresignedURL with an explicit context.
+func (b *Client) PresignedURLContext(ctx context.Context, file_id string, ttl time.Duration) (string, error) {
+	p, ok := b.backend.(domain.PresignBackend)
+	if !ok {
+		return "", fmt.Errorf("backend %q does not support presigned URLs: %w", b.backend.Name(), ErrUnsupported)
+	}
+	file, err := b.fileService.GetFile(ctx, file_id)
+	if err != nil {
+		return "", err
+	}
+	return p.PresignGetURL(ctx, file.Path, ttl)
+}
+
+// PresignedDerivativeURL returns a time-limited direct-download URL for a
+// generated image derivative (e.g. "thumbnail"), valid for ttl. Like
+// PresignedURL it needs a cloud backend (else ErrUnsupported); the URL 404s if
+// the derivative hasn't been generated. See GenerateDerivatives.
+func (b *Client) PresignedDerivativeURL(file_id, name string, ttl time.Duration) (string, error) {
+	return b.PresignedDerivativeURLContext(context.Background(), file_id, name, ttl)
+}
+
+// PresignedDerivativeURLContext is PresignedDerivativeURL with an explicit context.
+func (b *Client) PresignedDerivativeURLContext(ctx context.Context, file_id, name string, ttl time.Duration) (string, error) {
+	p, ok := b.backend.(domain.PresignBackend)
+	if !ok {
+		return "", fmt.Errorf("backend %q does not support presigned URLs: %w", b.backend.Name(), ErrUnsupported)
+	}
+	return p.PresignGetURL(ctx, derivativeKey(file_id, name), ttl)
+}
+
+/* Direct (presigned) uploads — register / confirm */
+
+// PresignUpload reserves a file and returns its stable ID plus a presigned PUT
+// URL the client uploads the bytes to **directly** (bypassing this process on
+// the write path). The file ID is valid immediately for your app's tracking,
+// but the file stays hidden from listings until you call FinalizeUpload once the
+// client's upload finishes.
+//
+// Because buckt never sees the bytes on this path, the upload is NOT
+// deduplicated or scanned, and no content hash is computed; image derivatives
+// are generated lazily at FinalizeUpload (via the file.uploaded event). Needs a
+// cloud backend — returns ErrUnsupported on local or during a migration.
+func (b *Client) PresignUpload(user_id, parent_id, file_name, content_type string, ttl time.Duration) (fileID, uploadURL string, err error) {
+	return b.PresignUploadContext(context.Background(), user_id, parent_id, file_name, content_type, ttl)
+}
+
+// PresignUploadContext is PresignUpload with an explicit context.
+func (b *Client) PresignUploadContext(ctx context.Context, user_id, parent_id, file_name, content_type string, ttl time.Duration) (fileID, uploadURL string, err error) {
+	p, ok := b.backend.(domain.PresignBackend)
+	if !ok {
+		return "", "", fmt.Errorf("backend %q does not support presigned uploads: %w", b.backend.Name(), ErrUnsupported)
+	}
+	fileID, key, err := b.fileService.CreatePendingUpload(ctx, user_id, parent_id, file_name, content_type)
+	if err != nil {
+		return "", "", err
+	}
+	uploadURL, err = p.PresignPutURL(ctx, key, ttl)
+	if err != nil {
+		return "", "", err
+	}
+	return fileID, uploadURL, nil
+}
+
+// FinalizeUpload confirms a presigned upload completed (the object is present in
+// the backend), makes the file live (visible in listings, readable), records its
+// size, and fires the file.uploaded event so handlers such as derivative
+// generation run. Call it after the client's PUT to the URL from PresignUpload
+// succeeds. Returns the file ID.
+func (b *Client) FinalizeUpload(file_id string, size int64) (string, error) {
+	return b.FinalizeUploadContext(context.Background(), file_id, size)
+}
+
+// FinalizeUploadContext is FinalizeUpload with an explicit context.
+func (b *Client) FinalizeUploadContext(ctx context.Context, file_id string, size int64) (string, error) {
+	return b.fileService.FinalizeUpload(ctx, file_id, size)
+}
+
 /* Helper Methods */
 
 func initializeCache(conf CacheConfig, bucktLog domain.BucktLogger) (domain.CacheManager, domain.LRUCache) {

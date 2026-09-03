@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"time"
 )
 
 type FileBackend interface {
@@ -35,6 +36,25 @@ type FileBackend interface {
 	DeleteFolder(ctx context.Context, prefix string) error
 
 	Move(ctx context.Context, oldPath, newPath string) error
+}
+
+// PresignBackend is an OPTIONAL capability: a backend that can mint a
+// time-limited URL granting direct access to an object, so reads don't have to
+// stream through the application process. Cloud backends (S3/R2, and later
+// Azure/GCS) implement it; the local filesystem backend does not. buckt detects
+// it by type assertion (like MigratableBackend) and surfaces ErrUnsupported when
+// the active backend can't presign.
+type PresignBackend interface {
+	// PresignGetURL returns a URL that downloads the object at key directly from
+	// the backend, valid for ttl. The URL bypasses buckt's auth for its lifetime,
+	// so keep ttl short.
+	PresignGetURL(ctx context.Context, key string, ttl time.Duration) (string, error)
+
+	// PresignPutURL returns a URL that uploads (HTTP PUT) an object to key
+	// directly to the backend, valid for ttl — so a client can upload straight to
+	// storage without the bytes passing through the application. Used by the
+	// register/confirm upload flow (CreatePendingUpload / FinalizeUpload).
+	PresignPutURL(ctx context.Context, key string, ttl time.Duration) (string, error)
 }
 
 type MigratableBackend interface {

@@ -284,6 +284,48 @@ func (s *S3Backend) headExists(ctx context.Context, key string) (bool, error) {
 	return true, nil
 }
 
+// PresignGetURL returns a time-limited URL that downloads the object directly
+// from S3/R2, so reads can bypass the application process. The signature is
+// computed locally (no network call) — except that, for a nested-mode key
+// (leading slash), it may HEAD to resolve which key form the object actually
+// lives under, so a URL for a migrated object doesn't 404. See altKey.
+func (s *S3Backend) PresignGetURL(ctx context.Context, path string, ttl time.Duration) (string, error) {
+	key := path
+	if alt, ok := altKey(path); ok {
+		// Objects written directly live at path; a local->S3 migration copies
+		// them under the slash-stripped key. Sign whichever one exists.
+		if exists, _ := s.headExists(ctx, path); !exists {
+			if altExists, _ := s.headExists(ctx, alt); altExists {
+				key = alt
+			}
+		}
+	}
+
+	req, err := s3.NewPresignClient(s.client).PresignGetObject(ctx, &s3.GetObjectInput{
+		Bucket: aws.String(s.bucketName),
+		Key:    aws.String(key),
+	}, s3.WithPresignExpires(ttl))
+	if err != nil {
+		return "", fmt.Errorf("failed to presign GET for %s: %w", key, err)
+	}
+	return req.URL, nil
+}
+
+// PresignPutURL returns a URL a client can HTTP PUT an object to, uploading
+// directly to S3/R2 without the bytes passing through the application. Signed
+// locally (no network). The key is used verbatim — the caller (buckt's upload
+// reservation) supplies the exact object key.
+func (s *S3Backend) PresignPutURL(ctx context.Context, key string, ttl time.Duration) (string, error) {
+	req, err := s3.NewPresignClient(s.client).PresignPutObject(ctx, &s3.PutObjectInput{
+		Bucket: aws.String(s.bucketName),
+		Key:    aws.String(key),
+	}, s3.WithPresignExpires(ttl))
+	if err != nil {
+		return "", fmt.Errorf("failed to presign PUT for %s: %w", key, err)
+	}
+	return req.URL, nil
+}
+
 func (s *S3Backend) Stat(ctx context.Context, path string) (*FileInfo, error) {
 	start := time.Now()
 	resp, err := s.client.HeadObject(ctx, &s3.HeadObjectInput{
