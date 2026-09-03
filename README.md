@@ -246,6 +246,8 @@ Or with options:
 
 Hand clients a time-limited URL that downloads a file **directly from the storage backend**, so reads don't stream through your process — the standard, CDN-friendly way to serve media (images, video, downloads).
 
+> **Integrating an app?** See the step-by-step [S3 migration + presigned URLs guide](docs/s3-migration-and-presigned-urls.md) — local→S3 cut-over, presigned downloads, and direct uploads, with Go backend and Astro/Svelte frontend snippets.
+
 ```go
   // 15-minute direct-download link for the file's bytes:
   url, err := client.PresignedURL(fileID, 15*time.Minute)
