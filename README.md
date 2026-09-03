@@ -265,6 +265,24 @@ Presigning is a **cloud-backend capability**: it works with S3/R2 (`cloud/aws`) 
 
 > A presigned URL grants access to whoever holds it — bypassing buckt's own auth — for the whole TTL, so keep the TTL short and don't log the URLs. The web client exposes `GET /presign/:file_id?ttl=15m` (returns 501 when the backend can't presign).
 
+### Direct uploads (register / confirm)
+
+The reverse direction: let the client upload **straight to the bucket** so the bytes never pass through your server. It's a two-step handshake, and the **file ID is stable from step 1** — so your app can track it immediately.
+
+```go
+  // 1. Reserve — returns a stable file ID + a presigned PUT URL:
+  fileID, uploadURL, _ := client.PresignUpload(userID, parentID, "video.mp4", "video/mp4", 15*time.Minute)
+
+  // 2. The client PUTs the bytes directly to uploadURL (browser → bucket).
+
+  // 3. Confirm — makes the file live and fires file.uploaded (derivatives, etc.):
+  client.FinalizeUpload(fileID, sizeInBytes)
+```
+
+Until you finalize, the file is **pending** and hidden from listings. Trade-off: because buckt never sees the bytes on this path, these uploads are **not deduplicated, scanned, or content-hashed**, and image derivatives are generated lazily at finalize (via the upload event). Keep bytes-through-the-backend uploads (`UploadFile`) for anything that needs those; use direct uploads for large/opaque files.
+
+Web endpoints for the frontend: `POST /upload/presign` → `{file_id, upload_url}`, then `POST /upload/finalize` (both accept form or JSON). Cloud backends only — `ErrUnsupported`/501 otherwise.
+
 ---
 
 ## Storage Backends
@@ -832,6 +850,8 @@ GetFile(fileID string) (*FileModel, error)
 GetFileStream(fileID string) (*FileModel, io.ReadCloser, error)
 PresignedURL(fileID string, ttl time.Duration) (string, error)                 // direct-download URL (cloud backends)
 PresignedDerivativeURL(fileID, name string, ttl time.Duration) (string, error) // direct URL for a derivative
+PresignUpload(userID, parentID, name, contentType string, ttl time.Duration) (fileID, uploadURL string, err error) // reserve a direct upload
+FinalizeUpload(fileID string, size int64) (string, error)                      // confirm a direct upload landed
 ListFiles(folderID string) ([]FileModel, error)
 ListFilesMetadata(folderID string) ([]FileModel, error)
 MoveFile(fileID, newParentID string) error
@@ -894,6 +914,7 @@ Branch on failures with `errors.Is` using the re-exported sentinels (also availa
 | [Azure Blob Storage](example/cloud/azure/main.go) | Azure setup |
 | [Full-featured UI](example/client/web/ui/main.go) | Metrics, dedup, derivatives, and upload events across `local`/`migrate`/`r2` modes |
 | [Headless migration](example/migration/headless/main.go) | Bulk `MigrateAll` + progress polling without the UI |
+| [Local → S3 migration](example/migration/s3/main.go) | Copy-paste template for the local→S3 swap + cut-over |
 | [Expiring / temp files](example/expiry/headless/main.go) | `SetFileTTL` → `PurgeExpired` lifecycle |
 
 ---

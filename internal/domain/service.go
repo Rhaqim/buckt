@@ -41,4 +41,9 @@ type FileService interface {
 	SetExpiry(ctx context.Context, file_id string, at *time.Time) error
 	// FindExpired returns up to limit files whose expiry is at or before now.
 	FindExpired(ctx context.Context, now time.Time, limit int) ([]*model.FileModel, error)
+	// CreatePendingUpload reserves a file row for an out-of-band (presigned)
+	// upload, returning the stable file ID and the object key to upload to.
+	CreatePendingUpload(ctx context.Context, user_id, parent_id, file_name, content_type string) (fileID, objectKey string, err error)
+	// FinalizeUpload confirms a presigned upload landed and makes the file live.
+	FinalizeUpload(ctx context.Context, file_id string, size int64) (string, error)
 }

@@ -34,7 +34,36 @@ func TestPresignGetURL(t *testing.T) {
 		"X-Amz-Credential",  // credential scope present
 	} {
 		if !strings.Contains(url, want) {
-			t.Errorf("presigned URL missing %q\n url = %s", want, url)
+			t.Errorf("presigned GET URL missing %q\n url = %s", want, url)
+		}
+	}
+}
+
+// TestPresignPutURL checks the upload URL is a signed PUT for the given key.
+func TestPresignPutURL(t *testing.T) {
+	be, err := NewBackend(Config{
+		AccessKey: "AKIAEXAMPLE",
+		SecretKey: "secretexamplekey",
+		Bucket:    "my-bucket",
+		Endpoint:  "https://accountid.r2.cloudflarestorage.com",
+	})
+	if err != nil {
+		t.Fatalf("NewBackend: %v", err)
+	}
+
+	url, err := be.PresignPutURL(context.Background(), "uploads/report.pdf", 10*time.Minute)
+	if err != nil {
+		t.Fatalf("PresignPutURL: %v", err)
+	}
+
+	for _, want := range []string{
+		"my-bucket",
+		"uploads/report.pdf",
+		"X-Amz-Signature",
+		"X-Amz-Expires=600",
+	} {
+		if !strings.Contains(url, want) {
+			t.Errorf("presigned PUT URL missing %q\n url = %s", want, url)
 		}
 	}
 }

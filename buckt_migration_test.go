@@ -121,6 +121,17 @@ func (m *memBackend) count() int {
 	return len(m.objs)
 }
 
+// PresignGetURL / PresignPutURL make memBackend satisfy domain.PresignBackend so
+// the presigned-upload flow can be tested. The "URL" just encodes the key, so a
+// test can extract it and simulate the client's direct upload with a plain Put.
+func (m *memBackend) PresignGetURL(_ context.Context, key string, _ time.Duration) (string, error) {
+	return "memget://" + key, nil
+}
+
+func (m *memBackend) PresignPutURL(_ context.Context, key string, _ time.Duration) (string, error) {
+	return "memput://" + key, nil
+}
+
 func TestMigration_BulkMigrateExistingFiles(t *testing.T) {
 	dir := t.TempDir()
 	mediaDir := filepath.Join(dir, "media")

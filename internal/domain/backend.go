@@ -49,6 +49,12 @@ type PresignBackend interface {
 	// the backend, valid for ttl. The URL bypasses buckt's auth for its lifetime,
 	// so keep ttl short.
 	PresignGetURL(ctx context.Context, key string, ttl time.Duration) (string, error)
+
+	// PresignPutURL returns a URL that uploads (HTTP PUT) an object to key
+	// directly to the backend, valid for ttl — so a client can upload straight to
+	// storage without the bytes passing through the application. Used by the
+	// register/confirm upload flow (CreatePendingUpload / FinalizeUpload).
+	PresignPutURL(ctx context.Context, key string, ttl time.Duration) (string, error)
 }
 
 type MigratableBackend interface {

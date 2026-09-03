@@ -579,6 +579,66 @@ func (svc *APIService) SetExpiry(c *gin.Context) {
 	c.JSON(200, response.Success("expiry set"))
 }
 
+// PresignUpload reserves a file and returns its id plus a presigned PUT URL the
+// client uploads bytes to directly (bypassing this server). Accepts form or JSON
+// {parent_id?, file_name, content_type?, ttl?}. Call FinalizeUpload after the
+// client's PUT succeeds. 501 when the backend can't presign.
+func (svc *APIService) PresignUpload(c *gin.Context) {
+	userID := c.GetString("owner_id")
+
+	var req struct {
+		ParentID    string `form:"parent_id" json:"parent_id"`
+		FileName    string `form:"file_name" json:"file_name" binding:"required"`
+		ContentType string `form:"content_type" json:"content_type"`
+		TTL         string `form:"ttl" json:"ttl"`
+	}
+	if err := c.ShouldBind(&req); err != nil {
+		c.AbortWithStatusJSON(400, response.Error("file_name is required", err.Error()))
+		return
+	}
+
+	ttl := 15 * time.Minute
+	if req.TTL != "" {
+		d, err := time.ParseDuration(req.TTL)
+		if err != nil {
+			c.AbortWithStatusJSON(400, response.Error("invalid ttl (use a Go duration like 15m)", err.Error()))
+			return
+		}
+		ttl = d
+	}
+
+	fileID, url, err := svc.client.PresignUploadContext(c.Request.Context(), userID, req.ParentID, req.FileName, req.ContentType, ttl)
+	if err != nil {
+		if errors.Is(err, buckt.ErrUnsupported) {
+			c.AbortWithStatusJSON(501, response.WrapError("this backend cannot presign uploads", err))
+			return
+		}
+		abort500(c, "failed to presign upload", err)
+		return
+	}
+	c.JSON(200, gin.H{"status": "success", "file_id": fileID, "upload_url": url})
+}
+
+// FinalizeUpload confirms a presigned upload landed and makes the file live.
+// Accepts form or JSON {file_id, size?}.
+func (svc *APIService) FinalizeUpload(c *gin.Context) {
+	var req struct {
+		FileID string `form:"file_id" json:"file_id" binding:"required"`
+		Size   int64  `form:"size" json:"size"`
+	}
+	if err := c.ShouldBind(&req); err != nil {
+		c.AbortWithStatusJSON(400, response.Error("file_id is required", err.Error()))
+		return
+	}
+
+	id, err := svc.client.FinalizeUploadContext(c.Request.Context(), req.FileID, req.Size)
+	if err != nil {
+		abort500(c, "failed to finalize upload", err)
+		return
+	}
+	c.JSON(200, gin.H{"status": "success", "file_id": id})
+}
+
 // Presign returns a time-limited URL that downloads the file directly from the
 // storage backend (so reads bypass this process). The optional `ttl` query is a
 // Go duration (default 15m). Returns 501 when the backend can't presign (e.g.

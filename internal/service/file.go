@@ -741,6 +741,84 @@ func (f *FileService) FindExpired(ctx context.Context, now time.Time, limit int)
 	return files, nil
 }
 
+// CreatePendingUpload reserves a metadata row for a file whose bytes will be
+// uploaded out of band (via a presigned URL) and returns its stable file ID and
+// the object key the bytes must land at. The row is marked pending — hidden from
+// listings — until FinalizeUpload is called. No dedup or scan runs (buckt never
+// sees the bytes on this path); derivatives are generated lazily at finalize.
+func (f *FileService) CreatePendingUpload(ctx context.Context, user_id, parent_id, file_name, content_type string) (string, string, error) {
+	if err := utils.ValidateFileName(file_name); err != nil {
+		return "", "", fmt.Errorf("invalid file name: %w", buckterr.ErrInvalidName)
+	}
+	if content_type == "" {
+		content_type = "application/octet-stream"
+	}
+
+	parentFolder, err := f.folderService.GetFolder(ctx, user_id, parent_id)
+	if err != nil {
+		parentFolder, err = f.folderService.GetRootFolder(ctx, user_id)
+		if err != nil {
+			return "", "", err
+		}
+	}
+
+	path := filepath.Join(parentFolder.Path, file_name)
+	if f.flatNameSpaces {
+		ext := filepath.Ext(file_name)
+		path = uuid.New().String() + ext
+	}
+
+	file := &model.FileModel{
+		UserID:      user_id,
+		ParentID:    parentFolder.ID,
+		Name:        file_name,
+		Path:        path,
+		ContentType: content_type,
+		Pending:     true,
+	}
+	if err := f.repo.Create(ctx, file); err != nil {
+		return "", "", f.logger.WrapError("failed to reserve upload", err)
+	}
+	return file.ID.String(), file.Path, nil
+}
+
+// FinalizeUpload completes a presigned upload: it confirms the object landed in
+// the backend, clears the pending flag, records the size, and emits a
+// file.uploaded event (so existing handlers — e.g. derivative generation — run).
+func (f *FileService) FinalizeUpload(ctx context.Context, file_id string, size int64) (string, error) {
+	fileID, err := uuid.Parse(file_id)
+	if err != nil {
+		return "", fmt.Errorf("invalid id: %w", buckterr.ErrInvalidID)
+	}
+
+	// Reserved row — carries the object key the client uploaded to.
+	file, err := f.repo.GetFile(ctx, fileID)
+	if err != nil {
+		return "", f.logger.WrapError("failed to get file metadata", err)
+	}
+
+	// Don't expose the file until the object is actually present.
+	exists, err := f.fileBackend.Exists(ctx, file.Path)
+	if err != nil {
+		return "", f.logger.WrapError("failed to verify uploaded object", err)
+	}
+	if !exists {
+		return "", fmt.Errorf("uploaded object not found for %s: %w", file_id, buckterr.ErrNotFound)
+	}
+
+	finalized, err := f.repo.FinalizeUpload(ctx, fileID, size)
+	if err != nil {
+		return "", f.logger.WrapError("failed to finalize upload", err)
+	}
+
+	if f.cache != nil {
+		_ = f.cache.DeleteBucktValue(ctx, file_id)
+	}
+	f.emitFile(ctx, events.FileUploaded, finalized)
+
+	return finalized.ID.String(), nil
+}
+
 // GetMetadata returns the metadata stored on a file (nil when none is set).
 func (f *FileService) GetMetadata(ctx context.Context, file_id string) (map[string]string, error) {
 	fileID, err := uuid.Parse(file_id)

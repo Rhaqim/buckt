@@ -32,6 +32,12 @@ type FileModel struct {
 	// and emits a file.purged event. Nil means the file never expires. Indexed so
 	// the expiry sweep is a cheap ranged query, not a full-table scan.
 	ExpiresAt *time.Time `gorm:"index" json:"expires_at,omitempty"`
+	// Pending is true between a presigned-upload reservation (CreatePendingUpload)
+	// and its finalization (FinalizeUpload): the metadata row exists so the file
+	// ID is stable, but the bytes may not be in the backend yet. Pending files are
+	// hidden from listings and their bytes aren't fetched until finalized. Always
+	// false for normal (bytes-through-the-backend) uploads.
+	Pending bool `gorm:"not null;default:false" json:"pending,omitempty"`
 	// DerivativesBytes is the total size of generated image derivatives for this
 	// file (thumbnails etc.), which live on the backend but are not tracked as
 	// files. Counted in Client.StorageBytes so storage totals stay accurate.

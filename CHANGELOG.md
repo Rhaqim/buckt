@@ -22,6 +22,17 @@ Additive; no API removals.
   resolved first, so a URL for a migrated object doesn't 404. The web client
   adds `GET /presign/:file_id?ttl=15m` (501 when unsupported). Presigned URLs
   bypass buckt's auth for their lifetime — keep the TTL short.
+- **Direct (presigned) uploads — register/confirm** (`Client.PresignUpload` /
+  `FinalizeUpload`, `PresignBackend.PresignPutURL`). `PresignUpload` reserves a
+  file (returning a **stable file ID** immediately, for your app's tracking) plus
+  a presigned PUT URL the client uploads to **directly**, bypassing your process
+  on the write path; `FinalizeUpload` confirms the object landed and makes the
+  file live, firing `file.uploaded` so handlers (e.g. derivative generation) run
+  lazily. The reserved file is `pending` (new column, schema migration v7) and
+  hidden from listings until finalized. Because buckt never sees the bytes on
+  this path, these uploads are **not** deduplicated, scanned, or content-hashed.
+  Web endpoints `POST /upload/presign` and `POST /upload/finalize` (form or
+  JSON). `example/migration/s3` is a copy-paste local→S3 migration template.
 
 ## [1.9.1] — unreleased
 

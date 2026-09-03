@@ -311,6 +311,21 @@ func (s *S3Backend) PresignGetURL(ctx context.Context, path string, ttl time.Dur
 	return req.URL, nil
 }
 
+// PresignPutURL returns a URL a client can HTTP PUT an object to, uploading
+// directly to S3/R2 without the bytes passing through the application. Signed
+// locally (no network). The key is used verbatim — the caller (buckt's upload
+// reservation) supplies the exact object key.
+func (s *S3Backend) PresignPutURL(ctx context.Context, key string, ttl time.Duration) (string, error) {
+	req, err := s3.NewPresignClient(s.client).PresignPutObject(ctx, &s3.PutObjectInput{
+		Bucket: aws.String(s.bucketName),
+		Key:    aws.String(key),
+	}, s3.WithPresignExpires(ttl))
+	if err != nil {
+		return "", fmt.Errorf("failed to presign PUT for %s: %w", key, err)
+	}
+	return req.URL, nil
+}
+
 func (s *S3Backend) Stat(ctx context.Context, path string) (*FileInfo, error) {
 	start := time.Now()
 	resp, err := s.client.HeadObject(ctx, &s3.HeadObjectInput{

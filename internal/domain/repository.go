@@ -41,4 +41,6 @@ type FileRepository interface {
 	SetExpiry(ctx context.Context, id uuid.UUID, at *time.Time) error
 	// FindExpired returns up to limit files whose expiry is at or before now.
 	FindExpired(ctx context.Context, now time.Time, limit int) ([]*model.FileModel, error)
+	// FinalizeUpload clears a pending presigned-upload row and records its size.
+	FinalizeUpload(ctx context.Context, id uuid.UUID, size int64) (*model.FileModel, error)
 }

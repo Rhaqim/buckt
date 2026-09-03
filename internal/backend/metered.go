@@ -129,3 +129,12 @@ func (m *meteredBackend) PresignGetURL(ctx context.Context, key string, ttl time
 	}
 	return p.PresignGetURL(ctx, key, ttl)
 }
+
+// PresignPutURL forwards to the inner backend when it can presign (see PresignGetURL).
+func (m *meteredBackend) PresignPutURL(ctx context.Context, key string, ttl time.Duration) (string, error) {
+	p, ok := m.inner.(domain.PresignBackend)
+	if !ok {
+		return "", fmt.Errorf("backend %q does not support presigned URLs: %w", m.inner.Name(), buckterr.ErrUnsupported)
+	}
+	return p.PresignPutURL(ctx, key, ttl)
+}
