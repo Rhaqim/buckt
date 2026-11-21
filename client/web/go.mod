@@ -3,7 +3,7 @@ module github.com/Rhaqim/buckt/client/web
 go 1.26.0
 
 require (
-	github.com/Rhaqim/buckt v1.9.0
+	github.com/Rhaqim/buckt v1.9.2
 	github.com/gin-gonic/gin v1.12.0
 )
 
