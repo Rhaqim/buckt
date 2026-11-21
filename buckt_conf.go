@@ -232,6 +232,12 @@ type Config struct {
 	// from your own scheduler. Configure with WithExpirySweeper.
 	ExpirySweepInterval time.Duration
 
+	// PresignCacheControl, when set, is the Cache-Control header presigned GET
+	// URLs (PresignedURL) are served with on backends that support response
+	// overrides (S3/R2). Empty (the default) uses "private, max-age=<ttl>".
+	// Configure with WithPresignCacheControl.
+	PresignCacheControl string
+
 	// Derivatives defines the resized image variants GenerateDerivatives will
 	// produce. Empty (the default) disables the feature. Configure with
 	// WithImageDerivatives.
@@ -478,6 +484,15 @@ func WithUploadScanner(s scan.Scanner) ConfigFunc {
 func WithExpirySweeper(interval time.Duration) ConfigFunc {
 	return func(c *Config) {
 		c.ExpirySweepInterval = interval
+	}
+}
+
+// WithPresignCacheControl sets the Cache-Control header served with presigned
+// download URLs (see Client.PresignedURL), e.g. "public, max-age=86400". By
+// default it is "private, max-age=<ttl>", matching the URL's lifetime.
+func WithPresignCacheControl(value string) ConfigFunc {
+	return func(c *Config) {
+		c.PresignCacheControl = value
 	}
 }
 

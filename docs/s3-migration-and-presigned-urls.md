@@ -113,7 +113,13 @@ if failed, _ := client.MigrationFailures(ctx); failed > 0 {
 ```
 
 `MigrateAll` is **concurrent, resumable across restarts, and retries transient
-failures** — safe to re-run. A runnable template is in
+failures** — safe to re-run.
+
+> **It copies the whole media directory, not just files in the database.** The
+> backlog comes from walking `MediaDir`. OS junk (`.DS_Store`, `._*`,
+> `Thumbs.db`, `desktop.ini`) is skipped, but backups, old folders, and files
+> deleted from the database without being removed from disk are copied and
+> counted. Clean up `MediaDir` before a production run. A runnable template is in
 [`example/migration/s3`](../example/migration/s3/main.go).
 
 ### 1.4 Cut over
@@ -173,6 +179,13 @@ GET /presign/:file_id?ttl=15m   →   { "status": "success", "url": "https://<bu
 
 (Returns `501` when the backend can't presign.) It sits behind the same API guard
 as your other routes, so your existing auth applies.
+
+**Response headers.** On S3/R2 the URL signs response-header overrides, so the
+browser gets the Content-Type stored in buckt's database, `Content-Disposition:
+inline` for safe media (images, audio, video, PDF, plain text) or `attachment`
+for everything else, and `Cache-Control: private, max-age=<ttl>`. Change the
+caching policy with `buckt.WithPresignCacheControl("public, max-age=86400")`.
+Objects copied before these headers were added are served correctly too.
 
 ### 2.2 Frontend (Astro/Svelte)
 

@@ -194,3 +194,21 @@ func TestFSDeleteFolder(t *testing.T) {
 	_, err = os.Stat(expectedFolderPath)
 	assert.True(t, os.IsNotExist(err))
 }
+
+// TestFSList_SkipsOSJunk: Finder/Windows metadata files are not listed (so a
+// bulk migration doesn't copy them), but ordinary dot-named uploads still are.
+func TestFSList_SkipsOSJunk(t *testing.T) {
+	log := logger.NewLogger("", true, false)
+	mediaDir := t.TempDir()
+	bfs := NewLocalFileSystemService(log, mediaDir, new(mocks.NoopLRUCache)).(*LocalFileSystemService)
+
+	dir := filepath.Join(mediaDir, "u1")
+	assert.NoError(t, os.MkdirAll(dir, os.ModePerm))
+	for _, name := range []string{"photo.jpg", ".env", ".DS_Store", "._photo.jpg", "Thumbs.db", "desktop.ini"} {
+		assert.NoError(t, os.WriteFile(filepath.Join(dir, name), []byte("x"), 0o644))
+	}
+
+	files, err := bfs.List(t.Context(), "")
+	assert.NoError(t, err)
+	assert.ElementsMatch(t, []string{"u1/photo.jpg", "u1/.env"}, files)
+}

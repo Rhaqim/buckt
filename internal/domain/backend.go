@@ -57,6 +57,16 @@ type PresignBackend interface {
 	PresignPutURL(ctx context.Context, key string, ttl time.Duration) (string, error)
 }
 
+// PresignHeadersBackend is an OPTIONAL refinement of PresignBackend: the backend
+// can sign response-header overrides into a GET URL, so the store serves the
+// Content-Type buckt recorded at upload, a safe Content-Disposition, and a
+// Cache-Control policy, regardless of the object's stored metadata. An empty
+// value leaves that header as stored. The S3/R2 backend implements it; buckt
+// falls back to PresignGetURL when a backend doesn't.
+type PresignHeadersBackend interface {
+	PresignGetURLWithHeaders(ctx context.Context, key string, ttl time.Duration, contentType, contentDisposition, cacheControl string) (string, error)
+}
+
 type MigratableBackend interface {
 	FileBackend
 

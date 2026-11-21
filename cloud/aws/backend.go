@@ -7,7 +7,10 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"mime"
 	"net"
+	"net/http"
+	"path"
 	"strings"
 	"syscall"
 	"time"
@@ -35,6 +38,12 @@ type S3Backend struct {
 	// the dependency one-way (buckt depends on backends, never the reverse).
 	rec func(op string, bytes int64, dur time.Duration, err error)
 }
+
+// Compile-time guard that S3Backend keeps the exact PresignGetURLWithHeaders
+// signature buckt detects structurally (see buckt's PresignedURL).
+var _ interface {
+	PresignGetURLWithHeaders(ctx context.Context, key string, ttl time.Duration, contentType, contentDisposition, cacheControl string) (string, error)
+} = (*S3Backend)(nil)
 
 // Compile-time guard that S3Backend keeps the exact SetOpRecorder signature
 // buckt detects structurally. If this stops compiling, the per-API-call metrics
@@ -138,18 +147,63 @@ func (s *S3Backend) Ping(ctx context.Context) error {
 	return nil
 }
 
-func (s *S3Backend) Put(ctx context.Context, path string, data []byte) error {
+// Put writes the object with a Content-Type (see contentTypeFor), so objects
+// served straight from the bucket — presigned URLs, a public R2 domain — carry
+// a usable type instead of the store's generic binary default. This covers both
+// regular uploads and the copies a local -> S3 migration makes.
+func (s *S3Backend) Put(ctx context.Context, key string, data []byte) error {
 	start := time.Now()
+	contentType := contentTypeFor(key, data)
 	err := withRetry(ctx, 3, func() error {
 		_, err := s.client.PutObject(ctx, &s3.PutObjectInput{
-			Bucket: aws.String(s.bucketName),
-			Key:    aws.String(path),
-			Body:   bytes.NewReader(data),
+			Bucket:      aws.String(s.bucketName),
+			Key:         aws.String(key),
+			Body:        bytes.NewReader(data),
+			ContentType: aws.String(contentType),
 		})
 		return err
 	})
 	s.record("PutObject", int64(len(data)), start, err)
 	return err
+}
+
+// contentTypeFor picks the stored Content-Type for an object: the key's file
+// extension first (http.DetectContentType misses common audio such as m4a/AAC
+// and ID3-less mp3, and reports SVG/JSON/CSS as text/plain), then byte
+// sniffing for extensionless keys (buckt's flat namespace keeps the extension,
+// but derivatives and nested names may not have one).
+func contentTypeFor(key string, data []byte) string {
+	if ext := strings.ToLower(path.Ext(key)); ext != "" {
+		if ct, ok := mediaTypes[ext]; ok {
+			return ct
+		}
+		if ct := mime.TypeByExtension(ext); ct != "" {
+			return ct
+		}
+	}
+	return http.DetectContentType(data)
+}
+
+// mediaTypes covers audio/video/image extensions that Go's built-in mime table
+// lacks. mime.TypeByExtension otherwise depends on the host's /etc/mime.types,
+// which slim containers often don't ship — so the stored type would vary by
+// machine without this.
+var mediaTypes = map[string]string{
+	".mp3":  "audio/mpeg",
+	".m4a":  "audio/mp4",
+	".aac":  "audio/aac",
+	".ogg":  "audio/ogg",
+	".oga":  "audio/ogg",
+	".opus": "audio/ogg",
+	".wav":  "audio/wav",
+	".flac": "audio/flac",
+	".weba": "audio/webm",
+	".webm": "video/webm",
+	".mp4":  "video/mp4",
+	".m4v":  "video/mp4",
+	".mov":  "video/quicktime",
+	".heic": "image/heic",
+	".heif": "image/heif",
 }
 
 func (s *S3Backend) Get(ctx context.Context, path string) ([]byte, error) {
@@ -290,6 +344,20 @@ func (s *S3Backend) headExists(ctx context.Context, key string) (bool, error) {
 // (leading slash), it may HEAD to resolve which key form the object actually
 // lives under, so a URL for a migrated object doesn't 404. See altKey.
 func (s *S3Backend) PresignGetURL(ctx context.Context, path string, ttl time.Duration) (string, error) {
+	return s.PresignGetURLWithHeaders(ctx, path, ttl, "", "", "")
+}
+
+// PresignGetURLWithHeaders is PresignGetURL plus signed response-header
+// overrides: the store returns Content-Type, Content-Disposition and
+// Cache-Control from these values instead of the object's stored metadata. That
+// lets the caller serve the type it recorded at upload, an inline/attachment
+// disposition, and its own caching policy — and it works for objects written
+// before Put set a Content-Type. An empty value leaves that header as stored.
+// S3 and Cloudflare R2 both honour these overrides on presigned GETs.
+//
+// The parameters are plain strings on purpose so buckt can detect this method
+// structurally without this module importing buckt.
+func (s *S3Backend) PresignGetURLWithHeaders(ctx context.Context, path string, ttl time.Duration, contentType, contentDisposition, cacheControl string) (string, error) {
 	key := path
 	if alt, ok := altKey(path); ok {
 		// Objects written directly live at path; a local->S3 migration copies
@@ -301,10 +369,21 @@ func (s *S3Backend) PresignGetURL(ctx context.Context, path string, ttl time.Dur
 		}
 	}
 
-	req, err := s3.NewPresignClient(s.client).PresignGetObject(ctx, &s3.GetObjectInput{
+	input := &s3.GetObjectInput{
 		Bucket: aws.String(s.bucketName),
 		Key:    aws.String(key),
-	}, s3.WithPresignExpires(ttl))
+	}
+	if contentType != "" {
+		input.ResponseContentType = aws.String(contentType)
+	}
+	if contentDisposition != "" {
+		input.ResponseContentDisposition = aws.String(contentDisposition)
+	}
+	if cacheControl != "" {
+		input.ResponseCacheControl = aws.String(cacheControl)
+	}
+
+	req, err := s3.NewPresignClient(s.client).PresignGetObject(ctx, input, s3.WithPresignExpires(ttl))
 	if err != nil {
 		return "", fmt.Errorf("failed to presign GET for %s: %w", key, err)
 	}
