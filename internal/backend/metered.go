@@ -130,6 +130,16 @@ func (m *meteredBackend) PresignGetURL(ctx context.Context, key string, ttl time
 	return p.PresignGetURL(ctx, key, ttl)
 }
 
+// PresignGetURLWithHeaders forwards to the inner backend's header-override
+// variant when it has one, and otherwise falls back to its plain PresignGetURL
+// (the overrides are best-effort; the URL still works without them).
+func (m *meteredBackend) PresignGetURLWithHeaders(ctx context.Context, key string, ttl time.Duration, contentType, contentDisposition, cacheControl string) (string, error) {
+	if h, ok := m.inner.(domain.PresignHeadersBackend); ok {
+		return h.PresignGetURLWithHeaders(ctx, key, ttl, contentType, contentDisposition, cacheControl)
+	}
+	return m.PresignGetURL(ctx, key, ttl)
+}
+
 // PresignPutURL forwards to the inner backend when it can presign (see PresignGetURL).
 func (m *meteredBackend) PresignPutURL(ctx context.Context, key string, ttl time.Duration) (string, error) {
 	p, ok := m.inner.(domain.PresignBackend)

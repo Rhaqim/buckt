@@ -164,6 +164,9 @@ func (bfs *LocalFileSystemService) List(ctx context.Context, prefix string) ([]s
 			return err
 		}
 		if !d.IsDir() {
+			if isOSJunk(d.Name()) {
+				return nil
+			}
 			relPath, err := filepath.Rel(bfs.mediaDir, path)
 			if err != nil {
 				return err
@@ -177,6 +180,19 @@ func (bfs *LocalFileSystemService) List(ctx context.Context, prefix string) ([]s
 	}
 
 	return files, nil
+}
+
+// isOSJunk reports whether name is a file the OS or a file manager drops into
+// directories on its own (Finder metadata, AppleDouble forks, Windows thumbnail
+// caches). They are never buckt uploads, so List skips them — otherwise a bulk
+// local -> cloud migration copies and counts them. Deliberately a narrow
+// denylist: dot-named files in general are valid uploads and must still list.
+func isOSJunk(name string) bool {
+	switch name {
+	case ".DS_Store", "Thumbs.db", "desktop.ini":
+		return true
+	}
+	return strings.HasPrefix(name, "._")
 }
 
 // Stream returns a file stream (caller must Close).

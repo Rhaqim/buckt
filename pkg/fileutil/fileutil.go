@@ -56,13 +56,22 @@ var inlineSafeTypes = map[string]bool{
 	"image/webp":      true,
 	"image/bmp":       true,
 	"image/x-icon":    true,
+	"image/avif":      true,
 	"audio/mpeg":      true,
+	"audio/mp4":       true, // .m4a — iOS/Safari voice recordings
+	"audio/x-m4a":     true,
+	"audio/aac":       true,
+	"audio/flac":      true,
 	"audio/ogg":       true,
 	"audio/wav":       true,
+	"audio/wave":      true, // what http.DetectContentType reports for WAV
+	"audio/x-wav":     true,
 	"audio/webm":      true,
+	"application/ogg": true, // what http.DetectContentType reports for Ogg
 	"video/mp4":       true,
 	"video/webm":      true,
 	"video/ogg":       true,
+	"video/quicktime": true,
 	"application/pdf": true,
 	"text/plain":      true,
 }

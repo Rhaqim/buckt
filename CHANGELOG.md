@@ -3,6 +3,42 @@
 All notable changes to buckt are documented here. This project follows
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+Backward-compatible fixes for serving files directly from S3/R2. Additive; no
+API removals.
+
+### 🐛 Fixed
+
+- **S3/R2 objects now get a Content-Type** (`cloud/aws`). `S3Backend.Put` never
+  set one, so after cutting over to S3 every presigned download came back as
+  generic binary. `Put` now picks the type from the key's extension (a built-in
+  table for audio/video, so it doesn't depend on the host's `/etc/mime.types`),
+  falling back to byte sniffing. This covers new uploads and migration copies.
+- **Presigned downloads carry the right headers** (`Client.PresignedURL`). On
+  backends that support it (S3/R2), the URL now signs response-header overrides:
+  the Content-Type recorded at upload, a `Content-Disposition` that is `inline`
+  only for inline-safe media (HTML/SVG are forced to download), and a
+  `Cache-Control` policy. Because the overrides come from the database, objects
+  copied before this fix are served correctly too, without re-copying them.
+  `PresignedDerivativeURL` gets the same Cache-Control.
+- **Voice notes play inline.** `fileutil` now treats `audio/mp4` (m4a),
+  `audio/aac`, `audio/flac`, `image/avif`, `video/quicktime`, and the types Go's
+  own sniffer reports for Ogg and WAV (`application/ogg`, `audio/wave`) as safe
+  to show inline. Before, these downloaded instead of playing.
+- **Migrations skip OS junk files.** The local backend's `List`, used by
+  `MigrateAll`, now ignores `.DS_Store`, `._*` AppleDouble files, `Thumbs.db`
+  and `desktop.ini`, so they are no longer copied or counted. Other dot-named
+  files are valid uploads and are still migrated.
+
+### ✨ Added
+
+- `WithPresignCacheControl` / `Config.PresignCacheControl` sets the
+  Cache-Control header for presigned downloads. Default:
+  `private, max-age=<ttl>`.
+- `S3Backend.PresignGetURLWithHeaders` (and the optional
+  `domain.PresignHeadersBackend` capability that buckt detects).
+
 ## [1.9.2] — unreleased
 
 A backward-compatible **minor** release adding presigned (direct-download) URLs.

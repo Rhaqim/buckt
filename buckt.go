@@ -25,6 +25,7 @@ import (
 	"github.com/Rhaqim/buckt/internal/repository"
 	"github.com/Rhaqim/buckt/internal/service"
 	"github.com/Rhaqim/buckt/pkg/events"
+	"github.com/Rhaqim/buckt/pkg/fileutil"
 	"github.com/Rhaqim/buckt/pkg/imageproc"
 	"github.com/Rhaqim/buckt/pkg/logger"
 	"github.com/Rhaqim/buckt/pkg/metrics"
@@ -53,6 +54,10 @@ type Client struct {
 
 	fileService   domain.FileService
 	folderService domain.FolderService
+
+	// presignCache overrides the Cache-Control presigned GETs are served with
+	// (WithPresignCacheControl). Empty means the ttl-derived default.
+	presignCache string
 
 	// sweeperStop cancels the optional background expiry sweeper (WithExpirySweeper).
 	// Nil when no sweeper is running. Called by Close.
@@ -150,6 +155,7 @@ func New(conf Config, opts ...ConfigFunc) (*Client, error) {
 		backend:           backend,
 		derivatives:       conf.Derivatives,
 		imageProcessor:    imageProcessor,
+		presignCache:      conf.PresignCacheControl,
 		flatnameSpaces:    conf.FlatNameSpaces,
 		silence:           logConf.Silence,
 		maxFileSize:       maxFileSize,
@@ -1180,7 +1186,29 @@ func (b *Client) PresignedURLContext(ctx context.Context, file_id string, ttl ti
 	if err != nil {
 		return "", err
 	}
+
+	// Sign response-header overrides when the backend supports them, so the
+	// browser gets the type recorded at upload (not whatever the object was
+	// stored with — objects copied by an older migration have none), an inline
+	// disposition only for inline-safe types (HTML/SVG are forced to download),
+	// and a Cache-Control policy.
+	if h, ok := b.backend.(domain.PresignHeadersBackend); ok {
+		disposition := fileutil.SafeContentDisposition(fileutil.DispositionFor(file.ContentType), file.Name)
+		return h.PresignGetURLWithHeaders(ctx, file.Path, ttl, file.ContentType, disposition, b.presignCacheControl(ttl))
+	}
 	return p.PresignGetURL(ctx, file.Path, ttl)
+}
+
+// presignCacheControl is the Cache-Control a presigned GET is served with:
+// the configured WithPresignCacheControl value, or by default
+// "private, max-age=<ttl>" — the URL stops working after ttl, so caching it
+// longer is pointless, and the signed URL is per-viewer, so shared caches
+// shouldn't keep it.
+func (b *Client) presignCacheControl(ttl time.Duration) string {
+	if b.presignCache != "" {
+		return b.presignCache
+	}
+	return fmt.Sprintf("private, max-age=%d", int64(ttl/time.Second))
 }
 
 // PresignedDerivativeURL returns a time-limited direct-download URL for a
@@ -1197,7 +1225,13 @@ func (b *Client) PresignedDerivativeURLContext(ctx context.Context, file_id, nam
 	if !ok {
 		return "", fmt.Errorf("backend %q does not support presigned URLs: %w", b.backend.Name(), ErrUnsupported)
 	}
-	return p.PresignGetURL(ctx, derivativeKey(file_id, name), ttl)
+	key := derivativeKey(file_id, name)
+	// Derivatives are images whose stored Content-Type is sniffed correctly at
+	// Put, so only the caching policy is overridden.
+	if h, ok := b.backend.(domain.PresignHeadersBackend); ok {
+		return h.PresignGetURLWithHeaders(ctx, key, ttl, "", "", b.presignCacheControl(ttl))
+	}
+	return p.PresignGetURL(ctx, key, ttl)
 }
 
 /* Direct (presigned) uploads — register / confirm */
